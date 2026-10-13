@@ -1,0 +1,10 @@
+**/bin
+**/obj
+**/TestResults
+.git
+.github
+.env
+.env.*
+!.env.example
+*.docx
+README.md

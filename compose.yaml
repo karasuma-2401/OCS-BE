@@ -1,0 +1,29 @@
+services:
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: src/OCS.Api/Dockerfile
+    image: ocs-api:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "5204:8080"
+
+volumes:
+  redis_data:

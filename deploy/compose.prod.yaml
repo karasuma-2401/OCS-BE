@@ -1,0 +1,47 @@
+services:
+  redis:
+    image: redis:8-alpine
+    container_name: ocs-redis
+    restart: always
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/${IMAGE_OWNER}/ocs-api:${IMAGE_TAG}
+    container_name: ocs-api
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__DefaultConnection: ${NEON_CONNECTION_STRING}
+      Redis__ConnectionString: redis:6379,password=${REDIS_PASSWORD},abortConnect=false
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      Jwt__Key: ${JWT_KEY}
+      Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN}
+      R2__ServiceUrl: ${R2_SERVICE_URL}
+      R2__AccessKeyId: ${R2_ACCESS_KEY_ID}
+      R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY}
+      R2__BucketName: ${R2_BUCKET_NAME}
+      R2__PublicBaseUrl: ${R2_PUBLIC_BASE_URL}
+    ports:
+      - "5204:8080"
+
+volumes:
+  redis_data:

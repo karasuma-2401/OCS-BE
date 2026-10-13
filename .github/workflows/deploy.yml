@@ -1,0 +1,116 @@
+name: Deploy API to VPS
+
+on:
+  workflow_run:
+    workflows:
+      - Publish API Image
+    types:
+      - completed
+    branches:
+      - dev
+      - main
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: Image tag/environment to deploy
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - main
+
+concurrency:
+  group: deploy-api-${{ github.event_name == 'workflow_dispatch' && inputs.target_env || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+
+jobs:
+  deploy:
+    name: Deploy via SSH
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify required deployment secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
+          JWT_KEY: ${{ secrets.JWT_KEY }}
+          CORS_ALLOWED_ORIGIN: ${{ secrets.CORS_ALLOWED_ORIGIN }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          R2_SERVICE_URL: ${{ secrets.R2_SERVICE_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || 'ocs' }}
+        run: |
+          missing=0
+          for name in VPS_HOST VPS_SSH_KEY NEON_CONNECTION_STRING JWT_KEY CORS_ALLOWED_ORIGIN REDIS_PASSWORD R2_SERVICE_URL R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error ::Missing required GitHub Actions secret: ${name}"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Checkout deployment definition
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.sha || github.event.workflow_run.head_sha }}
+
+      - name: Prepare production Compose payload
+        id: compose
+        shell: bash
+        run: echo "payload=$(base64 -w 0 deploy/compose.prod.yaml)" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy containers on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.target_env || github.event.workflow_run.head_branch }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+          NEON_CONNECTION_STRING: ${{ secrets.NEON_CONNECTION_STRING }}
+          JWT_KEY: ${{ secrets.JWT_KEY }}
+          JWT_ISSUER: ${{ vars.JWT_ISSUER || 'ocs-api' }}
+          JWT_AUDIENCE: ${{ vars.JWT_AUDIENCE || 'ocs-clients' }}
+          CORS_ALLOWED_ORIGIN: ${{ secrets.CORS_ALLOWED_ORIGIN }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          R2_SERVICE_URL: ${{ secrets.R2_SERVICE_URL }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || 'ocs' }}
+          R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          COMPOSE_FILE_BASE64: ${{ steps.compose.outputs.payload }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME || 'ubuntu' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: DEPLOY_TAG,REPOSITORY_OWNER,GHCR_TOKEN,GHCR_USERNAME,NEON_CONNECTION_STRING,JWT_KEY,JWT_ISSUER,JWT_AUDIENCE,CORS_ALLOWED_ORIGIN,REDIS_PASSWORD,R2_SERVICE_URL,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,R2_PUBLIC_BASE_URL,COMPOSE_FILE_BASE64
+          script: |
+            set -eu
+
+            APP_DIR="$HOME/ocs-backend"
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+
+            IMAGE_OWNER="$(echo "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+            export IMAGE_OWNER
+            export IMAGE_TAG="$DEPLOY_TAG"
+
+            printf '%s' "$COMPOSE_FILE_BASE64" | base64 --decode > compose.prod.yaml
+
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            docker compose -f compose.prod.yaml pull
+            docker compose -f compose.prod.yaml up -d --remove-orphans
+            docker image prune -f
+
+            echo "OCS API deployment completed with tag: $IMAGE_TAG"
