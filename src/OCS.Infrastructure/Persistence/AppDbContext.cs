@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OCS.Domain.Entities;
+using OCS.Infrastructure.Persistence.Seeds;
 
 namespace OCS.Infrastructure.Persistence;
 
@@ -30,5 +31,6 @@ public sealed class AppDbContext(
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
+        DemoDataSeed.Configure(modelBuilder);
     }
 }

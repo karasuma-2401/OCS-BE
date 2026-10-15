@@ -1,0 +1,4 @@
+# EF generates inline arrays in migration operations that run once per migration.
+# Keep this exception local; handwritten application code still uses CA1861.
+[*.cs]
+dotnet_diagnostic.CA1861.severity = none
