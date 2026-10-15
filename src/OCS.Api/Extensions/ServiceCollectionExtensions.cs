@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OCS.Application;
+using OCS.Application.Abstractions.Auditing;
+using OCS.Api.Auditing;
 using OCS.Infrastructure;
 using Scalar.AspNetCore;
 
@@ -20,6 +22,8 @@ public static class ServiceCollectionExtensions
         services.AddProblemDetails();
         services.AddOpenApi();
         services.AddApplication();
+        services.AddHttpContextAccessor();
+        services.AddScoped<IAuditContext, HttpAuditContext>();
         services.AddInfrastructure(configuration);
         services.AddJwtAuthentication(configuration);
         services.AddCorsPolicy(configuration);

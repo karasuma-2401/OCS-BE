@@ -1,0 +1,258 @@
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using OCS.Application.Abstractions.Auditing;
+using OCS.Domain.Entities;
+using OCS.Domain.Enums;
+
+namespace OCS.Infrastructure.Persistence.Interceptors;
+
+/// <summary>Adds redacted audit logs to the same save operation as tracked business changes.</summary>
+public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : SaveChangesInterceptor
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    // Opt in explicitly; new fields require review before entering the audit trail.
+    private static readonly Dictionary<Type, string[]> AuditedProperties = new()
+    {
+        [typeof(Account)] = [nameof(Account.AccountType), nameof(Account.FullName), nameof(Account.PhoneNumber),
+            nameof(Account.Username), nameof(Account.Email), nameof(Account.IdentityNumber), nameof(Account.PasswordHash),
+            nameof(Account.Status), nameof(Account.PhoneVerifiedAt), nameof(Account.ActivatedAt), nameof(Account.CreatedByAccountId)],
+        [typeof(CustomerProfile)] = [nameof(CustomerProfile.Address), nameof(CustomerProfile.BankCode),
+            nameof(CustomerProfile.BankAccountNumber), nameof(CustomerProfile.BankAccountHolderName), nameof(CustomerProfile.Status)],
+        [typeof(EmployeeProfile)] = [nameof(EmployeeProfile.JobTitle), nameof(EmployeeProfile.HiredOn), nameof(EmployeeProfile.Status)],
+        [typeof(Role)] = [nameof(Role.Code), nameof(Role.Name), nameof(Role.Description)],
+        [typeof(Permission)] = [nameof(Permission.Code), nameof(Permission.Name), nameof(Permission.Description)],
+        [typeof(AccountRole)] = [nameof(AccountRole.AccountId), nameof(AccountRole.RoleId)],
+        [typeof(RolePermission)] = [nameof(RolePermission.RoleId), nameof(RolePermission.PermissionId)]
+    };
+
+    // Ownership per context lets retries replace automatic logs without touching manual logs.
+    private readonly ConditionalWeakTable<DbContext, List<AuditLog>> pendingLogs = new();
+
+    public override InterceptionResult<int> SavingChanges(DbContextEventData eventData, InterceptionResult<int> result)
+    {
+        if (!result.HasResult)
+        {
+            PrepareAuditLogs(eventData.Context);
+        }
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        if (!result.HasResult)
+        {
+            PrepareAuditLogs(eventData.Context);
+        }
+        return ValueTask.FromResult(result);
+    }
+
+    public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
+    {
+        ForgetPendingLogs(eventData.Context);
+        return result;
+    }
+
+    public override ValueTask<int> SavedChangesAsync(
+        SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
+    {
+        ForgetPendingLogs(eventData.Context);
+        return ValueTask.FromResult(result);
+    }
+
+    public override void SaveChangesFailed(DbContextErrorEventData eventData) => RemovePendingLogs(eventData.Context);
+
+    public override Task SaveChangesFailedAsync(DbContextErrorEventData eventData, CancellationToken cancellationToken = default)
+    {
+        RemovePendingLogs(eventData.Context);
+        return Task.CompletedTask;
+    }
+
+    public override void SaveChangesCanceled(DbContextEventData eventData) => RemovePendingLogs(eventData.Context);
+
+    public override Task SaveChangesCanceledAsync(DbContextEventData eventData, CancellationToken cancellationToken = default)
+    {
+        RemovePendingLogs(eventData.Context);
+        return Task.CompletedTask;
+    }
+
+    private void PrepareAuditLogs(DbContext? context)
+    {
+        if (context is null)
+        {
+            return;
+        }
+        context.ChangeTracker.DetectChanges();
+        if (context.ChangeTracker.Entries<AuditLog>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException("Audit logs cannot be updated or deleted through SaveChanges.");
+        }
+
+        // Also handles exceptions thrown by a later SavingChanges interceptor.
+        RemovePendingLogs(context);
+        var entries = context.ChangeTracker.Entries()
+            .Where(x => AuditedProperties.ContainsKey(x.Metadata.ClrType)
+                && x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToList();
+        var logs = new List<AuditLog>();
+        foreach (var entry in entries)
+        {
+            var changes = GetChanges(entry);
+            if (changes.Count == 0)
+            {
+                continue;
+            }
+            var now = DateTimeOffset.UtcNow;
+            logs.Add(new AuditLog
+            {
+                ActorAccountId = auditContext.ActorAccountId,
+                ActorType = auditContext.ActorType,
+                Action = GetAction(entry),
+                EntityType = entry.Metadata.ClrType.Name,
+                EntityId = GetEntityId(entry),
+                Changes = JsonSerializer.Serialize(changes, JsonOptions),
+                Source = auditContext.Source,
+                IpAddress = auditContext.IpAddress,
+                CorrelationId = auditContext.CorrelationId,
+                OccurredAt = now,
+                RecordedAt = now
+            });
+        }
+        if (logs.Count == 0)
+        {
+            return;
+        }
+        foreach (var log in logs)
+        {
+            ValidateContext(log);
+        }
+        pendingLogs.Add(context, logs);
+        try
+        {
+            context.Set<AuditLog>().AddRange(logs);
+        }
+        catch
+        {
+            RemovePendingLogs(context);
+            throw;
+        }
+    }
+
+    private static Dictionary<string, ValueChange> GetChanges(EntityEntry entry)
+    {
+        var changes = new Dictionary<string, ValueChange>(StringComparer.Ordinal);
+        foreach (var name in AuditedProperties[entry.Metadata.ClrType])
+        {
+            var property = entry.Property(name);
+            if (entry.State == EntityState.Modified
+                && (!property.IsModified || Equals(property.OriginalValue, property.CurrentValue)))
+            {
+                continue;
+            }
+            changes[name] = new ValueChange(
+                RedactValue(entry.Metadata.ClrType, name, entry.State == EntityState.Added ? null : property.OriginalValue),
+                RedactValue(entry.Metadata.ClrType, name, entry.State == EntityState.Deleted ? null : property.CurrentValue));
+        }
+        return changes;
+    }
+
+    private static object? RedactValue(Type entityType, string name, object? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+        if ((entityType == typeof(Account) && name is nameof(Account.PasswordHash)
+                or nameof(Account.FullName) or nameof(Account.Email) or nameof(Account.IdentityNumber))
+            || (entityType == typeof(CustomerProfile) && name is nameof(CustomerProfile.Address)
+                or nameof(CustomerProfile.BankAccountHolderName)))
+        {
+            return "[REDACTED]";
+        }
+        if ((entityType == typeof(Account) && name == nameof(Account.PhoneNumber))
+            || (entityType == typeof(CustomerProfile) && name == nameof(CustomerProfile.BankAccountNumber)))
+        {
+            var text = value.ToString()!;
+            return text.Length > 4 ? "****" + text[^4..] : "[REDACTED]";
+        }
+        return value is Enum ? value.ToString() : value;
+    }
+
+    private static string GetEntityId(EntityEntry entry)
+    {
+        var key = entry.Metadata.FindPrimaryKey()
+            ?? throw new InvalidOperationException("An audited entity must have a primary key.");
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var keyProperty in key.Properties)
+        {
+            var property = entry.Property(keyProperty.Name);
+            var value = entry.State == EntityState.Deleted ? property.OriginalValue : property.CurrentValue;
+            if (property.IsTemporary || value is null || value is Guid id && id == Guid.Empty)
+            {
+                throw new InvalidOperationException("Assign the audited entity's permanent key before saving.");
+            }
+            values[keyProperty.Name] = value;
+        }
+        return values.Count == 1
+            ? values.Values.Single()!.ToString()!
+            : JsonSerializer.Serialize(values, JsonOptions);
+    }
+
+    private static string GetAction(EntityEntry entry) => (entry.Entity, entry.State) switch
+    {
+        (AccountRole, EntityState.Added) => "RoleAssigned",
+        (AccountRole, EntityState.Deleted) => "RoleRevoked",
+        (RolePermission, EntityState.Added) => "PermissionGranted",
+        (RolePermission, EntityState.Deleted) => "PermissionRevoked",
+        (_, EntityState.Added) => entry.Metadata.ClrType.Name + "Created",
+        (_, EntityState.Modified) => entry.Metadata.ClrType.Name + "Updated",
+        (_, EntityState.Deleted) => entry.Metadata.ClrType.Name + "Deleted",
+        _ => throw new InvalidOperationException("Unsupported audited entity state.")
+    };
+
+    private static void ValidateContext(AuditLog log)
+    {
+        if (!Enum.IsDefined(log.ActorType)
+            || log.ActorType == AuditActorType.User && (log.ActorAccountId is null || log.ActorAccountId == Guid.Empty)
+            || log.ActorType != AuditActorType.User && log.ActorAccountId is not null)
+        {
+            throw new InvalidOperationException("Audit actor type and account ID are inconsistent.");
+        }
+        if (string.IsNullOrWhiteSpace(log.Source) || log.Source.Length > 50
+            || log.IpAddress?.Length > 45 || log.CorrelationId?.Length > 128)
+        {
+            throw new InvalidOperationException("Configure a valid audit context before saving audited changes.");
+        }
+    }
+
+    private void RemovePendingLogs(DbContext? context)
+    {
+        if (context is null || !pendingLogs.TryGetValue(context, out var logs))
+        {
+            return;
+        }
+        foreach (var log in logs)
+        {
+            var entry = context.Entry(log);
+            if (entry.State == EntityState.Added)
+            {
+                entry.State = EntityState.Detached;
+            }
+        }
+        pendingLogs.Remove(context);
+    }
+
+    private void ForgetPendingLogs(DbContext? context)
+    {
+        if (context is not null)
+        {
+            pendingLogs.Remove(context);
+        }
+    }
+
+    private sealed record ValueChange(object? Old, object? New);
+}
