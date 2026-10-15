@@ -30,13 +30,17 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<AppointmentTimeSlot> AppointmentTimeSlots => Set<AppointmentTimeSlot>();
 
-    public DbSet<Appointment> Appointments  => Set<Appointment>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
 
-    public DbSet<ConsignmentContract> ConsignmentContracts  => Set<ConsignmentContract>();
+    public DbSet<ConsignmentContract> ConsignmentContracts => Set<ConsignmentContract>();
 
     public DbSet<Buyout> Buyouts => Set<Buyout>();
 
     public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+
+    public DbSet<ProductStatusHistory> ProductStatusHistories => Set<ProductStatusHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

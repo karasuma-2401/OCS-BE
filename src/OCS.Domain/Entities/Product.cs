@@ -46,4 +46,10 @@ public sealed class Product : BaseEntity
     public ConsignmentContract? ConsignmentContract { get; set; }
 
     public Buyout? Buyout { get; set; }
+
+    public ICollection<ProductImage> Images { get; set; }
+        = new List<ProductImage>();
+
+    public ICollection<ProductStatusHistory> StatusHistories { get; set; }
+        = new List<ProductStatusHistory>();
 }

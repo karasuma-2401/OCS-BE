@@ -173,6 +173,59 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.Appointment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("AppointmentDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("EstimatedItemCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SubmissionMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("TimeSlotId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TrackingNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("TimeSlotId");
+
+                    b.HasIndex("AppointmentDate", "TimeSlotId", "Status");
+
+                    b.ToTable("DATLICH", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_DATLICH_Enums", "\"Status\" IN ('Scheduled', 'Cancelled', 'Completed')\r\nAND \"SubmissionMethod\" IN ('InPerson', 'Shipping')");
+
+                            t.HasCheckConstraint("CK_DATLICH_ItemCount", "\"EstimatedItemCount\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.AppointmentTimeSlot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -336,6 +389,61 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.Buyout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ApprovedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BuyoutNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TotalPurchasePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByEmployeeId");
+
+                    b.HasIndex("BuyoutNumber")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByEmployeeId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("THUMUA", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_THUMUA_Approver", "\"Status\" <> 'Approved'\r\nOR \"ApprovedByEmployeeId\" IS NOT NULL");
+
+                            t.HasCheckConstraint("CK_THUMUA_Status", "\"Status\" IN ('Pending', 'Approved', 'Rejected')");
+
+                            t.HasCheckConstraint("CK_THUMUA_Total", "\"TotalPurchasePrice\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -361,6 +469,68 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("DANHMUC", (string)null);
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ConsignmentContract", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AppointmentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContractNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EndsAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExpiryHandling")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset>("SignedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.HasIndex("ContractNumber")
+                        .IsUnique();
+
+                    b.HasIndex("CreatedByEmployeeId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("Status", "EndsAt");
+
+                    b.ToTable("HOPDONGKYGUI", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_HOPDONGKYGUI_Dates", "\"EndsAt\" > \"SignedAt\"");
+
+                            t.HasCheckConstraint("CK_HOPDONGKYGUI_Enums", "\"Status\" IN ('Active', 'Completed')\r\nAND \"ExpiryHandling\" IN ('Return', 'Donate')");
+                        });
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.CustomerProfile", b =>
@@ -491,6 +661,199 @@ namespace OCS.Infrastructure.Persistence.Migrations
                             Code = "appointments.create",
                             Description = "Khách hàng tạo lịch hẹn ký gửi của mình trên mini app.",
                             Name = "Đặt lịch ký gửi"
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AgreedBrandTier")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<decimal?>("AgreedCommissionRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("Barcode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("BrandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("BuyoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ConditionPercentage")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ConsignmentContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<decimal>("ListedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<decimal?>("PurchasePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("Size")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SourceType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid?>("StorageLocationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Barcode")
+                        .IsUnique();
+
+                    b.HasIndex("BrandId");
+
+                    b.HasIndex("BuyoutId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("StorageLocationId");
+
+                    b.HasIndex("ConsignmentContractId", "Status");
+
+                    b.HasIndex("Status", "CategoryId");
+
+                    b.ToTable("SANPHAM", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SANPHAM_Commission", "\"AgreedCommissionRate\" IS NULL\r\nOR \"AgreedCommissionRate\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_SANPHAM_Condition", "\"ConditionPercentage\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_SANPHAM_Enums", "\"Status\" IN (\r\n    'PendingProcessing', 'OnSale', 'Sold',\r\n    'Expired', 'Donated', 'Returned',\r\n    'EarlyWithdrawn', 'Compensated', 'Cancelled'\r\n)\r\nAND (\r\n    \"AgreedBrandTier\" IS NULL\r\n    OR \"AgreedBrandTier\" IN (\r\n        'NoBrand', 'LocalBrand',\r\n        'Commercial', 'Luxury'\r\n    )\r\n)");
+
+                            t.HasCheckConstraint("CK_SANPHAM_Prices", "\"ListedPrice\" >= 0\r\nAND (\r\n    \"PurchasePrice\" IS NULL\r\n    OR \"PurchasePrice\" >= 0\r\n)");
+
+                            t.HasCheckConstraint("CK_SANPHAM_Source", "(\r\n    \"SourceType\" = 'Consignment'\r\n    AND \"ConsignmentContractId\" IS NOT NULL\r\n    AND \"BuyoutId\" IS NULL\r\n    AND \"PurchasePrice\" IS NULL\r\n    AND \"AgreedCommissionRate\" IS NOT NULL\r\n    AND \"AgreedBrandTier\" IS NOT NULL\r\n)\r\nOR\r\n(\r\n    \"SourceType\" = 'Buyout'\r\n    AND \"ConsignmentContractId\" IS NULL\r\n    AND \"BuyoutId\" IS NOT NULL\r\n    AND \"PurchasePrice\" IS NOT NULL\r\n    AND \"AgreedCommissionRate\" IS NULL\r\n    AND \"AgreedBrandTier\" IS NULL\r\n)");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ProductImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImageType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasFilter("\"ImageType\" = 'Cover'");
+
+                    b.HasIndex("ProductId", "SortOrder");
+
+                    b.ToTable("ANH_SANPHAM", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ANH_SANPHAM_ImageType", "\"ImageType\" IN ('Cover', 'Detail', 'Incident')");
+
+                            t.HasCheckConstraint("CK_ANH_SANPHAM_SortOrder", "\"SortOrder\" >= 0");
+
+                            t.HasCheckConstraint("CK_ANH_SANPHAM_Url", "length(btrim(\"Url\")) > 0");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ProductStatusHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ChangedByAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChangedByAccountId");
+
+                    b.HasIndex("ProductId", "OccurredAt");
+
+                    b.ToTable("LICHSUTRANGTHAISP", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_DifferentStatus", "\"PreviousStatus\" IS NULL\nOR \"PreviousStatus\" <> \"NewStatus\"");
+
+                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_NewStatus", "\"NewStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
+
+                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_PreviousStatus", "\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
                         });
                 });
 
@@ -659,6 +1022,25 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.Appointment", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.CustomerProfile", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.AppointmentTimeSlot", "TimeSlot")
+                        .WithMany()
+                        .HasForeignKey("TimeSlotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("TimeSlot");
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.AuditLog", b =>
                 {
                     b.HasOne("OCS.Domain.Entities.Account", "ActorAccount")
@@ -667,6 +1049,58 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ActorAccount");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Buyout", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "ApprovedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "CreatedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("CreatedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.CustomerProfile", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByEmployee");
+
+                    b.Navigation("CreatedByEmployee");
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ConsignmentContract", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Appointment", "Appointment")
+                        .WithMany()
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "CreatedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("CreatedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.CustomerProfile", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+
+                    b.Navigation("CreatedByEmployee");
+
+                    b.Navigation("Customer");
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.CustomerProfile", b =>
@@ -689,6 +1123,75 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Brand", "Brand")
+                        .WithMany()
+                        .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.Buyout", "Buyout")
+                        .WithMany("Products")
+                        .HasForeignKey("BuyoutId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.ConsignmentContract", "ConsignmentContract")
+                        .WithMany("Products")
+                        .HasForeignKey("ConsignmentContractId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.StorageLocation", "StorageLocation")
+                        .WithMany()
+                        .HasForeignKey("StorageLocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Brand");
+
+                    b.Navigation("Buyout");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("ConsignmentContract");
+
+                    b.Navigation("StorageLocation");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ProductImage", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithMany("Images")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ProductStatusHistory", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Account", "ChangedByAccount")
+                        .WithMany()
+                        .HasForeignKey("ChangedByAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithMany("StatusHistories")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ChangedByAccount");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.RolePermission", b =>
@@ -719,9 +1222,26 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.Navigation("EmployeeProfile");
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.Buyout", b =>
+                {
+                    b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ConsignmentContract", b =>
+                {
+                    b.Navigation("Products");
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.Permission", b =>
                 {
                     b.Navigation("RolePermissions");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Product", b =>
+                {
+                    b.Navigation("Images");
+
+                    b.Navigation("StatusHistories");
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.Role", b =>

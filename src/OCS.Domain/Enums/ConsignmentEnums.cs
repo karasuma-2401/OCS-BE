@@ -50,3 +50,10 @@ public enum ProductStatus
     Compensated = 7,
     Cancelled = 8
 }
+
+public enum ProductImageType
+{
+    Cover = 0,
+    Detail = 1,
+    Incident = 2
+}
