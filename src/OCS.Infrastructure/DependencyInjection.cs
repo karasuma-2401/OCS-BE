@@ -60,6 +60,7 @@ public static class DependencyInjection
 
         services.TryAddScoped<SystemAuditContext>();
         services.TryAddScoped<IAuditContext>(provider => provider.GetRequiredService<SystemAuditContext>());
+        services.AddScoped<TimestampSaveChangesInterceptor>();
         services.AddScoped<AuditSaveChangesInterceptor>();
 
         services.AddDbContext<AppDbContext>((provider, options) =>
@@ -69,7 +70,9 @@ public static class DependencyInjection
                 options.UseNpgsql(connectionString);
             }
 
-            options.AddInterceptors(provider.GetRequiredService<AuditSaveChangesInterceptor>());
+            options.AddInterceptors(
+                provider.GetRequiredService<TimestampSaveChangesInterceptor>(),
+                provider.GetRequiredService<AuditSaveChangesInterceptor>());
         });
     }
 

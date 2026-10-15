@@ -26,7 +26,27 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
         [typeof(Role)] = [nameof(Role.Code), nameof(Role.Name), nameof(Role.Description)],
         [typeof(Permission)] = [nameof(Permission.Code), nameof(Permission.Name), nameof(Permission.Description)],
         [typeof(AccountRole)] = [nameof(AccountRole.AccountId), nameof(AccountRole.RoleId)],
-        [typeof(RolePermission)] = [nameof(RolePermission.RoleId), nameof(RolePermission.PermissionId)]
+        [typeof(RolePermission)] = [nameof(RolePermission.RoleId), nameof(RolePermission.PermissionId)],
+        [typeof(Brand)] = [nameof(Brand.Name), nameof(Brand.Tier), nameof(Brand.DefaultCommissionRate), nameof(Brand.IsActive)],
+        [typeof(Category)] = [nameof(Category.Name), nameof(Category.IsActive)],
+        [typeof(StorageLocation)] = [nameof(StorageLocation.Code), nameof(StorageLocation.Name), nameof(StorageLocation.IsActive)],
+        [typeof(AppointmentTimeSlot)] = [nameof(AppointmentTimeSlot.StartTime), nameof(AppointmentTimeSlot.EndTime),
+            nameof(AppointmentTimeSlot.MaxCustomers), nameof(AppointmentTimeSlot.IsActive)],
+        [typeof(Appointment)] = [nameof(Appointment.CustomerId), nameof(Appointment.TimeSlotId), nameof(Appointment.AppointmentDate),
+            nameof(Appointment.EstimatedItemCount), nameof(Appointment.SubmissionMethod), nameof(Appointment.TrackingNumber),
+            nameof(Appointment.Status)],
+        [typeof(ConsignmentContract)] = [nameof(ConsignmentContract.ContractNumber), nameof(ConsignmentContract.CustomerId),
+            nameof(ConsignmentContract.AppointmentId), nameof(ConsignmentContract.CreatedByEmployeeId),
+            nameof(ConsignmentContract.SignedAt), nameof(ConsignmentContract.EndsAt), nameof(ConsignmentContract.ExpiryHandling),
+            nameof(ConsignmentContract.Status)],
+        [typeof(Buyout)] = [nameof(Buyout.BuyoutNumber), nameof(Buyout.CustomerId), nameof(Buyout.CreatedByEmployeeId),
+            nameof(Buyout.ApprovedByEmployeeId), nameof(Buyout.TotalPurchasePrice), nameof(Buyout.Status)],
+        [typeof(Product)] = [nameof(Product.Barcode), nameof(Product.Name), nameof(Product.Size), nameof(Product.Description),
+            nameof(Product.ConditionPercentage), nameof(Product.BrandId), nameof(Product.CategoryId), nameof(Product.StorageLocationId),
+            nameof(Product.SourceType), nameof(Product.ConsignmentContractId), nameof(Product.BuyoutId), nameof(Product.ListedPrice),
+            nameof(Product.PurchasePrice), nameof(Product.AgreedCommissionRate), nameof(Product.AgreedBrandTier), nameof(Product.Status)],
+        [typeof(ProductImage)] = [nameof(ProductImage.ProductId), nameof(ProductImage.Url), nameof(ProductImage.ImageType),
+            nameof(ProductImage.SortOrder)]
     };
 
     // Ownership per context lets retries replace automatic logs without touching manual logs.
@@ -90,6 +110,11 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
         if (context.ChangeTracker.Entries<AuditLog>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
         {
             throw new InvalidOperationException("Audit logs cannot be updated or deleted through SaveChanges.");
+        }
+        // Services append lifecycle events explicitly; do not generate a second audit trail for them.
+        if (context.ChangeTracker.Entries<ProductStatusHistory>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+        {
+            throw new InvalidOperationException("Product status history cannot be updated or deleted through SaveChanges.");
         }
 
         // Also handles exceptions thrown by a later SavingChanges interceptor.
