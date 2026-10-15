@@ -26,6 +26,16 @@ public sealed class AppDbContext(
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
+    public DbSet<Brand> Brands => Set<Brand>();
+
+    public DbSet<Category> Categories => Set<Category>();
+
+    public DbSet<StorageLocation> StorageLocations
+        => Set<StorageLocation>();
+
+    public DbSet<AppointmentTimeSlot> AppointmentTimeSlots
+        => Set<AppointmentTimeSlot>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

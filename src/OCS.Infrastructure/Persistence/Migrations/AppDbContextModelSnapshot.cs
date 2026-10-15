@@ -173,6 +173,42 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.AppointmentTimeSlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("MaxCustomers")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartTime", "EndTime")
+                        .IsUnique();
+
+                    b.ToTable("KHUNGGIOHEN", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_KHUNGGIOHEN_MaxCustomers", "\"MaxCustomers\" > 0");
+
+                            t.HasCheckConstraint("CK_KHUNGGIOHEN_TimeRange", "\"EndTime\" > \"StartTime\"");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.AuditLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -257,6 +293,74 @@ namespace OCS.Infrastructure.Persistence.Migrations
                             RecordedAt = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
                             Source = "DemoSeed"
                         });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Brand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("DefaultCommissionRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Tier")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("THUONGHIEU", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_THUONGHIEU_CommissionRate", "\"DefaultCommissionRate\" BETWEEN 0 AND 100");
+
+                            t.HasCheckConstraint("CK_THUONGHIEU_Tier", "\"Tier\" IN (\r\n    'NoBrand',\r\n    'LocalBrand',\r\n    'Commercial',\r\n    'Luxury'\r\n)");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Category", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("DANHMUC", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.CustomerProfile", b =>
@@ -492,6 +596,38 @@ namespace OCS.Infrastructure.Persistence.Migrations
                             RoleId = new Guid("20000000-0000-0000-0000-000000000004"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000003")
                         });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.StorageLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("KHOLUU", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.Account", b =>
