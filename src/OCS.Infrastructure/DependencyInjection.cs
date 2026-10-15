@@ -5,10 +5,13 @@ using Hangfire.PostgreSql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using OCS.Application.Abstractions.Persistence;
+using OCS.Application.Abstractions.Auditing;
 using OCS.Infrastructure.HealthChecks;
 using OCS.Infrastructure.Persistence;
+using OCS.Infrastructure.Persistence.Interceptors;
 using OCS.Infrastructure.Storage;
 
 namespace OCS.Infrastructure;
@@ -55,12 +58,18 @@ public static class DependencyInjection
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection");
 
-        services.AddDbContext<AppDbContext>(options =>
+        services.TryAddScoped<SystemAuditContext>();
+        services.TryAddScoped<IAuditContext>(provider => provider.GetRequiredService<SystemAuditContext>());
+        services.AddScoped<AuditSaveChangesInterceptor>();
+
+        services.AddDbContext<AppDbContext>((provider, options) =>
         {
             if (!string.IsNullOrWhiteSpace(connectionString))
             {
                 options.UseNpgsql(connectionString);
             }
+
+            options.AddInterceptors(provider.GetRequiredService<AuditSaveChangesInterceptor>());
         });
     }
 
