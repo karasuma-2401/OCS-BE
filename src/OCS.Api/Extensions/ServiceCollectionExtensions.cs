@@ -19,7 +19,7 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddControllers();
-        services.AddProblemDetails();
+        services.AddApiConventions();
         services.AddOpenApi();
         services.AddApplication();
         services.AddHttpContextAccessor();
