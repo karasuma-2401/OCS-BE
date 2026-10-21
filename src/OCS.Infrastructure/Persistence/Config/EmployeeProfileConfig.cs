@@ -23,6 +23,9 @@ public sealed class EmployeeProfileConfig : IEntityTypeConfiguration<EmployeePro
             .HasColumnType("date")
             .IsRequired();
 
+        builder.Property(x => x.LeftOn)
+            .HasColumnType("date");
+
         builder.Property(x => x.Status)
             .HasConversion<string>()
             .HasMaxLength(20)
