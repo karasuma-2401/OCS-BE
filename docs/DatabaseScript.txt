@@ -1,0 +1,1410 @@
+﻿CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    "MigrationId" character varying(150) NOT NULL,
+    "ProductVersion" character varying(32) NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY ("MigrationId")
+);
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "QUYEN" (
+        "Id" uuid NOT NULL,
+        "Code" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "Description" character varying(500),
+        CONSTRAINT "PK_QUYEN" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "TAIKHOAN" (
+        "Id" uuid NOT NULL,
+        "AccountType" character varying(20) NOT NULL,
+        "FullName" character varying(200) NOT NULL,
+        "PhoneNumber" character varying(20) NOT NULL,
+        "Username" character varying(100),
+        "Email" character varying(254),
+        "IdentityNumber" character varying(20),
+        "PasswordHash" character varying(512),
+        "Status" character varying(30) NOT NULL,
+        "PhoneVerifiedAt" timestamp with time zone,
+        "ActivatedAt" timestamp with time zone,
+        "CreatedByAccountId" uuid,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_TAIKHOAN" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_TAIKHOAN_AccountType" CHECK ("AccountType" IN ('Customer', 'Internal')),
+        CONSTRAINT "CK_TAIKHOAN_ActiveInternalPassword" CHECK ("AccountType" <> 'Internal'
+    OR "Status" <> 'Active'
+    OR (
+        "PasswordHash" IS NOT NULL
+        AND length(btrim("PasswordHash")) > 0
+    )),
+        CONSTRAINT "CK_TAIKHOAN_InternalUsername" CHECK ("AccountType" <> 'Internal'
+    OR (
+        "Username" IS NOT NULL
+        AND length(btrim("Username")) > 0
+    )),
+        CONSTRAINT "CK_TAIKHOAN_Status" CHECK ("Status" IN (
+        'PendingActivation',
+        'Active',
+        'Locked',
+        'Deactivated'
+    )),
+        CONSTRAINT "FK_TAIKHOAN_TAIKHOAN_CreatedByAccountId" FOREIGN KEY ("CreatedByAccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "VAITRO" (
+        "Id" uuid NOT NULL,
+        "Code" character varying(50) NOT NULL,
+        "Name" character varying(100) NOT NULL,
+        "Description" character varying(500),
+        CONSTRAINT "PK_VAITRO" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "KHACHHANG" (
+        "Id" uuid NOT NULL,
+        "Address" character varying(500),
+        "BankCode" character varying(50),
+        "BankAccountNumber" character varying(50),
+        "BankAccountHolderName" character varying(200),
+        "Status" character varying(20) NOT NULL,
+        CONSTRAINT "PK_KHACHHANG" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_KHACHHANG_TAIKHOAN_Id" FOREIGN KEY ("Id") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "NHANVIEN" (
+        "Id" uuid NOT NULL,
+        "JobTitle" character varying(100) NOT NULL,
+        "HiredOn" date NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        CONSTRAINT "PK_NHANVIEN" PRIMARY KEY ("Id"),
+        CONSTRAINT "FK_NHANVIEN_TAIKHOAN_Id" FOREIGN KEY ("Id") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "NHATKYHETHONG" (
+        "Id" uuid NOT NULL,
+        "ActorAccountId" uuid,
+        "ActorType" character varying(20) NOT NULL,
+        "Action" character varying(100) NOT NULL,
+        "EntityType" character varying(100) NOT NULL,
+        "EntityId" character varying(200) NOT NULL,
+        "Changes" jsonb NOT NULL,
+        "Reason" character varying(1000),
+        "OccurredAt" timestamp with time zone NOT NULL,
+        "RecordedAt" timestamp with time zone NOT NULL,
+        "Source" character varying(50) NOT NULL,
+        "IpAddress" character varying(45),
+        "CorrelationId" character varying(128),
+        CONSTRAINT "PK_NHATKYHETHONG" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_NHATKYHETHONG_ActorType" CHECK ("ActorType" IN ('User', 'System', 'Anonymous')),
+        CONSTRAINT "CK_NHATKYHETHONG_UserActor" CHECK ("ActorType" <> 'User'
+    OR "ActorAccountId" IS NOT NULL),
+        CONSTRAINT "FK_NHATKYHETHONG_TAIKHOAN_ActorAccountId" FOREIGN KEY ("ActorAccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "PHANQUYEN" (
+        "RoleId" uuid NOT NULL,
+        "PermissionId" uuid NOT NULL,
+        CONSTRAINT "PK_PHANQUYEN" PRIMARY KEY ("RoleId", "PermissionId"),
+        CONSTRAINT "FK_PHANQUYEN_QUYEN_PermissionId" FOREIGN KEY ("PermissionId") REFERENCES "QUYEN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_PHANQUYEN_VAITRO_RoleId" FOREIGN KEY ("RoleId") REFERENCES "VAITRO" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE TABLE "TAIKHOAN_VAITRO" (
+        "AccountId" uuid NOT NULL,
+        "RoleId" uuid NOT NULL,
+        CONSTRAINT "PK_TAIKHOAN_VAITRO" PRIMARY KEY ("AccountId", "RoleId"),
+        CONSTRAINT "FK_TAIKHOAN_VAITRO_TAIKHOAN_AccountId" FOREIGN KEY ("AccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_TAIKHOAN_VAITRO_VAITRO_RoleId" FOREIGN KEY ("RoleId") REFERENCES "VAITRO" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "NHATKYHETHONG" ("Id", "Action", "ActorAccountId", "ActorType", "Changes", "CorrelationId", "EntityId", "EntityType", "IpAddress", "OccurredAt", "Reason", "RecordedAt", "Source")
+    VALUES ('40000000-0000-0000-0000-000000000001', 'DemoDataSeeded', NULL, 'System', '{"Dataset":{"old":null,"new":"AccountsDemoV1"}}', NULL, '10000000-0000-0000-0000-000000000001', 'Account', NULL, TIMESTAMPTZ '2026-10-16T00:00:00+00:00', 'Bản ghi minh họa thuộc bộ dữ liệu demo; không phải sự kiện người dùng thực tế.', TIMESTAMPTZ '2026-10-16T00:00:00+00:00', 'DemoSeed');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "QUYEN" ("Id", "Code", "Description", "Name")
+    VALUES ('30000000-0000-0000-0000-000000000001', 'customers.read', 'Tra cứu hồ sơ phục vụ tiếp nhận tại cửa hàng.', 'Xem hồ sơ khách');
+    INSERT INTO "QUYEN" ("Id", "Code", "Description", "Name")
+    VALUES ('30000000-0000-0000-0000-000000000002', 'accounts.create', 'Quản lý cấp tài khoản cho nhân viên.', 'Cấp tài khoản nội bộ');
+    INSERT INTO "QUYEN" ("Id", "Code", "Description", "Name")
+    VALUES ('30000000-0000-0000-0000-000000000003', 'appointments.create', 'Khách hàng tạo lịch hẹn ký gửi của mình trên mini app.', 'Đặt lịch ký gửi');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "TAIKHOAN" ("Id", "AccountType", "ActivatedAt", "CreatedAt", "CreatedByAccountId", "Email", "FullName", "IdentityNumber", "PasswordHash", "PhoneNumber", "PhoneVerifiedAt", "Status", "UpdatedAt", "Username")
+    VALUES ('10000000-0000-0000-0000-000000000001', 'Internal', NULL, TIMESTAMPTZ '2026-10-16T00:00:00+00:00', NULL, 'manager.demo@example.com', 'Quản lý demo', NULL, NULL, '0900000001', NULL, 'PendingActivation', NULL, 'manager.demo');
+    INSERT INTO "TAIKHOAN" ("Id", "AccountType", "ActivatedAt", "CreatedAt", "CreatedByAccountId", "Email", "FullName", "IdentityNumber", "PasswordHash", "PhoneNumber", "PhoneVerifiedAt", "Status", "UpdatedAt", "Username")
+    VALUES ('10000000-0000-0000-0000-000000000003', 'Customer', NULL, TIMESTAMPTZ '2026-10-16T00:00:00+00:00', NULL, 'customer.demo@example.com', 'Khách ký gửi demo', NULL, NULL, '0900000003', NULL, 'PendingActivation', NULL, NULL);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "VAITRO" ("Id", "Code", "Description", "Name")
+    VALUES ('20000000-0000-0000-0000-000000000001', 'Manager', 'Vai trò mẫu cho tài khoản quản lý nội bộ.', 'Quản lý');
+    INSERT INTO "VAITRO" ("Id", "Code", "Description", "Name")
+    VALUES ('20000000-0000-0000-0000-000000000002', 'Staff', 'Vai trò mẫu cho nhân viên sử dụng POS.', 'Nhân viên');
+    INSERT INTO "VAITRO" ("Id", "Code", "Description", "Name")
+    VALUES ('20000000-0000-0000-0000-000000000003', 'Admin', 'Vai trò quản trị hệ thống nội bộ.', 'Quản trị viên');
+    INSERT INTO "VAITRO" ("Id", "Code", "Description", "Name")
+    VALUES ('20000000-0000-0000-0000-000000000004', 'Customer', 'Vai trò khách hàng sử dụng mini app để đặt lịch ký gửi.', 'Khách hàng');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "KHACHHANG" ("Id", "Address", "BankAccountHolderName", "BankAccountNumber", "BankCode", "Status")
+    VALUES ('10000000-0000-0000-0000-000000000003', 'Địa chỉ mẫu tại TP. Hồ Chí Minh', 'KHACH KY GUI DEMO', '000000000001', 'VCB', 'Active');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "NHANVIEN" ("Id", "HiredOn", "JobTitle", "Status")
+    VALUES ('10000000-0000-0000-0000-000000000001', DATE '2026-10-01', 'Quản lý cửa hàng', 'Working');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "PHANQUYEN" ("PermissionId", "RoleId")
+    VALUES ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001');
+    INSERT INTO "PHANQUYEN" ("PermissionId", "RoleId")
+    VALUES ('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001');
+    INSERT INTO "PHANQUYEN" ("PermissionId", "RoleId")
+    VALUES ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000002');
+    INSERT INTO "PHANQUYEN" ("PermissionId", "RoleId")
+    VALUES ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003');
+    INSERT INTO "PHANQUYEN" ("PermissionId", "RoleId")
+    VALUES ('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000003');
+    INSERT INTO "PHANQUYEN" ("PermissionId", "RoleId")
+    VALUES ('30000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000004');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "TAIKHOAN" ("Id", "AccountType", "ActivatedAt", "CreatedAt", "CreatedByAccountId", "Email", "FullName", "IdentityNumber", "PasswordHash", "PhoneNumber", "PhoneVerifiedAt", "Status", "UpdatedAt", "Username")
+    VALUES ('10000000-0000-0000-0000-000000000002', 'Internal', NULL, TIMESTAMPTZ '2026-10-16T00:00:00+00:00', '10000000-0000-0000-0000-000000000001', 'staff.demo@example.com', 'Nhân viên demo', NULL, NULL, '0900000002', NULL, 'PendingActivation', NULL, 'staff.demo');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "TAIKHOAN_VAITRO" ("AccountId", "RoleId")
+    VALUES ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001');
+    INSERT INTO "TAIKHOAN_VAITRO" ("AccountId", "RoleId")
+    VALUES ('10000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000004');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "NHANVIEN" ("Id", "HiredOn", "JobTitle", "Status")
+    VALUES ('10000000-0000-0000-0000-000000000002', DATE '2026-10-10', 'Nhân viên POS', 'Working');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "TAIKHOAN_VAITRO" ("AccountId", "RoleId")
+    VALUES ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002');
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE INDEX "IX_NHATKYHETHONG_ActorAccountId_OccurredAt" ON "NHATKYHETHONG" ("ActorAccountId", "OccurredAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE INDEX "IX_NHATKYHETHONG_EntityType_EntityId_OccurredAt" ON "NHATKYHETHONG" ("EntityType", "EntityId", "OccurredAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE INDEX "IX_NHATKYHETHONG_RecordedAt" ON "NHATKYHETHONG" ("RecordedAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE INDEX "IX_PHANQUYEN_PermissionId" ON "PHANQUYEN" ("PermissionId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE UNIQUE INDEX "IX_QUYEN_Code" ON "QUYEN" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE UNIQUE INDEX "IX_TAIKHOAN_AccountType_Email" ON "TAIKHOAN" ("AccountType", "Email");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE UNIQUE INDEX "IX_TAIKHOAN_AccountType_IdentityNumber" ON "TAIKHOAN" ("AccountType", "IdentityNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE UNIQUE INDEX "IX_TAIKHOAN_AccountType_PhoneNumber" ON "TAIKHOAN" ("AccountType", "PhoneNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE INDEX "IX_TAIKHOAN_CreatedByAccountId" ON "TAIKHOAN" ("CreatedByAccountId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE UNIQUE INDEX "IX_TAIKHOAN_Username" ON "TAIKHOAN" ("Username");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE INDEX "IX_TAIKHOAN_VAITRO_RoleId" ON "TAIKHOAN_VAITRO" ("RoleId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    CREATE UNIQUE INDEX "IX_VAITRO_Code" ON "VAITRO" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015173917_InitialAccountsAndPermissions') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261015173917_InitialAccountsAndPermissions', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE TABLE "DANHMUC" (
+        "Id" uuid NOT NULL,
+        "Name" character varying(100) NOT NULL,
+        "IsActive" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_DANHMUC" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE TABLE "KHOLUU" (
+        "Id" uuid NOT NULL,
+        "Code" character varying(50) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "IsActive" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_KHOLUU" PRIMARY KEY ("Id")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE TABLE "KHUNGGIOHEN" (
+        "Id" uuid NOT NULL,
+        "StartTime" time without time zone NOT NULL,
+        "EndTime" time without time zone NOT NULL,
+        "MaxCustomers" integer NOT NULL,
+        "IsActive" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_KHUNGGIOHEN" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_KHUNGGIOHEN_MaxCustomers" CHECK ("MaxCustomers" > 0),
+        CONSTRAINT "CK_KHUNGGIOHEN_TimeRange" CHECK ("EndTime" > "StartTime")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE TABLE "THUONGHIEU" (
+        "Id" uuid NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "Tier" character varying(30) NOT NULL,
+        "DefaultCommissionRate" numeric(5,2) NOT NULL,
+        "IsActive" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_THUONGHIEU" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_THUONGHIEU_CommissionRate" CHECK ("DefaultCommissionRate" BETWEEN 0 AND 100),
+        CONSTRAINT "CK_THUONGHIEU_Tier" CHECK ("Tier" IN (
+        'NoBrand',
+        'LocalBrand',
+        'Commercial',
+        'Luxury'
+    ))
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE UNIQUE INDEX "IX_DANHMUC_Name" ON "DANHMUC" ("Name");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE UNIQUE INDEX "IX_KHOLUU_Code" ON "KHOLUU" ("Code");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE UNIQUE INDEX "IX_KHUNGGIOHEN_StartTime_EndTime" ON "KHUNGGIOHEN" ("StartTime", "EndTime");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    CREATE UNIQUE INDEX "IX_THUONGHIEU_Name" ON "THUONGHIEU" ("Name");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015181115_AddCatalogsAndAppointmentTimeSlots') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261015181115_AddCatalogsAndAppointmentTimeSlots', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE TABLE "DATLICH" (
+        "Id" uuid NOT NULL,
+        "CustomerId" uuid NOT NULL,
+        "TimeSlotId" uuid NOT NULL,
+        "AppointmentDate" date NOT NULL,
+        "EstimatedItemCount" integer NOT NULL,
+        "SubmissionMethod" character varying(20) NOT NULL,
+        "TrackingNumber" character varying(100),
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_DATLICH" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_DATLICH_Enums" CHECK ("Status" IN ('Scheduled', 'Cancelled', 'Completed')
+    AND "SubmissionMethod" IN ('InPerson', 'Shipping')),
+        CONSTRAINT "CK_DATLICH_ItemCount" CHECK ("EstimatedItemCount" >= 0),
+        CONSTRAINT "FK_DATLICH_KHACHHANG_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "KHACHHANG" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_DATLICH_KHUNGGIOHEN_TimeSlotId" FOREIGN KEY ("TimeSlotId") REFERENCES "KHUNGGIOHEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE TABLE "THUMUA" (
+        "Id" uuid NOT NULL,
+        "BuyoutNumber" character varying(50) NOT NULL,
+        "CustomerId" uuid NOT NULL,
+        "CreatedByEmployeeId" uuid NOT NULL,
+        "ApprovedByEmployeeId" uuid,
+        "TotalPurchasePrice" numeric(18,2) NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_THUMUA" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_THUMUA_Approver" CHECK ("Status" <> 'Approved'
+    OR "ApprovedByEmployeeId" IS NOT NULL),
+        CONSTRAINT "CK_THUMUA_Status" CHECK ("Status" IN ('Pending', 'Approved', 'Rejected')),
+        CONSTRAINT "CK_THUMUA_Total" CHECK ("TotalPurchasePrice" >= 0),
+        CONSTRAINT "FK_THUMUA_KHACHHANG_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "KHACHHANG" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_THUMUA_NHANVIEN_ApprovedByEmployeeId" FOREIGN KEY ("ApprovedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_THUMUA_NHANVIEN_CreatedByEmployeeId" FOREIGN KEY ("CreatedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE TABLE "HOPDONGKYGUI" (
+        "Id" uuid NOT NULL,
+        "ContractNumber" character varying(50) NOT NULL,
+        "CustomerId" uuid NOT NULL,
+        "AppointmentId" uuid,
+        "CreatedByEmployeeId" uuid NOT NULL,
+        "SignedAt" timestamp with time zone NOT NULL,
+        "EndsAt" timestamp with time zone NOT NULL,
+        "ExpiryHandling" character varying(20) NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_HOPDONGKYGUI" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_HOPDONGKYGUI_Dates" CHECK ("EndsAt" > "SignedAt"),
+        CONSTRAINT "CK_HOPDONGKYGUI_Enums" CHECK ("Status" IN ('Active', 'Completed')
+    AND "ExpiryHandling" IN ('Return', 'Donate')),
+        CONSTRAINT "FK_HOPDONGKYGUI_DATLICH_AppointmentId" FOREIGN KEY ("AppointmentId") REFERENCES "DATLICH" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_HOPDONGKYGUI_KHACHHANG_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "KHACHHANG" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_HOPDONGKYGUI_NHANVIEN_CreatedByEmployeeId" FOREIGN KEY ("CreatedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE TABLE "SANPHAM" (
+        "Id" uuid NOT NULL,
+        "Barcode" character varying(100) NOT NULL,
+        "Name" character varying(200) NOT NULL,
+        "Size" character varying(30) NOT NULL,
+        "Description" character varying(2000),
+        "ConditionPercentage" integer NOT NULL,
+        "BrandId" uuid NOT NULL,
+        "CategoryId" uuid NOT NULL,
+        "StorageLocationId" uuid,
+        "SourceType" character varying(20) NOT NULL,
+        "ConsignmentContractId" uuid,
+        "BuyoutId" uuid,
+        "ListedPrice" numeric(18,2) NOT NULL,
+        "PurchasePrice" numeric(18,2),
+        "AgreedCommissionRate" numeric(5,2),
+        "AgreedBrandTier" character varying(30),
+        "Status" character varying(30) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_SANPHAM" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_SANPHAM_Commission" CHECK ("AgreedCommissionRate" IS NULL
+    OR "AgreedCommissionRate" BETWEEN 0 AND 100),
+        CONSTRAINT "CK_SANPHAM_Condition" CHECK ("ConditionPercentage" BETWEEN 0 AND 100),
+        CONSTRAINT "CK_SANPHAM_Enums" CHECK ("Status" IN (
+        'PendingProcessing', 'OnSale', 'Sold',
+        'Expired', 'Donated', 'Returned',
+        'EarlyWithdrawn', 'Compensated', 'Cancelled'
+    )
+    AND (
+        "AgreedBrandTier" IS NULL
+        OR "AgreedBrandTier" IN (
+            'NoBrand', 'LocalBrand',
+            'Commercial', 'Luxury'
+        )
+    )),
+        CONSTRAINT "CK_SANPHAM_Prices" CHECK ("ListedPrice" >= 0
+    AND (
+        "PurchasePrice" IS NULL
+        OR "PurchasePrice" >= 0
+    )),
+        CONSTRAINT "CK_SANPHAM_Source" CHECK ((
+        "SourceType" = 'Consignment'
+        AND "ConsignmentContractId" IS NOT NULL
+        AND "BuyoutId" IS NULL
+        AND "PurchasePrice" IS NULL
+        AND "AgreedCommissionRate" IS NOT NULL
+        AND "AgreedBrandTier" IS NOT NULL
+    )
+    OR
+    (
+        "SourceType" = 'Buyout'
+        AND "ConsignmentContractId" IS NULL
+        AND "BuyoutId" IS NOT NULL
+        AND "PurchasePrice" IS NOT NULL
+        AND "AgreedCommissionRate" IS NULL
+        AND "AgreedBrandTier" IS NULL
+    )),
+        CONSTRAINT "FK_SANPHAM_DANHMUC_CategoryId" FOREIGN KEY ("CategoryId") REFERENCES "DANHMUC" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_SANPHAM_HOPDONGKYGUI_ConsignmentContractId" FOREIGN KEY ("ConsignmentContractId") REFERENCES "HOPDONGKYGUI" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_SANPHAM_KHOLUU_StorageLocationId" FOREIGN KEY ("StorageLocationId") REFERENCES "KHOLUU" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_SANPHAM_THUMUA_BuyoutId" FOREIGN KEY ("BuyoutId") REFERENCES "THUMUA" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_SANPHAM_THUONGHIEU_BrandId" FOREIGN KEY ("BrandId") REFERENCES "THUONGHIEU" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE TABLE "ANH_SANPHAM" (
+        "Id" uuid NOT NULL,
+        "ProductId" uuid NOT NULL,
+        "Url" character varying(2048) NOT NULL,
+        "ImageType" character varying(20) NOT NULL,
+        "SortOrder" integer NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_ANH_SANPHAM" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_ANH_SANPHAM_ImageType" CHECK ("ImageType" IN ('Cover', 'Detail', 'Incident')),
+        CONSTRAINT "CK_ANH_SANPHAM_SortOrder" CHECK ("SortOrder" >= 0),
+        CONSTRAINT "CK_ANH_SANPHAM_Url" CHECK (length(btrim("Url")) > 0),
+        CONSTRAINT "FK_ANH_SANPHAM_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE TABLE "LICHSUTRANGTHAISP" (
+        "Id" uuid NOT NULL,
+        "ProductId" uuid NOT NULL,
+        "PreviousStatus" character varying(30),
+        "NewStatus" character varying(30) NOT NULL,
+        "OccurredAt" timestamp with time zone NOT NULL,
+        "ChangedByAccountId" uuid,
+        "Reason" character varying(1000),
+        CONSTRAINT "PK_LICHSUTRANGTHAISP" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_LICHSUTRANGTHAISP_DifferentStatus" CHECK ("PreviousStatus" IS NULL
+    OR "PreviousStatus" <> "NewStatus"),
+        CONSTRAINT "CK_LICHSUTRANGTHAISP_NewStatus" CHECK ("NewStatus" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')),
+        CONSTRAINT "CK_LICHSUTRANGTHAISP_PreviousStatus" CHECK ("PreviousStatus" IS NULL OR "PreviousStatus" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')),
+        CONSTRAINT "FK_LICHSUTRANGTHAISP_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_LICHSUTRANGTHAISP_TAIKHOAN_ChangedByAccountId" FOREIGN KEY ("ChangedByAccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE UNIQUE INDEX "IX_ANH_SANPHAM_ProductId" ON "ANH_SANPHAM" ("ProductId") WHERE "ImageType" = 'Cover';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_ANH_SANPHAM_ProductId_SortOrder" ON "ANH_SANPHAM" ("ProductId", "SortOrder");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_DATLICH_AppointmentDate_TimeSlotId_Status" ON "DATLICH" ("AppointmentDate", "TimeSlotId", "Status");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_DATLICH_CustomerId" ON "DATLICH" ("CustomerId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_DATLICH_TimeSlotId" ON "DATLICH" ("TimeSlotId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_HOPDONGKYGUI_AppointmentId" ON "HOPDONGKYGUI" ("AppointmentId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE UNIQUE INDEX "IX_HOPDONGKYGUI_ContractNumber" ON "HOPDONGKYGUI" ("ContractNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_HOPDONGKYGUI_CreatedByEmployeeId" ON "HOPDONGKYGUI" ("CreatedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_HOPDONGKYGUI_CustomerId" ON "HOPDONGKYGUI" ("CustomerId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_HOPDONGKYGUI_Status_EndsAt" ON "HOPDONGKYGUI" ("Status", "EndsAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_LICHSUTRANGTHAISP_ChangedByAccountId" ON "LICHSUTRANGTHAISP" ("ChangedByAccountId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_LICHSUTRANGTHAISP_ProductId_OccurredAt" ON "LICHSUTRANGTHAISP" ("ProductId", "OccurredAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE UNIQUE INDEX "IX_SANPHAM_Barcode" ON "SANPHAM" ("Barcode");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_SANPHAM_BrandId" ON "SANPHAM" ("BrandId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_SANPHAM_BuyoutId" ON "SANPHAM" ("BuyoutId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_SANPHAM_CategoryId" ON "SANPHAM" ("CategoryId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_SANPHAM_ConsignmentContractId_Status" ON "SANPHAM" ("ConsignmentContractId", "Status");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_SANPHAM_Status_CategoryId" ON "SANPHAM" ("Status", "CategoryId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_SANPHAM_StorageLocationId" ON "SANPHAM" ("StorageLocationId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_THUMUA_ApprovedByEmployeeId" ON "THUMUA" ("ApprovedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE UNIQUE INDEX "IX_THUMUA_BuyoutNumber" ON "THUMUA" ("BuyoutNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_THUMUA_CreatedByEmployeeId" ON "THUMUA" ("CreatedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    CREATE INDEX "IX_THUMUA_CustomerId" ON "THUMUA" ("CustomerId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261015185523_AddProducts') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261015185523_AddProducts', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    ALTER TABLE "HOPDONGKYGUI" DROP CONSTRAINT "CK_HOPDONGKYGUI_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    ALTER TABLE "NHANVIEN" ADD "LeftOn" date;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "BIENBANSUCO" (
+        "Id" uuid NOT NULL,
+        "ProductId" uuid NOT NULL,
+        "CreatedByEmployeeId" uuid NOT NULL,
+        "ApprovedByEmployeeId" uuid NOT NULL,
+        "Type" character varying(20) NOT NULL,
+        "CompensationAmount" numeric(18,2) NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_BIENBANSUCO" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_BIENBANSUCO_Compensation" CHECK ("CompensationAmount" >= 0),
+        CONSTRAINT "CK_BIENBANSUCO_Enums" CHECK ("Type" IN ('Lost', 'Damaged', 'TagSwapped') AND "Status" IN ('Pending', 'Approved', 'Compensated')),
+        CONSTRAINT "FK_BIENBANSUCO_NHANVIEN_ApprovedByEmployeeId" FOREIGN KEY ("ApprovedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_BIENBANSUCO_NHANVIEN_CreatedByEmployeeId" FOREIGN KEY ("CreatedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_BIENBANSUCO_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "HOADONBAN" (
+        "Id" uuid NOT NULL,
+        "InvoiceNumber" character varying(50) NOT NULL,
+        "SoldByEmployeeId" uuid NOT NULL,
+        "TotalAmount" numeric(18,2) NOT NULL,
+        "PaymentStatus" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_HOADONBAN" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_HOADONBAN_PaymentStatus" CHECK ("PaymentStatus" IN ('Unpaid', 'Partial', 'Paid')),
+        CONSTRAINT "CK_HOADONBAN_Total" CHECK ("TotalAmount" >= 0),
+        CONSTRAINT "FK_HOADONBAN_NHANVIEN_SoldByEmployeeId" FOREIGN KEY ("SoldByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "PHIEUGIAINGAN" (
+        "Id" uuid NOT NULL,
+        "PayoutNumber" character varying(50) NOT NULL,
+        "ConsignmentContractId" uuid NOT NULL,
+        "ApprovedByEmployeeId" uuid NOT NULL,
+        "TotalAmount" numeric(18,2) NOT NULL,
+        "ProofUrl" character varying(2048),
+        "BankTransactionReference" character varying(100),
+        "Status" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_PHIEUGIAINGAN" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_PHIEUGIAINGAN_Status" CHECK ("Status" IN ('Pending', 'Transferred', 'Completed')),
+        CONSTRAINT "CK_PHIEUGIAINGAN_Total" CHECK ("TotalAmount" >= 0),
+        CONSTRAINT "FK_PHIEUGIAINGAN_HOPDONGKYGUI_ConsignmentContractId" FOREIGN KEY ("ConsignmentContractId") REFERENCES "HOPDONGKYGUI" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_PHIEUGIAINGAN_NHANVIEN_ApprovedByEmployeeId" FOREIGN KEY ("ApprovedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "PHIEURUTHANGSOM" (
+        "Id" uuid NOT NULL,
+        "CustomerId" uuid NOT NULL,
+        "ProcessedByEmployeeId" uuid NOT NULL,
+        "TotalPenaltyAmount" numeric(18,2) NOT NULL,
+        "PaymentStatus" character varying(20) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_PHIEURUTHANGSOM" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_PHIEURUTHANGSOM_PaymentStatus" CHECK ("PaymentStatus" IN ('Unpaid', 'Partial', 'Paid')),
+        CONSTRAINT "CK_PHIEURUTHANGSOM_TotalPenalty" CHECK ("TotalPenaltyAmount" >= 0),
+        CONSTRAINT "FK_PHIEURUTHANGSOM_KHACHHANG_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "KHACHHANG" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_PHIEURUTHANGSOM_NHANVIEN_ProcessedByEmployeeId" FOREIGN KEY ("ProcessedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "PHIEUXULYHETHAN" (
+        "Id" uuid NOT NULL,
+        "ProcessedByEmployeeId" uuid NOT NULL,
+        "CollectionDeadline" timestamp with time zone NOT NULL,
+        "Type" character varying(20) NOT NULL,
+        "Status" character varying(20) NOT NULL,
+        "ConfirmedAt" timestamp with time zone,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_PHIEUXULYHETHAN" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_PHIEUXULYHETHAN_Enums" CHECK ("Type" IN ('Donate', 'Return') AND "Status" IN ('Pending', 'Completed', 'OverdueDonated')),
+        CONSTRAINT "FK_PHIEUXULYHETHAN_NHANVIEN_ProcessedByEmployeeId" FOREIGN KEY ("ProcessedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "THAMSO" (
+        "Key" character varying(100) NOT NULL,
+        "Value" character varying(2000) NOT NULL,
+        "Description" character varying(1000),
+        CONSTRAINT "PK_THAMSO" PRIMARY KEY ("Key")
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "THONGBAO" (
+        "Id" uuid NOT NULL,
+        "RecipientAccountId" uuid NOT NULL,
+        "SenderAccountId" uuid,
+        "Type" character varying(20) NOT NULL,
+        "Title" character varying(300) NOT NULL,
+        "Content" character varying(4000) NOT NULL,
+        "SentAt" timestamp with time zone NOT NULL,
+        "IsRead" boolean NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_THONGBAO" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_THONGBAO_Type" CHECK ("Type" IN ('System', 'Manual', 'Promotion')),
+        CONSTRAINT "FK_THONGBAO_TAIKHOAN_RecipientAccountId" FOREIGN KEY ("RecipientAccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_THONGBAO_TAIKHOAN_SenderAccountId" FOREIGN KEY ("SenderAccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "CT_HOADON" (
+        "SaleInvoiceId" uuid NOT NULL,
+        "ProductId" uuid NOT NULL,
+        "SalePrice" numeric(18,2) NOT NULL,
+        CONSTRAINT "PK_CT_HOADON" PRIMARY KEY ("SaleInvoiceId", "ProductId"),
+        CONSTRAINT "CK_CT_HOADON_SalePrice" CHECK ("SalePrice" >= 0),
+        CONSTRAINT "FK_CT_HOADON_HOADONBAN_SaleInvoiceId" FOREIGN KEY ("SaleInvoiceId") REFERENCES "HOADONBAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_CT_HOADON_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "CT_GIAINGAN" (
+        "Id" uuid NOT NULL,
+        "PayoutId" uuid NOT NULL,
+        "ProductId" uuid,
+        "IncidentReportId" uuid,
+        "Type" character varying(20) NOT NULL,
+        "Description" character varying(1000) NOT NULL,
+        "Amount" numeric(18,2) NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_CT_GIAINGAN" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_CT_GIAINGAN_Source" CHECK (NOT ("ProductId" IS NOT NULL AND "IncidentReportId" IS NOT NULL)),
+        CONSTRAINT "CK_CT_GIAINGAN_Type" CHECK ("Type" IN ('Commission', 'Compensation', 'ServiceFee')),
+        CONSTRAINT "FK_CT_GIAINGAN_BIENBANSUCO_IncidentReportId" FOREIGN KEY ("IncidentReportId") REFERENCES "BIENBANSUCO" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_CT_GIAINGAN_PHIEUGIAINGAN_PayoutId" FOREIGN KEY ("PayoutId") REFERENCES "PHIEUGIAINGAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_CT_GIAINGAN_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "CT_RUTSOM" (
+        "EarlyWithdrawalId" uuid NOT NULL,
+        "ProductId" uuid NOT NULL,
+        "ListedPrice" numeric(18,2) NOT NULL,
+        "PenaltyAmount" numeric(18,2) NOT NULL,
+        CONSTRAINT "PK_CT_RUTSOM" PRIMARY KEY ("EarlyWithdrawalId", "ProductId"),
+        CONSTRAINT "CK_CT_RUTSOM_ListedPrice" CHECK ("ListedPrice" >= 0),
+        CONSTRAINT "CK_CT_RUTSOM_Penalty" CHECK ("PenaltyAmount" >= 0),
+        CONSTRAINT "FK_CT_RUTSOM_PHIEURUTHANGSOM_EarlyWithdrawalId" FOREIGN KEY ("EarlyWithdrawalId") REFERENCES "PHIEURUTHANGSOM" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_CT_RUTSOM_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "GIAODICHTAICHINH" (
+        "Id" uuid NOT NULL,
+        "CustomerId" uuid,
+        "Type" character varying(20) NOT NULL,
+        "SaleInvoiceId" uuid,
+        "PayoutId" uuid,
+        "BuyoutId" uuid,
+        "EarlyWithdrawalId" uuid,
+        "Amount" numeric(18,2) NOT NULL,
+        "PaymentMethod" character varying(20) NOT NULL,
+        "BankTransactionReference" character varying(100),
+        "ProofUrl" character varying(2048),
+        "Status" character varying(20) NOT NULL,
+        "OccurredAt" timestamp with time zone NOT NULL,
+        "PerformedByEmployeeId" uuid NOT NULL,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_GIAODICHTAICHINH" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_GIAODICHTAICHINH_Amount" CHECK ("Amount" >= 0),
+        CONSTRAINT "CK_GIAODICHTAICHINH_Enums" CHECK ("Type" IN ('Income', 'Expense', 'CashFloat', 'BankDeposit') AND "PaymentMethod" IN ('Cash', 'VietQr', 'BankTransfer') AND "Status" IN ('Pending', 'Success', 'Failed', 'Refunded')),
+        CONSTRAINT "FK_GIAODICHTAICHINH_HOADONBAN_SaleInvoiceId" FOREIGN KEY ("SaleInvoiceId") REFERENCES "HOADONBAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_GIAODICHTAICHINH_KHACHHANG_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "KHACHHANG" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_GIAODICHTAICHINH_NHANVIEN_PerformedByEmployeeId" FOREIGN KEY ("PerformedByEmployeeId") REFERENCES "NHANVIEN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_GIAODICHTAICHINH_PHIEUGIAINGAN_PayoutId" FOREIGN KEY ("PayoutId") REFERENCES "PHIEUGIAINGAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_GIAODICHTAICHINH_PHIEURUTHANGSOM_EarlyWithdrawalId" FOREIGN KEY ("EarlyWithdrawalId") REFERENCES "PHIEURUTHANGSOM" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_GIAODICHTAICHINH_THUMUA_BuyoutId" FOREIGN KEY ("BuyoutId") REFERENCES "THUMUA" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE TABLE "CT_XULY" (
+        "ExpiryProcessingId" uuid NOT NULL,
+        "ProductId" uuid NOT NULL,
+        CONSTRAINT "PK_CT_XULY" PRIMARY KEY ("ExpiryProcessingId", "ProductId"),
+        CONSTRAINT "FK_CT_XULY_PHIEUXULYHETHAN_ExpiryProcessingId" FOREIGN KEY ("ExpiryProcessingId") REFERENCES "PHIEUXULYHETHAN" ("Id") ON DELETE RESTRICT,
+        CONSTRAINT "FK_CT_XULY_SANPHAM_ProductId" FOREIGN KEY ("ProductId") REFERENCES "SANPHAM" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    UPDATE "NHANVIEN" SET "LeftOn" = NULL
+    WHERE "Id" = '10000000-0000-0000-0000-000000000001';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    UPDATE "NHANVIEN" SET "LeftOn" = NULL
+    WHERE "Id" = '10000000-0000-0000-0000-000000000002';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    ALTER TABLE "HOPDONGKYGUI" ADD CONSTRAINT "CK_HOPDONGKYGUI_Enums" CHECK ("Status" IN ('Active', 'Completed', 'Cancelled')
+    AND "ExpiryHandling" IN ('Return', 'Donate'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_BIENBANSUCO_ApprovedByEmployeeId" ON "BIENBANSUCO" ("ApprovedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_BIENBANSUCO_CreatedByEmployeeId" ON "BIENBANSUCO" ("CreatedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE UNIQUE INDEX "IX_BIENBANSUCO_ProductId" ON "BIENBANSUCO" ("ProductId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_CT_GIAINGAN_IncidentReportId" ON "CT_GIAINGAN" ("IncidentReportId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_CT_GIAINGAN_PayoutId" ON "CT_GIAINGAN" ("PayoutId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_CT_GIAINGAN_ProductId" ON "CT_GIAINGAN" ("ProductId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE UNIQUE INDEX "IX_CT_HOADON_ProductId" ON "CT_HOADON" ("ProductId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE UNIQUE INDEX "IX_CT_RUTSOM_ProductId" ON "CT_RUTSOM" ("ProductId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE UNIQUE INDEX "IX_CT_XULY_ProductId" ON "CT_XULY" ("ProductId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_BuyoutId" ON "GIAODICHTAICHINH" ("BuyoutId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_CustomerId" ON "GIAODICHTAICHINH" ("CustomerId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_EarlyWithdrawalId" ON "GIAODICHTAICHINH" ("EarlyWithdrawalId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_PayoutId" ON "GIAODICHTAICHINH" ("PayoutId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_PerformedByEmployeeId" ON "GIAODICHTAICHINH" ("PerformedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_SaleInvoiceId" ON "GIAODICHTAICHINH" ("SaleInvoiceId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_GIAODICHTAICHINH_Status_OccurredAt" ON "GIAODICHTAICHINH" ("Status", "OccurredAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE UNIQUE INDEX "IX_HOADONBAN_InvoiceNumber" ON "HOADONBAN" ("InvoiceNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_HOADONBAN_SoldByEmployeeId" ON "HOADONBAN" ("SoldByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_PHIEUGIAINGAN_ApprovedByEmployeeId" ON "PHIEUGIAINGAN" ("ApprovedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_PHIEUGIAINGAN_ConsignmentContractId" ON "PHIEUGIAINGAN" ("ConsignmentContractId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE UNIQUE INDEX "IX_PHIEUGIAINGAN_PayoutNumber" ON "PHIEUGIAINGAN" ("PayoutNumber");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_PHIEURUTHANGSOM_CustomerId" ON "PHIEURUTHANGSOM" ("CustomerId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_PHIEURUTHANGSOM_ProcessedByEmployeeId" ON "PHIEURUTHANGSOM" ("ProcessedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_PHIEUXULYHETHAN_ProcessedByEmployeeId" ON "PHIEUXULYHETHAN" ("ProcessedByEmployeeId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_THONGBAO_RecipientAccountId_IsRead_SentAt" ON "THONGBAO" ("RecipientAccountId", "IsRead", "SentAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    CREATE INDEX "IX_THONGBAO_SenderAccountId" ON "THONGBAO" ("SenderAccountId");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261021031023_AddFinancialAndExceptionTables') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261021031023_AddFinancialAndExceptionTables', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261023162400_SeparateDevelopmentSeed') THEN
+    DO $cleanup$
+    DECLARE
+        demo_ids uuid[] := ARRAY[
+            '10000000-0000-0000-0000-000000000001'::uuid,
+            '10000000-0000-0000-0000-000000000002'::uuid,
+            '10000000-0000-0000-0000-000000000003'::uuid
+        ];
+        pristine boolean;
+        referenced boolean;
+        fk record;
+    BEGIN
+        LOCK TABLE "TAIKHOAN", "KHACHHANG", "NHANVIEN", "TAIKHOAN_VAITRO"
+            IN SHARE ROW EXCLUSIVE MODE;
+        SELECT count(*) = 3 INTO pristine
+        FROM "TAIKHOAN" a
+        JOIN (VALUES
+            ('10000000-0000-0000-0000-000000000001'::uuid, 'Internal', 'Quản lý demo', '0900000001', 'manager.demo', 'manager.demo@example.com', NULL::uuid),
+            ('10000000-0000-0000-0000-000000000002'::uuid, 'Internal', 'Nhân viên demo', '0900000002', 'staff.demo', 'staff.demo@example.com', '10000000-0000-0000-0000-000000000001'::uuid),
+            ('10000000-0000-0000-0000-000000000003'::uuid, 'Customer', 'Khách ký gửi demo', '0900000003', NULL, 'customer.demo@example.com', NULL::uuid)
+        ) AS expected(id, kind, full_name, phone, username, email, creator) ON a."Id" = expected.id
+        WHERE a."AccountType" = expected.kind AND a."FullName" = expected.full_name
+          AND a."PhoneNumber" = expected.phone AND a."Email" = expected.email
+          AND a."Username" IS NOT DISTINCT FROM expected.username
+          AND a."CreatedByAccountId" IS NOT DISTINCT FROM expected.creator
+          AND a."Status" = 'PendingActivation' AND a."PasswordHash" IS NULL
+          AND a."IdentityNumber" IS NULL AND a."PhoneVerifiedAt" IS NULL
+          AND a."ActivatedAt" IS NULL AND a."UpdatedAt" IS NULL
+          AND a."CreatedAt" = TIMESTAMPTZ '2026-10-16 00:00:00+00';
+
+        pristine := pristine
+            AND (SELECT count(*) = 2 FROM "NHANVIEN"
+                 WHERE ("Id", "JobTitle", "HiredOn") IN (
+                     (demo_ids[1], 'Quản lý cửa hàng', DATE '2026-10-01'),
+                     (demo_ids[2], 'Nhân viên POS', DATE '2026-10-10'))
+                 AND "LeftOn" IS NULL AND "Status" = 'Working')
+            AND EXISTS (SELECT 1 FROM "KHACHHANG" WHERE "Id" = demo_ids[3]
+                 AND "Address" = 'Địa chỉ mẫu tại TP. Hồ Chí Minh'
+                 AND "BankCode" = 'VCB' AND "BankAccountNumber" = '000000000001'
+                 AND "BankAccountHolderName" = 'KHACH KY GUI DEMO' AND "Status" = 'Active')
+            AND NOT EXISTS (SELECT 1 FROM "KHACHHANG" WHERE "Id" = ANY(demo_ids[1:2]))
+            AND NOT EXISTS (SELECT 1 FROM "NHANVIEN" WHERE "Id" = demo_ids[3])
+            AND (SELECT count(*) = 3 FROM "TAIKHOAN_VAITRO" WHERE "AccountId" = ANY(demo_ids))
+            AND (SELECT count(*) = 3 FROM "TAIKHOAN_VAITRO"
+                 WHERE ("AccountId", "RoleId") IN (
+                     (demo_ids[1], '20000000-0000-0000-0000-000000000001'::uuid),
+                     (demo_ids[2], '20000000-0000-0000-0000-000000000002'::uuid),
+                     (demo_ids[3], '20000000-0000-0000-0000-000000000004'::uuid)))
+            AND NOT EXISTS (SELECT 1 FROM "TAIKHOAN"
+                 WHERE "CreatedByAccountId" = ANY(demo_ids) AND NOT ("Id" = ANY(demo_ids)));
+
+        IF pristine THEN
+            -- Check all actual foreign keys, including audit and future business tables.
+            FOR fk IN
+                SELECT c.conrelid::regclass AS relation_name, a.attname AS column_name
+                FROM pg_constraint c
+                JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY(c.conkey)
+                WHERE c.contype = 'f'
+                  AND c.confrelid IN ('"TAIKHOAN"'::regclass, '"KHACHHANG"'::regclass, '"NHANVIEN"'::regclass)
+                  AND c.conrelid NOT IN ('"TAIKHOAN"'::regclass, '"KHACHHANG"'::regclass,
+                                        '"NHANVIEN"'::regclass, '"TAIKHOAN_VAITRO"'::regclass)
+            LOOP
+                EXECUTE format('SELECT EXISTS (SELECT 1 FROM %s WHERE %I = ANY($1))',
+                    fk.relation_name, fk.column_name) INTO referenced USING demo_ids;
+                IF referenced THEN
+                    pristine := false;
+                    EXIT;
+                END IF;
+            END LOOP;
+        END IF;
+
+        IF pristine THEN
+            DELETE FROM "TAIKHOAN_VAITRO" WHERE "AccountId" = ANY(demo_ids);
+            DELETE FROM "KHACHHANG" WHERE "Id" = demo_ids[3];
+            DELETE FROM "NHANVIEN" WHERE "Id" = ANY(demo_ids[1:2]);
+            DELETE FROM "TAIKHOAN" WHERE "Id" = ANY(demo_ids[2:3]);
+            DELETE FROM "TAIKHOAN" WHERE "Id" = demo_ids[1];
+        END IF;
+
+        -- Remove only the known synthetic event, not real user history.
+        DELETE FROM "NHATKYHETHONG"
+        WHERE "Id" = '40000000-0000-0000-0000-000000000001'::uuid
+          AND "Action" = 'DemoDataSeeded' AND "Source" = 'DemoSeed'
+          AND "ActorAccountId" IS NULL
+          AND "ActorType" = 'System' AND "EntityType" = 'Account'
+          AND "EntityId" = demo_ids[1]::text
+          AND "IpAddress" IS NULL AND "CorrelationId" IS NULL
+          AND "OccurredAt" = TIMESTAMPTZ '2026-10-16 00:00:00+00'
+          AND "RecordedAt" = TIMESTAMPTZ '2026-10-16 00:00:00+00'
+          AND "Reason" = 'Bản ghi minh họa thuộc bộ dữ liệu demo; không phải sự kiện người dùng thực tế.'
+          AND "Changes"::jsonb = '{"Dataset":{"old":null,"new":"AccountsDemoV1"}}'::jsonb;
+    END;
+    $cleanup$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261023162400_SeparateDevelopmentSeed') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261023162400_SeparateDevelopmentSeed', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

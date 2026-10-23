@@ -1,0 +1,80 @@
+@startuml
+title Use case tổng quan - Online Consignment Store
+left to right direction
+
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam usecase {
+  BackgroundColor #FFFFFF
+  BorderColor #4A5568
+}
+
+actor "Quản trị viên" as Admin
+actor "Quản lý" as Manager
+actor "Nhân viên" as Staff
+actor "Người ký gửi" as Consignor
+
+rectangle "Hệ thống quản lý cửa hàng ký gửi quần áo" {
+  usecase "Đăng nhập" as Login
+  usecase "Đăng ký tài khoản" as Register
+  usecase "Quản lý tài khoản" as Account
+  usecase "Phân quyền vai trò" as Role
+  usecase "Cấu hình hệ thống" as Configuration
+  usecase "Tra cứu audit log" as AuditLog
+  usecase "Xem báo cáo và thống kê" as Report
+
+  usecase "Tra cứu sản phẩm" as ProductLookup
+  usecase "Tiếp nhận lịch hẹn" as Appointment
+  usecase "Kiểm định và phân loại sản phẩm" as Inspection
+  usecase "Lập hợp đồng ký gửi" as ConsignmentContract
+  usecase "Lập phiếu mua đứt" as Buyout
+  usecase "Duyệt bồi thường" as Compensation
+  usecase "Duyệt mua đứt" as BuyoutApproval
+  usecase "Tạo đơn thanh toán" as Payment
+  usecase "Thêm sản phẩm vào giỏ hàng" as Cart
+  usecase "Xử lý sự cố" as Incident
+  usecase "Xử lý sản phẩm hết hạn" as ExpiredItem
+  usecase "Trả lại sản phẩm" as ReturnItem
+  usecase "Quyên góp sản phẩm" as DonateItem
+
+  usecase "Theo dõi sản phẩm ký gửi" as Tracking
+  usecase "Yêu cầu rút sản phẩm sớm" as EarlyWithdrawal
+  usecase "Xác nhận nhận lại sản phẩm" as ReturnConfirmation
+  usecase "Tự động xác nhận sau thời hạn" as AutomaticConfirmation
+}
+
+Admin -- Login
+Admin -- Account
+Admin -- Role
+Admin -- Configuration
+Admin -- AuditLog
+Admin -- Report
+
+Manager -- Login
+Manager -- Account
+Manager -- Report
+Manager -- Compensation
+Manager -- BuyoutApproval
+Manager -- Tracking
+
+Staff -- Login
+Staff -- ProductLookup
+Staff -- Appointment
+Staff -- Inspection
+Staff -- ConsignmentContract
+Staff -- Buyout
+Staff -- Payment
+Staff -- Cart
+Staff -- Incident
+Staff -- ExpiredItem
+
+Consignor -- Register
+Consignor -- Login
+Consignor -- Tracking
+Consignor -- EarlyWithdrawal
+Consignor -- ReturnConfirmation
+
+ReturnItem ..> ExpiredItem : <<extend>>
+DonateItem ..> ExpiredItem : <<extend>>
+AutomaticConfirmation ..> ReturnConfirmation : <<extend>>
+@enduml

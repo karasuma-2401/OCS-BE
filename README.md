@@ -2,6 +2,24 @@
 
 Backend API cho **OCS - Old Clothes Store**, hệ thống quản lý cửa hàng ký gửi quần áo.
 
+## Tài liệu
+
+Các tài liệu dưới đây được chuyển đổi và chuẩn hóa từ Báo cáo SE100 (Final 3), sau đó đối chiếu với mã nguồn hiện có. Những nội dung là định hướng nghiệp vụ trong báo cáo được ghi rõ là yêu cầu; chúng không đồng nghĩa với một API hoặc một bảng dữ liệu đã được hiện thực.
+
+| Tài liệu | Nội dung |
+| --- | --- |
+| [Requirements.md](docs/Requirements.md) | Yêu cầu chức năng, yêu cầu phi chức năng và phạm vi vận hành. |
+| [UseCases.md](docs/UseCases.md) | Sơ đồ và đặc tả chín use case chính. |
+| [Architecture.md](docs/Architecture.md) | Kiến trúc hiện tại, layer, dependency và tích hợp runtime. |
+| [DataFlows.md](docs/DataFlows.md) | Biểu mẫu, quy định, luồng dữ liệu và thuật toán nghiệp vụ. |
+| [DataModel.md](docs/DataModel.md) | Mô hình dữ liệu theo báo cáo và mức độ hiện thực trong EF Core. |
+| [DatabaseScript.txt](docs/DatabaseScript.txt) | SQL PostgreSQL được sinh từ các EF Core migration hiện có. |
+| [API_CONTRACT.md](docs/API_CONTRACT.md) | Hợp đồng HTTP duy nhất: endpoint đang công bố và quy ước mở rộng API. |
+
+## Tình trạng hiện thực
+
+Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, danh mục, lịch hẹn, hợp đồng ký gửi, thu mua đứt, sản phẩm và lịch sử trạng thái. Các controller nghiệp vụ, POS offline, VietQR, xử lý hết hạn, quyết toán, thông báo và các báo cáo vẫn chưa xuất hiện trong backend; vì vậy chúng chỉ được mô tả như yêu cầu hoặc luồng dự kiến trong tài liệu.
+
 ## Công nghệ
 
 - .NET 10 / ASP.NET Core Web API
@@ -66,6 +84,8 @@ dotnet build OCS.sln --configuration Release
 dotnet test OCS.sln --configuration Release
 docker build --file src/OCS.Api/Dockerfile --tag ocs-api:local .
 ```
+
+Test được tách theo Domain, Application, API và Infrastructure. Test PostgreSQL dùng database tạm qua Docker/Testcontainers; bật `$env:OCS_RUN_POSTGRES_TESTS = "1"` để chạy đầy đủ như CI. Cách seed demo và quy tắc mở rộng tính năng được ghi trong [Architecture.md](docs/Architecture.md).
 
 GitHub Actions gồm:
 

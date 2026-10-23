@@ -1,15 +1,70 @@
 # OCS API Contract
 
-This document is the shared HTTP contract for OCS clients and backend contributors. It
-defines conventions for endpoints that will be added; it is not a database schema.
+This is the only HTTP contract for OCS clients and backend contributors. It defines
+the public endpoints that exist today and the conventions required for endpoints added
+later. It is not a database schema.
 
 ## Scope and versioning
 
-- Business endpoints use `/api/v1`, for example `/api/v1/products`.
+- Business endpoints will use `/api/v1`, for example `/api/v1/products`.
 - Operational endpoints remain unversioned: `/api/health` and `/api/health/live`.
 - JSON uses camelCase property names and UTF-8 encoding.
 - Resource IDs are UUID strings. Timestamps use ISO 8601 UTC, for example
   `2026-10-21T03:15:00Z`. Dates use `YYYY-MM-DD` and times use `HH:mm:ss`.
+
+No business controller is mapped in the current backend. A client must not treat the
+examples in this document as implemented `/api/v1` endpoints until the endpoint appears
+in OpenAPI/Scalar.
+
+## Published operational endpoints
+
+| Method | Path | Purpose | Authentication |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | Readiness check for Neon PostgreSQL, Redis and Cloudflare R2. | None |
+| `GET` | `/api/health/live` | Liveness check for the API process only. | None |
+
+`GET /api/health` returns the following shape. The `checks` object contains the
+dependencies selected by the readiness predicate; each entry can be `Healthy`,
+`Degraded` or `Unhealthy`.
+
+```json
+{
+  "service": "OCS API",
+  "status": "Healthy",
+  "timestamp": "2026-10-23T15:00:00+00:00",
+  "durationMs": 12.34,
+  "checks": {
+    "neon": {
+      "status": "Healthy",
+      "description": null,
+      "durationMs": 3.21
+    }
+  }
+}
+```
+
+`/api/health/live` uses the same envelope with an empty `checks` object. ASP.NET Core
+returns `200` for `Healthy` or `Degraded`, and `503` for `Unhealthy`.
+
+## Contract baseline in the codebase
+
+Expected business failures use `OCS.Application.Common.ApplicationError` with a stable
+`Code`, a client-safe `Message`, and an `ErrorType`. Controllers can call
+`Result<T>.ToActionResult(this)` to map validation, not-found, conflict, unauthorized,
+and forbidden failures to `400`, `404`, `409`, `401`, and `403`. Feature-specific
+codes such as `CATALOG.NOT_FOUND` are defined with their feature in Application;
+the generic HTTP codes remain in `ApiErrorCodes`. Do not derive behavior from error text.
+
+Empty HTTP error responses, including authentication challenges and unmatched routes,
+are filled with Problem Details by the shared status-code middleware. Pagination
+validation also rejects page offsets that exceed a 32-bit integer.
+
+- `OCS.Api.Contracts.Common.ApiErrorCodes` is the canonical list of stable error codes.
+- `PagedRequest` and `PagedResponse<T>` are the shared pagination types.
+- `AddApiConventions()` is registered during API startup and standardizes validation
+  errors as RFC 7807 `ProblemDetails` with `code` and `traceId`.
+- The contract document and OpenAPI/Scalar must be updated in the same change as every
+  newly published endpoint.
 
 ## Success responses
 

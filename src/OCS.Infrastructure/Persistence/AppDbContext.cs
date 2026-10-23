@@ -71,6 +71,6 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
-        DemoDataSeed.Configure(modelBuilder);
+        ReferenceDataSeed.Configure(modelBuilder);
     }
 }

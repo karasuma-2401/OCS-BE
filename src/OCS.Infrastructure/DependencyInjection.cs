@@ -13,6 +13,9 @@ using OCS.Infrastructure.HealthChecks;
 using OCS.Infrastructure.Persistence;
 using OCS.Infrastructure.Persistence.Interceptors;
 using OCS.Infrastructure.Storage;
+using OCS.Application.Features.Catalog;
+using OCS.Infrastructure.Persistence.Repositories;
+using OCS.Infrastructure.Persistence.Seeds;
 
 namespace OCS.Infrastructure;
 
@@ -28,6 +31,8 @@ public static class DependencyInjection
         services.AddObjectStorage(configuration);
         services.AddDependencyHealthChecks();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<DevelopmentDataSeeder>();
 
         return services;
     }

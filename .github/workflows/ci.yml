@@ -67,6 +67,8 @@ jobs:
         run: dotnet build OCS.sln --configuration Release --no-restore /nr:false
 
       - name: Run tests
+        env:
+          OCS_RUN_POSTGRES_TESTS: "1"
         run: dotnet test OCS.sln --configuration Release --no-build --logger "trx;LogFileName=results.trx"
 
       - name: Upload failed test results
