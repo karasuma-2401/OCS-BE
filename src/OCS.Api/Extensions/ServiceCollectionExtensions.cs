@@ -7,6 +7,7 @@ using OCS.Application.Abstractions.Auditing;
 using OCS.Api.Auditing;
 using OCS.Infrastructure;
 using Scalar.AspNetCore;
+using Microsoft.AspNetCore.Mvc;
 
 namespace OCS.Api.Extensions;
 
@@ -34,6 +35,15 @@ public static class ServiceCollectionExtensions
     public static WebApplication UseOcsApi(this WebApplication app)
     {
         app.UseExceptionHandler();
+        app.UseStatusCodePages(async context =>
+        {
+            var service = context.HttpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
+            await service.WriteAsync(new ProblemDetailsContext
+            {
+                HttpContext = context.HttpContext,
+                ProblemDetails = new ProblemDetails { Status = context.HttpContext.Response.StatusCode }
+            });
+        });
 
         if (app.Environment.IsDevelopment())
         {

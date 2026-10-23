@@ -3,7 +3,7 @@
 Tài liệu này tách rõ hai lớp thông tin để không làm sai lệch hiện trạng của dự án:
 
 - **Thiết kế báo cáo:** 30 bảng được đề xuất trong Báo cáo SE100 (Final 3).
-- **Hiện thực backend:** cả 30 bảng đã có entity, cấu hình EF Core và migration. Migration mới nhất là `20261021031023_AddFinancialAndExceptionTables`.
+- **Hiện thực backend:** cả 30 bảng đã có entity, cấu hình EF Core và migration. Migration mới nhất là `20261023162400_SeparateDevelopmentSeed`, tách dữ liệu demo khỏi seed dùng chung.
 
 `DatabaseScript.txt` là SQL PostgreSQL idempotent được sinh từ toàn bộ migration hiện có. Khi migration thay đổi, cần sinh lại script trước khi phát hành.
 
@@ -26,6 +26,7 @@ Tài liệu này tách rõ hai lớp thông tin để không làm sai lệch hi�
 | `20261015181115_AddCatalogsAndAppointmentTimeSlots` | Danh mục, thương hiệu, kho lưu và khung giờ hẹn. |
 | `20261015185523_AddProducts` | Lịch hẹn, hợp đồng ký gửi, thu mua, sản phẩm, ảnh và lịch sử trạng thái. |
 | `20261021031023_AddFinancialAndExceptionTables` | Hóa đơn, giải ngân, giao dịch tài chính, rút sớm, xử lý hết hạn, sự cố, thông báo và tham số. |
+| `20261023162400_SeparateDevelopmentSeed` | Giữ seed role/permission; dọn bộ demo nguyên trạng chưa được sử dụng. Không thay đổi schema nghiệp vụ. |
 
 Tất cả 30 bảng trong mô hình hiện được migration quản lý. Một số tên bảng trong code được đặt rõ nghĩa hơn so với báo cáo; bảng đối chiếu ở cuối tài liệu là nguồn tham chiếu khi đọc SQL.
 

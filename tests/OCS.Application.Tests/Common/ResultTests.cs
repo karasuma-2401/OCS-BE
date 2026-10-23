@@ -17,10 +17,11 @@ public sealed class ResultTests
     [Fact]
     public void FailureContainsErrorWithoutData()
     {
-        var result = Result.Failure<string>("invalid");
+        var error = new ApplicationError("CATALOG.NOT_FOUND", "Product was not found.", ErrorType.NotFound);
+        var result = Result.Failure<string>(error);
 
         Assert.False(result.IsSuccess);
         Assert.Null(result.Data);
-        Assert.Equal("invalid", result.Error);
+        Assert.Same(error, result.Error);
     }
 }

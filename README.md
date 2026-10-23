@@ -85,6 +85,8 @@ dotnet test OCS.sln --configuration Release
 docker build --file src/OCS.Api/Dockerfile --tag ocs-api:local .
 ```
 
+Test được tách theo Domain, Application, API và Infrastructure. Test PostgreSQL dùng database tạm qua Docker/Testcontainers; bật `$env:OCS_RUN_POSTGRES_TESTS = "1"` để chạy đầy đủ như CI. Cách seed demo và quy tắc mở rộng tính năng được ghi trong [Architecture.md](docs/Architecture.md).
+
 GitHub Actions gồm:
 
 - `Backend CI`: format, secret scanning, build, test và Docker build verification.

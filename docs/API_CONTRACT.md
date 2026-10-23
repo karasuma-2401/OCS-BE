@@ -48,6 +48,17 @@ returns `200` for `Healthy` or `Degraded`, and `503` for `Unhealthy`.
 
 ## Contract baseline in the codebase
 
+Expected business failures use `OCS.Application.Common.ApplicationError` with a stable
+`Code`, a client-safe `Message`, and an `ErrorType`. Controllers can call
+`Result<T>.ToActionResult(this)` to map validation, not-found, conflict, unauthorized,
+and forbidden failures to `400`, `404`, `409`, `401`, and `403`. Feature-specific
+codes such as `CATALOG.NOT_FOUND` are defined with their feature in Application;
+the generic HTTP codes remain in `ApiErrorCodes`. Do not derive behavior from error text.
+
+Empty HTTP error responses, including authentication challenges and unmatched routes,
+are filled with Problem Details by the shared status-code middleware. Pagination
+validation also rejects page offsets that exceed a 32-bit integer.
+
 - `OCS.Api.Contracts.Common.ApiErrorCodes` is the canonical list of stable error codes.
 - `PagedRequest` and `PagedResponse<T>` are the shared pagination types.
 - `AddApiConventions()` is registered during API startup and standardizes validation

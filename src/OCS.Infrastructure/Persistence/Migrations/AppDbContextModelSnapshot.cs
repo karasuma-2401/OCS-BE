@@ -104,41 +104,6 @@ namespace OCS.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_TAIKHOAN_Status", "\"Status\" IN (\r\n    'PendingActivation',\r\n    'Active',\r\n    'Locked',\r\n    'Deactivated'\r\n)");
                         });
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
-                            AccountType = "Internal",
-                            CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Email = "manager.demo@example.com",
-                            FullName = "Quản lý demo",
-                            PhoneNumber = "0900000001",
-                            Status = "PendingActivation",
-                            Username = "manager.demo"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
-                            AccountType = "Internal",
-                            CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            CreatedByAccountId = new Guid("10000000-0000-0000-0000-000000000001"),
-                            Email = "staff.demo@example.com",
-                            FullName = "Nhân viên demo",
-                            PhoneNumber = "0900000002",
-                            Status = "PendingActivation",
-                            Username = "staff.demo"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
-                            AccountType = "Customer",
-                            CreatedAt = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Email = "customer.demo@example.com",
-                            FullName = "Khách ký gửi demo",
-                            PhoneNumber = "0900000003",
-                            Status = "PendingActivation"
-                        });
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.AccountRole", b =>
@@ -154,23 +119,6 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("TAIKHOAN_VAITRO", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            AccountId = new Guid("10000000-0000-0000-0000-000000000001"),
-                            RoleId = new Guid("20000000-0000-0000-0000-000000000001")
-                        },
-                        new
-                        {
-                            AccountId = new Guid("10000000-0000-0000-0000-000000000002"),
-                            RoleId = new Guid("20000000-0000-0000-0000-000000000002")
-                        },
-                        new
-                        {
-                            AccountId = new Guid("10000000-0000-0000-0000-000000000003"),
-                            RoleId = new Guid("20000000-0000-0000-0000-000000000004")
-                        });
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.Appointment", b =>
@@ -330,21 +278,6 @@ namespace OCS.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("CK_NHATKYHETHONG_ActorType", "\"ActorType\" IN ('User', 'System', 'Anonymous')");
 
                             t.HasCheckConstraint("CK_NHATKYHETHONG_UserActor", "\"ActorType\" <> 'User'\r\nOR \"ActorAccountId\" IS NOT NULL");
-                        });
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("40000000-0000-0000-0000-000000000001"),
-                            Action = "DemoDataSeeded",
-                            ActorType = "System",
-                            Changes = "{\"Dataset\":{\"old\":null,\"new\":\"AccountsDemoV1\"}}",
-                            EntityId = "10000000-0000-0000-0000-000000000001",
-                            EntityType = "Account",
-                            OccurredAt = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Reason = "Bản ghi minh họa thuộc bộ dữ liệu demo; không phải sự kiện người dùng thực tế.",
-                            RecordedAt = new DateTimeOffset(new DateTime(2026, 10, 16, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0)),
-                            Source = "DemoSeed"
                         });
                 });
 
@@ -562,17 +495,6 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("KHACHHANG", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000003"),
-                            Address = "Địa chỉ mẫu tại TP. Hồ Chí Minh",
-                            BankAccountHolderName = "KHACH KY GUI DEMO",
-                            BankAccountNumber = "000000000001",
-                            BankCode = "VCB",
-                            Status = "Active"
-                        });
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.EarlyWithdrawal", b =>
@@ -668,22 +590,6 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("NHANVIEN", (string)null);
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000001"),
-                            HiredOn = new DateOnly(2026, 10, 1),
-                            JobTitle = "Quản lý cửa hàng",
-                            Status = "Working"
-                        },
-                        new
-                        {
-                            Id = new Guid("10000000-0000-0000-0000-000000000002"),
-                            HiredOn = new DateOnly(2026, 10, 10),
-                            JobTitle = "Nhân viên POS",
-                            Status = "Working"
-                        });
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.ExpiryProcessing", b =>
