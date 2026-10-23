@@ -10,10 +10,11 @@ Các tài liệu dưới đây được chuyển đổi và chuẩn hóa từ B�
 | --- | --- |
 | [Requirements.md](docs/Requirements.md) | Yêu cầu chức năng, yêu cầu phi chức năng và phạm vi vận hành. |
 | [UseCases.md](docs/UseCases.md) | Sơ đồ và đặc tả chín use case chính. |
+| [Architecture.md](docs/Architecture.md) | Kiến trúc hiện tại, layer, dependency và tích hợp runtime. |
 | [DataFlows.md](docs/DataFlows.md) | Biểu mẫu, quy định, luồng dữ liệu và thuật toán nghiệp vụ. |
 | [DataModel.md](docs/DataModel.md) | Mô hình dữ liệu theo báo cáo và mức độ hiện thực trong EF Core. |
 | [DatabaseScript.txt](docs/DatabaseScript.txt) | SQL PostgreSQL được sinh từ các EF Core migration hiện có. |
-| [ApiContract/](docs/ApiContract/) | Hợp đồng HTTP đã có trong backend và quy ước mở rộng API. |
+| [API_CONTRACT.md](docs/API_CONTRACT.md) | Hợp đồng HTTP duy nhất: endpoint đang công bố và quy ước mở rộng API. |
 
 ## Tình trạng hiện thực
 

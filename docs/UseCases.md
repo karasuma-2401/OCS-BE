@@ -4,9 +4,7 @@ Tài liệu này chuyển các đặc tả use case trong Báo cáo SE100 (Final
 
 ## Sơ đồ use case tổng quan
 
-![Sơ đồ use case tổng quan của OCS](assets/use-case-overview.png)
-
-*Hình 1. Sơ đồ use case tổng quan, trích từ báo cáo.*
+Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overview.puml](diagrams/use-case-overview.puml). Repository không lưu ảnh nhị phân; tệp này là nguồn duy nhất để xem, chỉnh sửa hoặc sinh sơ đồ.
 
 ## UC-01 — Đặt lịch hẹn ký gửi
 
