@@ -529,7 +529,7 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("CK_HOPDONGKYGUI_Dates", "\"EndsAt\" > \"SignedAt\"");
 
-                            t.HasCheckConstraint("CK_HOPDONGKYGUI_Enums", "\"Status\" IN ('Active', 'Completed')\r\nAND \"ExpiryHandling\" IN ('Return', 'Donate')");
+                            t.HasCheckConstraint("CK_HOPDONGKYGUI_Enums", "\"Status\" IN ('Active', 'Completed', 'Cancelled')\r\nAND \"ExpiryHandling\" IN ('Return', 'Donate')");
                         });
                 });
 
@@ -575,6 +575,75 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.EarlyWithdrawal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("ProcessedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalPenaltyAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("ProcessedByEmployeeId");
+
+                    b.ToTable("PHIEURUTHANGSOM", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PHIEURUTHANGSOM_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
+
+                            t.HasCheckConstraint("CK_PHIEURUTHANGSOM_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.EarlyWithdrawalItem", b =>
+                {
+                    b.Property<Guid>("EarlyWithdrawalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ListedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("PenaltyAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("EarlyWithdrawalId", "ProductId");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("CT_RUTSOM", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CT_RUTSOM_ListedPrice", "\"ListedPrice\" >= 0");
+
+                            t.HasCheckConstraint("CK_CT_RUTSOM_Penalty", "\"PenaltyAmount\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.EmployeeProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -587,6 +656,9 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<DateOnly?>("LeftOn")
+                        .HasColumnType("date");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -611,6 +683,352 @@ namespace OCS.Infrastructure.Persistence.Migrations
                             HiredOn = new DateOnly(2026, 10, 10),
                             JobTitle = "Nhân viên POS",
                             Status = "Working"
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ExpiryProcessing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CollectionDeadline")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProcessedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedByEmployeeId");
+
+                    b.ToTable("PHIEUXULYHETHAN", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PHIEUXULYHETHAN_Enums", "\"Type\" IN ('Donate', 'Return') AND \"Status\" IN ('Pending', 'Completed', 'OverdueDonated')");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ExpiryProcessingItem", b =>
+                {
+                    b.Property<Guid>("ExpiryProcessingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ExpiryProcessingId", "ProductId");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("CT_XULY", (string)null);
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.FinancialTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("BankTransactionReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid?>("BuyoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("EarlyWithdrawalId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid?>("PayoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PerformedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProofUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<Guid?>("SaleInvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BuyoutId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("EarlyWithdrawalId");
+
+                    b.HasIndex("PayoutId");
+
+                    b.HasIndex("PerformedByEmployeeId");
+
+                    b.HasIndex("SaleInvoiceId");
+
+                    b.HasIndex("Status", "OccurredAt");
+
+                    b.ToTable("GIAODICHTAICHINH", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_GIAODICHTAICHINH_Amount", "\"Amount\" >= 0");
+
+                            t.HasCheckConstraint("CK_GIAODICHTAICHINH_Enums", "\"Type\" IN ('Income', 'Expense', 'CashFloat', 'BankDeposit') AND \"PaymentMethod\" IN ('Cash', 'VietQr', 'BankTransfer') AND \"Status\" IN ('Pending', 'Success', 'Failed', 'Refunded')");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.IncidentReport", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApprovedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("CompensationAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CreatedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByEmployeeId");
+
+                    b.HasIndex("CreatedByEmployeeId");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("BIENBANSUCO", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BIENBANSUCO_Compensation", "\"CompensationAmount\" >= 0");
+
+                            t.HasCheckConstraint("CK_BIENBANSUCO_Enums", "\"Type\" IN ('Lost', 'Damaged', 'TagSwapped') AND \"Status\" IN ('Pending', 'Approved', 'Compensated')");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("RecipientAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SenderAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SenderAccountId");
+
+                    b.HasIndex("RecipientAccountId", "IsRead", "SentAt");
+
+                    b.ToTable("THONGBAO", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_THONGBAO_Type", "\"Type\" IN ('System', 'Manual', 'Promotion')");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Payout", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApprovedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BankTransactionReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("ConsignmentContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PayoutNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ProofUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApprovedByEmployeeId");
+
+                    b.HasIndex("ConsignmentContractId");
+
+                    b.HasIndex("PayoutNumber")
+                        .IsUnique();
+
+                    b.ToTable("PHIEUGIAINGAN", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PHIEUGIAINGAN_Status", "\"Status\" IN ('Pending', 'Transferred', 'Completed')");
+
+                            t.HasCheckConstraint("CK_PHIEUGIAINGAN_Total", "\"TotalAmount\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.PayoutDetail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("IncidentReportId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PayoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncidentReportId");
+
+                    b.HasIndex("PayoutId");
+
+                    b.HasIndex("ProductId");
+
+                    b.ToTable("CT_GIAINGAN", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CT_GIAINGAN_Source", "NOT (\"ProductId\" IS NOT NULL AND \"IncidentReportId\" IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_CT_GIAINGAN_Type", "\"Type\" IN ('Commission', 'Compensation', 'ServiceFee')");
                         });
                 });
 
@@ -849,7 +1267,7 @@ namespace OCS.Infrastructure.Persistence.Migrations
 
                     b.ToTable("LICHSUTRANGTHAISP", null, t =>
                         {
-                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_DifferentStatus", "\"PreviousStatus\" IS NULL\nOR \"PreviousStatus\" <> \"NewStatus\"");
+                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_DifferentStatus", "\"PreviousStatus\" IS NULL\r\nOR \"PreviousStatus\" <> \"NewStatus\"");
 
                             t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_NewStatus", "\"NewStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
 
@@ -961,6 +1379,72 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.SaleInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("InvoiceNumber")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("PaymentStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("SoldByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InvoiceNumber")
+                        .IsUnique();
+
+                    b.HasIndex("SoldByEmployeeId");
+
+                    b.ToTable("HOADONBAN", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_HOADONBAN_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
+
+                            t.HasCheckConstraint("CK_HOADONBAN_Total", "\"TotalAmount\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.SaleInvoiceLine", b =>
+                {
+                    b.Property<Guid>("SaleInvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("SalePrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("SaleInvoiceId", "ProductId");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique();
+
+                    b.ToTable("CT_HOADON", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CT_HOADON_SalePrice", "\"SalePrice\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.StorageLocation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -991,6 +1475,26 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("KHOLUU", (string)null);
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.SystemParameter", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("THAMSO", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.Account", b =>
@@ -1114,6 +1618,44 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.Navigation("Account");
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.EarlyWithdrawal", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.CustomerProfile", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "ProcessedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("ProcessedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("ProcessedByEmployee");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.EarlyWithdrawalItem", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.EarlyWithdrawal", "EarlyWithdrawal")
+                        .WithMany("Items")
+                        .HasForeignKey("EarlyWithdrawalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("EarlyWithdrawal");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.EmployeeProfile", b =>
                 {
                     b.HasOne("OCS.Domain.Entities.Account", "Account")
@@ -1123,6 +1665,171 @@ namespace OCS.Infrastructure.Persistence.Migrations
                         .IsRequired();
 
                     b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ExpiryProcessing", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "ProcessedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("ProcessedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ProcessedByEmployee");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ExpiryProcessingItem", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.ExpiryProcessing", "ExpiryProcessing")
+                        .WithMany("Items")
+                        .HasForeignKey("ExpiryProcessingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExpiryProcessing");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.FinancialTransaction", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Buyout", "Buyout")
+                        .WithMany()
+                        .HasForeignKey("BuyoutId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.CustomerProfile", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.EarlyWithdrawal", "EarlyWithdrawal")
+                        .WithMany()
+                        .HasForeignKey("EarlyWithdrawalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.Payout", "Payout")
+                        .WithMany()
+                        .HasForeignKey("PayoutId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "PerformedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("PerformedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.SaleInvoice", "SaleInvoice")
+                        .WithMany()
+                        .HasForeignKey("SaleInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Buyout");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("EarlyWithdrawal");
+
+                    b.Navigation("Payout");
+
+                    b.Navigation("PerformedByEmployee");
+
+                    b.Navigation("SaleInvoice");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.IncidentReport", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "ApprovedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "CreatedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("CreatedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByEmployee");
+
+                    b.Navigation("CreatedByEmployee");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Notification", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Account", "RecipientAccount")
+                        .WithMany()
+                        .HasForeignKey("RecipientAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.Account", "SenderAccount")
+                        .WithMany()
+                        .HasForeignKey("SenderAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("RecipientAccount");
+
+                    b.Navigation("SenderAccount");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Payout", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "ApprovedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("ApprovedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.ConsignmentContract", "ConsignmentContract")
+                        .WithMany("Payouts")
+                        .HasForeignKey("ConsignmentContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ApprovedByEmployee");
+
+                    b.Navigation("ConsignmentContract");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.PayoutDetail", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.IncidentReport", "IncidentReport")
+                        .WithMany()
+                        .HasForeignKey("IncidentReportId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Domain.Entities.Payout", "Payout")
+                        .WithMany("Details")
+                        .HasForeignKey("PayoutId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("IncidentReport");
+
+                    b.Navigation("Payout");
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.Product", b =>
@@ -1213,6 +1920,36 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("OCS.Domain.Entities.SaleInvoice", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.EmployeeProfile", "SoldByEmployee")
+                        .WithMany()
+                        .HasForeignKey("SoldByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("SoldByEmployee");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.SaleInvoiceLine", b =>
+                {
+                    b.HasOne("OCS.Domain.Entities.Product", "Product")
+                        .WithOne("SaleInvoiceLine")
+                        .HasForeignKey("OCS.Domain.Entities.SaleInvoiceLine", "ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Domain.Entities.SaleInvoice", "SaleInvoice")
+                        .WithMany("Lines")
+                        .HasForeignKey("SaleInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+
+                    b.Navigation("SaleInvoice");
+                });
+
             modelBuilder.Entity("OCS.Domain.Entities.Account", b =>
                 {
                     b.Navigation("AccountRoles");
@@ -1229,7 +1966,24 @@ namespace OCS.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OCS.Domain.Entities.ConsignmentContract", b =>
                 {
+                    b.Navigation("Payouts");
+
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.EarlyWithdrawal", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.ExpiryProcessing", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.Payout", b =>
+                {
+                    b.Navigation("Details");
                 });
 
             modelBuilder.Entity("OCS.Domain.Entities.Permission", b =>
@@ -1241,6 +1995,8 @@ namespace OCS.Infrastructure.Persistence.Migrations
                 {
                     b.Navigation("Images");
 
+                    b.Navigation("SaleInvoiceLine");
+
                     b.Navigation("StatusHistories");
                 });
 
@@ -1249,6 +2005,11 @@ namespace OCS.Infrastructure.Persistence.Migrations
                     b.Navigation("AccountRoles");
 
                     b.Navigation("RolePermissions");
+                });
+
+            modelBuilder.Entity("OCS.Domain.Entities.SaleInvoice", b =>
+                {
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }

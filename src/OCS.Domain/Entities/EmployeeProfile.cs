@@ -10,6 +10,8 @@ public sealed class EmployeeProfile
 
     public DateOnly HiredOn { get; set; }
 
+    public DateOnly? LeftOn { get; set; }
+
     public EmployeeStatus Status { get; set; }
         = EmployeeStatus.Working;
 

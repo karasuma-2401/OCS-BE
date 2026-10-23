@@ -42,6 +42,30 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<ProductStatusHistory> ProductStatusHistories => Set<ProductStatusHistory>();
 
+    public DbSet<SaleInvoice> SaleInvoices => Set<SaleInvoice>();
+
+    public DbSet<SaleInvoiceLine> SaleInvoiceLines => Set<SaleInvoiceLine>();
+
+    public DbSet<Payout> Payouts => Set<Payout>();
+
+    public DbSet<PayoutDetail> PayoutDetails => Set<PayoutDetail>();
+
+    public DbSet<FinancialTransaction> FinancialTransactions => Set<FinancialTransaction>();
+
+    public DbSet<ExpiryProcessing> ExpiryProcessings => Set<ExpiryProcessing>();
+
+    public DbSet<ExpiryProcessingItem> ExpiryProcessingItems => Set<ExpiryProcessingItem>();
+
+    public DbSet<EarlyWithdrawal> EarlyWithdrawals => Set<EarlyWithdrawal>();
+
+    public DbSet<EarlyWithdrawalItem> EarlyWithdrawalItems => Set<EarlyWithdrawalItem>();
+
+    public DbSet<IncidentReport> IncidentReports => Set<IncidentReport>();
+
+    public DbSet<SystemParameter> SystemParameters => Set<SystemParameter>();
+
+    public DbSet<Notification> Notifications => Set<Notification>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

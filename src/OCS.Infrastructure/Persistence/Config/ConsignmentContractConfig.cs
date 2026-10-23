@@ -20,7 +20,7 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
             table.HasCheckConstraint(
                 "CK_HOPDONGKYGUI_Enums",
                 """
-                "Status" IN ('Active', 'Completed')
+                "Status" IN ('Active', 'Completed', 'Cancelled')
                 AND "ExpiryHandling" IN ('Return', 'Donate')
                 """);
         });

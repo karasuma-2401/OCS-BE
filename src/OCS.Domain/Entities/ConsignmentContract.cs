@@ -28,4 +28,11 @@ public sealed class ConsignmentContract : BaseEntity
     public EmployeeProfile CreatedByEmployee { get; set; } = null!;
 
     public ICollection<Product> Products { get; set; } = new List<Product>();
+
+    public ICollection<Payout> Payouts { get; set; } = new List<Payout>();
+
+    public int GetTermDays() => (EndsAt.Date - SignedAt.Date).Days;
+
+    public bool IsWithinTerm(DateTimeOffset occurredAt) =>
+        occurredAt >= SignedAt && occurredAt <= EndsAt;
 }

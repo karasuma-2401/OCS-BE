@@ -22,7 +22,8 @@ public enum ExpiryHandling
 public enum ConsignmentContractStatus
 {
     Active = 0,
-    Completed = 1
+    Completed = 1,
+    Cancelled = 2
 }
 
 public enum BuyoutStatus
