@@ -6,6 +6,8 @@ internal static class ProductionConfiguration
 {
     public static void Validate(IConfiguration configuration, IHostEnvironment environment)
     {
+        // AUTH TODO: Once Gmail SMTP is wired, also validate the Email options required by the selected
+        // provider in Production without echoing secret values. Missing/revoked secrets must fail safe.
         if (!environment.IsProduction())
         {
             return;

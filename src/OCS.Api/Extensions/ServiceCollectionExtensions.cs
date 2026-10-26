@@ -74,6 +74,10 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // AUTH TODO: Tighten JWT validation when Auth is implemented: configured issuer, audience and
+        // signing key must be required for every non-test runtime; set a <=30-second clock skew; then
+        // call IAuthSessionValidator from token-validated events to reject revoked/expired server
+        // sessions and account changes. Cryptographic JWT validation alone is insufficient.
         var issuer = configuration["Jwt:Issuer"];
         var audience = configuration["Jwt:Audience"];
         var key = configuration["Jwt:Key"];

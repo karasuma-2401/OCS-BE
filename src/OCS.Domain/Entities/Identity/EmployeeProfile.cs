@@ -1,7 +1,7 @@
+using OCS.Domain.Common;
 using OCS.Domain.Enums;
 
 namespace OCS.Domain.Entities;
-
 public sealed class EmployeeProfile
 {
     public Guid Id { get; set; }

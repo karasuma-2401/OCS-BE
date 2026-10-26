@@ -25,6 +25,9 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // AUTH TODO: When the commented Auth implementations are completed, register each scoped
+        // repository/security service and the singleton-safe options here. Validate required Gmail
+        // and JWT configuration on startup in Production; never silently replace SMTP with a fake.
         services.AddDatabase(configuration);
         services.AddCaching(configuration);
         services.AddBackgroundJobs(configuration);

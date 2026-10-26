@@ -5,6 +5,10 @@ namespace OCS.Domain.Entities;
 
 public sealed class Account : BaseEntity
 {
+    // AUTH TODO: Extend this aggregate only with authentication identity state:
+    // normalized phone/email/username lookup values and EmailVerifiedAt. Keep password hashing,
+    // OTP delivery, JWT, session lookup and HTTP concerns outside Domain. Email proof must never
+    // set PhoneVerifiedAt. Preserve Id and business-history relations for every legacy account.
     public AccountType AccountType { get; set; }
 
     public string FullName { get; set; } = string.Empty;

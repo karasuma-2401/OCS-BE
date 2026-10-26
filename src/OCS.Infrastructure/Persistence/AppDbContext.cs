@@ -18,6 +18,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<AccountRole> AccountRoles => Set<AccountRole>();
 
+    // AUTH TODO: Add DbSets for AuthSession, RefreshCredential, OtpChallenge, RegistrationGrant,
+    // IdentityRecoveryRequest and AuthorizationGroupDelegation only after their Domain entities and
+    // IEntityTypeConfiguration classes exist. Do not use this DbContext directly from controllers.
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
