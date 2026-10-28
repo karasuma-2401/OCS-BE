@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using OCS.Api.Contracts.Common;
+using OCS.Api.Common;
 using OCS.Api.Extensions;
-using OCS.Application.Common;
+// using OCS.Api.Common;
 
 namespace OCS.Api.IntegrationTests;
 
@@ -21,7 +21,7 @@ public sealed class ApiContractTests
         .WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
-            builder.ConfigureLogging(logging => logging.ClearProviders());
+            builder.ConfigureLogging(logging => logging.AddConsole());
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -67,6 +67,8 @@ public sealed class ApiContractTests
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var response = await client.GetAsync("/api/health/live");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Healthy", payload.GetProperty("status").GetString());
     }
 
     [Fact]

@@ -10,7 +10,7 @@ Các tài liệu dưới đây được chuyển đổi và chuẩn hóa từ B�
 | --- | --- |
 | [Requirements.md](docs/Requirements.md) | Yêu cầu chức năng, yêu cầu phi chức năng và phạm vi vận hành. |
 | [UseCases.md](docs/UseCases.md) | Sơ đồ và đặc tả chín use case chính. |
-| [Architecture.md](docs/Architecture.md) | Kiến trúc hiện tại, layer, dependency và tích hợp runtime. |
+| [Architecture.md](docs/Architecture.md) | Kiến trúc hiện tại, cấu trúc thư mục, luồng dữ liệu và tích hợp runtime. |
 | [DataFlows.md](docs/DataFlows.md) | Biểu mẫu, quy định, luồng dữ liệu và thuật toán nghiệp vụ. |
 | [DataModel.md](docs/DataModel.md) | Mô hình dữ liệu theo báo cáo và mức độ hiện thực trong EF Core. |
 | [DatabaseScript.txt](docs/DatabaseScript.txt) | SQL PostgreSQL được sinh từ các EF Core migration hiện có. |
@@ -18,7 +18,7 @@ Các tài liệu dưới đây được chuyển đổi và chuẩn hóa từ B�
 
 ## Tình trạng hiện thực
 
-Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, danh mục, lịch hẹn, hợp đồng ký gửi, thu mua đứt, sản phẩm và lịch sử trạng thái. Các controller nghiệp vụ, POS offline, VietQR, xử lý hết hạn, quyết toán, thông báo và các báo cáo vẫn chưa xuất hiện trong backend; vì vậy chúng chỉ được mô tả như yêu cầu hoặc luồng dự kiến trong tài liệu.
+Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, danh mục, lịch hẹn, hợp đồng ký gửi, thu mua đứt, sản phẩm và lịch sử trạng thái. Hệ thống vận hành 100% online qua Web API và React Frontend; các cơ chế offline SQLite đã được loại bỏ hoàn toàn.
 
 ## Công nghệ
 
@@ -32,21 +32,27 @@ Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, d
 
 ## Kiến trúc
 
-Repository dùng Clean Architecture nhẹ. Team vẫn triển khai theo luồng Controller → Application Service → Repository quen thuộc; ranh giới project giúp compiler kiểm soát chiều phụ thuộc:
+Backend được tổ chức theo kiến trúc monolithic N-tier tinh gọn (tương tự mô hình `eBoard-backend`), quy về một project duy nhất `OCS.Api` để tối ưu hóa phát triển, triển khai và bảo trì:
 
 ```text
 src/
-├── OCS.Domain/           # Entity, value object và business rule thuần
-├── OCS.Application/      # Use case/service và abstraction
-├── OCS.Infrastructure/   # EF Core, Neon, Redis, Hangfire và Cloudflare R2
-└── OCS.Api/              # Controller, authentication và composition root
+└── OCS.Api/
+    ├── Controllers/             # HTTP endpoints, routing, authorization
+    ├── Services/                # Business logic implementation (AuthService, ProductService, ...)
+    ├── Repositories/            # UnitOfWork & Repository pattern (resolved via DI container)
+    ├── Interfaces/              # Abstraction cho Services & Repositories
+    ├── Entities/                # Database entities, domain models & BaseEntity
+    ├── Context/                 # EF Core AppDbContext, configurations, migrations, seeds
+    ├── Models/                  # Request/Response DTOs & ViewModels
+    ├── Common/                  # Result<T>, ApplicationError, PagedRequest/Response, ErrorCodes
+    ├── Consts/                  # Domain Enums & hằng số hệ thống
+    ├── Extensions/              # DI container registration, middleware & API conventions
+    └── Storage/                 # Cloudflare R2 storage options & client
 tests/
-└── OCS.Application.Tests/
+└── OCS.Api.IntegrationTests/    # Contract tests, JWT auth, validation, liveness
 ```
 
-Chiều phụ thuộc: `Api → Application`, `Api → Infrastructure`, `Infrastructure → Application → Domain`. Domain không phụ thuộc framework hoặc hạ tầng. CQRS, MediatR, event bus và domain event không phải yêu cầu bắt buộc của kiến trúc này; chỉ bổ sung khi nghiệp vụ thực tế cần.
-
-Các phân hệ nghiệp vụ sẽ được thêm dần theo tài liệu nhóm: tài khoản/RBAC, lịch hẹn, tiếp nhận và thẩm định, hợp đồng ký gửi, sản phẩm và kho, POS, xử lý hết hạn/rút sớm, đối soát và giải ngân, thông báo và cấu hình hệ thống.
+Luồng xử lý chuẩn: `Controller → Service → Repository / UnitOfWork → AppDbContext`. Toàn bộ phụ thuộc được giải quyết thông qua .NET Dependency Injection container tiêu chuẩn.
 
 ## Chạy local
 
@@ -84,8 +90,6 @@ dotnet build OCS.sln --configuration Release
 dotnet test OCS.sln --configuration Release
 docker build --file src/OCS.Api/Dockerfile --tag ocs-api:local .
 ```
-
-Test được tách theo Domain, Application, API và Infrastructure. Test PostgreSQL dùng database tạm qua Docker/Testcontainers; bật `$env:OCS_RUN_POSTGRES_TESTS = "1"` để chạy đầy đủ như CI. Cách seed demo và quy tắc mở rộng tính năng được ghi trong [Architecture.md](docs/Architecture.md).
 
 GitHub Actions gồm:
 

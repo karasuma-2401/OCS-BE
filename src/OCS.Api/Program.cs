@@ -1,6 +1,6 @@
 using OCS.Api.Extensions;
 using OCS.Api.Configuration;
-using OCS.Infrastructure.Persistence.Seeds;
+using OCS.Api.Context.Seeds;
 
 var builder = WebApplication.CreateBuilder(args);
 

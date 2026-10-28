@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using OCS.Api.Contracts.Common;
+using OCS.Api.Common;
 
 namespace OCS.Api.Extensions;
 

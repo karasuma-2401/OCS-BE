@@ -1,13 +1,25 @@
 using System.Text;
+using Amazon.Runtime;
+using Amazon.S3;
+using Hangfire;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.IdentityModel.Tokens;
-using OCS.Application;
-using OCS.Application.Abstractions.Auditing;
-using OCS.Api.Auditing;
-using OCS.Infrastructure;
-using Scalar.AspNetCore;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.IdentityModel.Tokens;
+using OCS.Api.Auditing;
+using OCS.Api.Context;
+using OCS.Api.Context.Interceptors;
+using OCS.Api.Context.Seeds;
+using OCS.Api.HealthChecks;
+using OCS.Api.Interfaces.Repositories;
+using OCS.Api.Interfaces.Services;
+using OCS.Api.Repositories;
+using OCS.Api.Services;
+using OCS.Api.Storage;
+using Scalar.AspNetCore;
 
 namespace OCS.Api.Extensions;
 
@@ -22,13 +34,185 @@ public static class ServiceCollectionExtensions
         services.AddControllers();
         services.AddApiConventions();
         services.AddOpenApi();
-        services.AddApplication();
         services.AddHttpContextAccessor();
+        services.AddScoped<SystemAuditContext>();
         services.AddScoped<IAuditContext, HttpAuditContext>();
-        services.AddInfrastructure(configuration);
-        services.AddJwtAuthentication(configuration);
-        services.AddCorsPolicy(configuration);
 
+        services
+            .AddDatabase(configuration)
+            .AddRepositories()
+            .AddServices(configuration)
+            .AddCaching(configuration)
+            .AddBackgroundJobs(configuration)
+            .AddObjectStorage(configuration)
+            .AddJwtAuthentication(configuration)
+            .AddCorsPolicy(configuration)
+            .AddDependencyHealthChecks();
+
+        return services;
+    }
+
+    public static IServiceCollection AddDatabase(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        services.AddScoped<TimestampSaveChangesInterceptor>();
+        services.AddScoped<AuditSaveChangesInterceptor>();
+
+        services.AddDbContext<AppDbContext>((provider, options) =>
+        {
+            if (!string.IsNullOrWhiteSpace(connectionString))
+            {
+                options.UseNpgsql(connectionString);
+            }
+
+            options.AddInterceptors(
+                provider.GetRequiredService<TimestampSaveChangesInterceptor>(),
+                provider.GetRequiredService<AuditSaveChangesInterceptor>());
+        });
+
+        return services;
+    }
+
+    public static IServiceCollection AddRepositories(this IServiceCollection services)
+    {
+        services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<IAuthRepository, AuthRepository>();
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+        return services;
+    }
+
+    public static IServiceCollection AddServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddScoped<IPasswordHasher, PasswordHasher>();
+        services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<DevelopmentDataSeeder>();
+        return services;
+    }
+
+    public static IServiceCollection AddJwtAuthentication(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                var issuer = string.IsNullOrWhiteSpace(configuration["Jwt:Issuer"]) ? "OCS" : configuration["Jwt:Issuer"]!;
+                var audience = string.IsNullOrWhiteSpace(configuration["Jwt:Audience"]) ? "OCS" : configuration["Jwt:Audience"]!;
+                var key = string.IsNullOrWhiteSpace(configuration["Jwt:Key"]) ? "ocs-super-secret-key-that-is-at-least-32-bytes-long" : configuration["Jwt:Key"]!;
+
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidIssuer = issuer,
+                    ValidateAudience = true,
+                    ValidAudience = audience,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+                };
+            });
+
+        services.AddAuthorization();
+        return services;
+    }
+
+    public static IServiceCollection AddCorsPolicy(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var allowedOrigins = configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? ["http://localhost:3000", "http://localhost:5173"];
+
+        services.AddCors(options => options.AddPolicy(CorsPolicyName, policy =>
+        {
+            policy.WithOrigins(allowedOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        }));
+
+        return services;
+    }
+
+    public static IServiceCollection AddCaching(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var redisConnection = configuration["Redis:ConnectionString"];
+        if (string.IsNullOrWhiteSpace(redisConnection))
+        {
+            services.AddDistributedMemoryCache();
+            return services;
+        }
+
+        services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnection;
+            options.InstanceName = "ocs:";
+        });
+        return services;
+    }
+
+    public static IServiceCollection AddBackgroundJobs(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return services;
+        }
+
+        services.AddHangfire(hangfire => hangfire
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UsePostgreSqlStorage(options => options.UseNpgsqlConnection(connectionString)));
+        services.AddHangfireServer();
+        return services;
+    }
+
+    public static IServiceCollection AddObjectStorage(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var section = configuration.GetSection(R2Options.SectionName);
+        var options = section.Get<R2Options>() ?? new R2Options();
+        services.Configure<R2Options>(section);
+
+        if (string.IsNullOrWhiteSpace(options.ServiceUrl) ||
+            string.IsNullOrWhiteSpace(options.AccessKeyId) ||
+            string.IsNullOrWhiteSpace(options.SecretAccessKey))
+        {
+            return services;
+        }
+
+        services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client(
+            new BasicAWSCredentials(options.AccessKeyId, options.SecretAccessKey),
+            new AmazonS3Config
+            {
+                ServiceURL = options.ServiceUrl,
+                AuthenticationRegion = "auto",
+                ForcePathStyle = true
+            }));
+
+        return services;
+    }
+
+    public static IServiceCollection AddDependencyHealthChecks(this IServiceCollection services)
+    {
+        services.AddHealthChecks()
+            .AddCheck<NeonHealthCheck>("neon", failureStatus: HealthStatus.Unhealthy, tags: ["ready"], timeout: TimeSpan.FromSeconds(10))
+            .AddCheck<RedisHealthCheck>("redis", failureStatus: HealthStatus.Unhealthy, tags: ["ready"], timeout: TimeSpan.FromSeconds(10))
+            .AddCheck<R2HealthCheck>("r2", failureStatus: HealthStatus.Unhealthy, tags: ["ready"], timeout: TimeSpan.FromSeconds(10));
         return services;
     }
 
@@ -68,60 +252,5 @@ public static class ServiceCollectionExtensions
         });
 
         return app;
-    }
-
-    private static void AddJwtAuthentication(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        // AUTH TODO: Tighten JWT validation when Auth is implemented: configured issuer, audience and
-        // signing key must be required for every non-test runtime; set a <=30-second clock skew; then
-        // call IAuthSessionValidator from token-validated events to reject revoked/expired server
-        // sessions and account changes. Cryptographic JWT validation alone is insufficient.
-        var issuer = configuration["Jwt:Issuer"];
-        var audience = configuration["Jwt:Audience"];
-        var key = configuration["Jwt:Key"];
-
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = !string.IsNullOrWhiteSpace(issuer),
-                    ValidIssuer = issuer,
-                    ValidateAudience = !string.IsNullOrWhiteSpace(audience),
-                    ValidAudience = audience,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = !string.IsNullOrWhiteSpace(key),
-                    IssuerSigningKey = string.IsNullOrWhiteSpace(key)
-                        ? null
-                        : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
-                };
-            });
-
-        services.AddAuthorization();
-    }
-
-    private static void AddCorsPolicy(
-        this IServiceCollection services,
-        IConfiguration configuration)
-    {
-        var allowedOrigins = configuration
-            .GetSection("Cors:AllowedOrigins")
-            .Get<string[]>() ?? [];
-
-        services.AddCors(options => options.AddPolicy(CorsPolicyName, policy =>
-        {
-            if (allowedOrigins.Length == 0)
-            {
-                policy.SetIsOriginAllowed(_ => false);
-                return;
-            }
-
-            policy.WithOrigins(allowedOrigins)
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-        }));
     }
 }

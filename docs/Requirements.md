@@ -4,9 +4,7 @@ Tài liệu này ghi lại yêu cầu của hệ thống quản lý cửa hàng 
 
 ## Phạm vi vận hành
 
-Hệ thống phục vụ một cửa hàng độc lập và một kho tại chỗ. Dữ liệu nghiệp vụ tập trung trên Cloud. Ứng dụng khách hàng hướng tới Mobile và Website; ứng dụng nội bộ chạy trên Windows Desktop cho quản lý, nhân viên kho, kiểm định và thu ngân POS.
-
-Chỉ phân hệ POS được dự kiến hỗ trợ ngoại tuyến giới hạn: khi máy POS mất Internet nhưng dữ liệu bán hàng đã được tải trước, giao dịch tiền mặt được ghi cục bộ trong SQLite rồi đồng bộ về Backend khi kết nối được khôi phục. Hệ thống không mở rộng sang chuỗi nhiều chi nhánh hoặc SaaS đa tổ chức trong phạm vi đề tài.
+Hệ thống phục vụ một cửa hàng độc lập và một kho tại chỗ. Dữ liệu nghiệp vụ tập trung trên Cloud. Toàn bộ hệ thống vận hành tập trung trên Website duy nhất (React + Tailwind CSS + Vite) cho cả khách hàng, người ký gửi và nhân viên (quản lý, kho, thẩm định, thu ngân Web POS) kết nối trực tiếp với Backend Web API. Hệ thống không mở rộng sang chuỗi nhiều chi nhánh hoặc SaaS đa tổ chức trong phạm vi đề tài.
 
 ## Mục đích
 
@@ -63,9 +61,9 @@ Chỉ phân hệ POS được dự kiến hỗ trợ ngoại tuyến giới hạ
 | FR-020 | Giữ nguyên giá niêm yết | Giá bán giữ theo mức đã chốt trong hợp đồng suốt đợt ký gửi. | Hệ thống |
 | FR-022 | Thanh toán tiền mặt | Nhập tiền khách trả và tính tiền thừa. | Staff |
 | FR-023 | VietQR động | Chỉ hoàn tất khi có Internet và nhận xác nhận thanh toán hợp lệ. | Hệ thống |
-| FR-024 | Chuyển sang `Sold` | Online: lưu hóa đơn và cập nhật Cloud trong một transaction. Offline tiền mặt: WPF POS lưu hóa đơn, chi tiết, trạng thái `Sold` và Outbox trong một transaction SQLite; Cloud chỉ đổi sau khi đồng bộ. | Hệ thống |
+| FR-024 | Chuyển sang `Sold` | Lưu hóa đơn, chi tiết và cập nhật trạng thái `Sold` trong một transaction trực tuyến. | Hệ thống |
 | FR-025 | In hóa đơn | In hóa đơn có thông tin món đồ và quy định hàng ký gửi không đổi trả. | Staff |
-| FR-026 | POS ngoại tuyến | Dùng SQLite cục bộ để kiểm tra hàng đã tải trước, nhận tiền mặt, lưu hóa đơn và sự kiện đồng bộ có `EventId` duy nhất; retry, chống trùng và đưa xung đột vào đối soát. | Hệ thống, Staff |
+| FR-026 | Web POS trực tuyến | Giao diện Web POS xử lý giỏ hàng, thanh toán tiền mặt/VietQR trực tiếp qua Backend API với transaction toàn vẹn. | Hệ thống, Staff |
 
 > Báo cáo gốc không có FR-019 và FR-021; các mã được giữ nguyên để không làm thay đổi tham chiếu nghiệp vụ của nhóm.
 
@@ -107,14 +105,12 @@ Chỉ phân hệ POS được dự kiến hỗ trợ ngoại tuyến giới hạ
 ### Độ tin cậy và khả năng chịu lỗi
 
 - Mục tiêu thời gian sẵn sàng của máy chủ: từ 99%; sao lưu cơ sở dữ liệu mỗi đêm; khắc phục sự cố không quá 4 giờ.
-- POS offline chỉ ghi tiền mặt trên thiết bị đã có dữ liệu và quyền hợp lệ. Khi có mạng, Sync Service gửi giao dịch đến Backend và nhận xác nhận.
-- VietQR không được hoàn tất ở chế độ offline.
+- Toàn bộ giao dịch bán lẻ tại quầy POS được xử lý trực tuyến qua Backend API; hỗ trợ cả tiền mặt và VietQR.
 
 ### An toàn và bảo mật
 
 - Phải đăng nhập trước khi xem thông tin cá nhân hoặc lịch sử giao dịch; mật khẩu được băm trước khi lưu.
 - Dữ liệu truyền giữa client và server dùng HTTPS; quyền truy cập dữ liệu giới hạn theo vai trò.
-- SQLite trên máy POS phải hạn chế truy cập theo người dùng Windows, bảo vệ dữ liệu nhạy cảm và lưu vết người bán/thời điểm bán.
 - Ghi audit log cho các thao tác quan trọng như sửa giá, đổi hoa hồng hoặc xóa sản phẩm.
 
 ### Tính chính xác và toàn vẹn dữ liệu

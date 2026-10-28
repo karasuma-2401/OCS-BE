@@ -71,8 +71,8 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 | --- | --- |
 | Tác nhân | Nhân viên/thu ngân |
 | Kích hoạt | Khách mua mang sản phẩm đến quầy. |
-| Điều kiện trước | Sản phẩm ở trạng thái `OnSale`, chưa được giao dịch khác bán. Với offline, POS đã có cache hợp lệ, quyền offline và chỉ một máy được bán offline ở phiên bản đầu. |
-| Kết quả | Online: lưu hóa đơn và `Sold` trên Cloud. Offline tiền mặt: lưu hóa đơn, dòng chi tiết, `Sold` cục bộ và Outbox; dữ liệu Cloud chỉ đổi sau khi đồng bộ hợp lệ. |
+| Điều kiện trước | Sản phẩm ở trạng thái `OnSale`, chưa được giao dịch khác bán. Quản lý / Thu ngân truy cập màn hình Web POS trực tuyến. |
+| Kết quả | Lưu hóa đơn, dòng chi tiết và trạng thái `Sold` trên Cloud Database trong cùng một transaction. |
 
 **Luồng chính**
 
@@ -83,7 +83,7 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 5. POS in hóa đơn, trong đó nêu rõ hàng ký gửi đã kiểm định và không áp dụng đổi trả.
 6. Khi dữ liệu đã được ghi nhận trên Cloud, hệ thống thông báo cho người ký gửi.
 
-**Luồng thay thế:** hủy mua chỉ xóa hàng khỏi giỏ, không đổi trạng thái. Khi offline, POS chỉ nhận tiền mặt và lưu giao dịch chờ đồng bộ. Sự kiện đồng bộ thất bại được giữ `Pending`/`Retry`; nếu Cloud phát hiện xung đột, giao dịch được đánh dấu `Conflict` để quản lý đối soát, không tạo hóa đơn mới âm thầm.
+**Luồng thay thế:** hủy mua chỉ xóa hàng khỏi giỏ, không đổi trạng thái. Nếu giao dịch thanh toán thất bại, toàn bộ giỏ hàng và trạng thái sản phẩm được hoàn nguyên (rollback) an toàn.
 
 ## UC-05 — Xử lý sản phẩm hết hạn đợt ký gửi
 

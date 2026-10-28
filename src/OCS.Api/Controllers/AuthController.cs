@@ -1,8 +1,46 @@
-// AUTH IMPLEMENTATION SCAFFOLD — replace this comment-only file with the thin HTTP Auth controller.
-// Use route `/api/v1/auth`; make each anonymous operation explicit: customer login; internal login;
-// registration request OTP; registration verify OTP; registration complete; reset request/complete;
-// refresh; and recovery request. Authenticated operations include me, logout, logout-all, password
-// change and email-change flow. Apply [AllowAnonymous] only to public flow steps and [Authorize] to
-// session/account operations. Bind API DTOs, call IAuthService and map Result<T> with ToActionResult.
-// Set Cache-Control: no-store on all token/grant/password/OTP responses. Never inspect DbContext,
-// sign JWT, send email or decide group permissions in this controller.
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using OCS.Api.Common;
+using OCS.Api.Extensions;
+using OCS.Api.Interfaces.Services;
+using OCS.Api.Models.Auth;
+
+namespace OCS.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController(IAuthService authService) : ControllerBase
+{
+    [HttpPost("login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Login([FromBody] LoginRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await authService.LoginAsync(request, cancellationToken);
+        return result.ToActionResult();
+    }
+
+    [HttpPost("register")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Register([FromBody] RegisterRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await authService.RegisterAsync(request, cancellationToken);
+        return result.ToActionResult();
+    }
+
+    [HttpGet("me")]
+    [Authorize]
+    public IActionResult Me()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var username = User.Identity?.Name;
+        var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
+
+        return Ok(new
+        {
+            Id = userId,
+            Username = username,
+            Roles = roles
+        });
+    }
+}

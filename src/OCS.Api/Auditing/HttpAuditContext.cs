@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using System.Security.Claims;
-using OCS.Application.Abstractions.Auditing;
-using OCS.Domain.Enums;
+using OCS.Api.Interfaces.Services;
+using OCS.Api.Services;
+using OCS.Api.Consts;
 
 namespace OCS.Api.Auditing;
 
@@ -30,16 +31,21 @@ public sealed class HttpAuditContext(
         }
     }
 
-    public AuditActorType ActorType => httpContextAccessor.HttpContext is { } context
-        ? context.User.Identity?.IsAuthenticated == true ? AuditActorType.User : AuditActorType.Anonymous
-        : systemContext.ActorType;
+    public AuditActorType ActorType =>
+        httpContextAccessor.HttpContext?.User?.Identity?.IsAuthenticated == true
+            ? AuditActorType.User
+            : systemContext.ActorType;
 
-    // POS/MiniApp identification needs a trusted server policy; a client header is not proof.
-    public string Source => httpContextAccessor.HttpContext is null ? systemContext.Source : "BackendApi";
+    public string Source =>
+        httpContextAccessor.HttpContext?.Request.Path.Value is { } path && !string.IsNullOrWhiteSpace(path)
+            ? path
+            : systemContext.Source;
 
-    public string? IpAddress => httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+    public string? IpAddress =>
+        httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? systemContext.IpAddress;
 
-    public string? CorrelationId => httpContextAccessor.HttpContext is null
-        ? systemContext.CorrelationId
-        : Activity.Current?.TraceId.ToString() ?? httpContextAccessor.HttpContext.TraceIdentifier;
+    public string? CorrelationId =>
+        Activity.Current?.Id
+        ?? httpContextAccessor.HttpContext?.TraceIdentifier
+        ?? systemContext.CorrelationId;
 }

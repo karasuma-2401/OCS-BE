@@ -130,7 +130,7 @@ Danh sách sản phẩm gồm: STT, GUID, tên sản phẩm, brand, đơn giá v
 - **QĐ4.1:** Sản phẩm được nạp vào giỏ khi quét Barcode hoặc nhập GUID.
 - **QĐ4.2:** Giá bán giữ theo giá niêm yết đã chốt trong hợp đồng.
 - **QĐ4.3:** Thanh toán thành công chuyển sản phẩm ngay sang `Sold`.
-- **QĐ4.4:** Offline chỉ cho phép tiền mặt, dữ liệu sản phẩm phải tải trước và một máy POS được quyền bán offline ở phiên bản đầu.
+- **QĐ4.4:** Bán hàng tại quầy thực hiện trực tuyến qua Web POS, hỗ trợ tiền mặt và VietQR.
 - **QĐ4.5:** Mobile/Website có thể chậm hiển thị trạng thái và doanh thu cho tới khi POS đồng bộ; phải đối soát trước khi giải ngân.
 
 ### Luồng dữ liệu
@@ -139,8 +139,8 @@ Danh sách sản phẩm gồm: STT, GUID, tên sản phẩm, brand, đơn giá v
 | --- | --- |
 | D1 | Barcode/GUID, phương thức thanh toán và số tiền nhận. |
 | D2 | Webhook xác nhận thanh toán VietQR. |
-| D3 | Online: dữ liệu hàng và kho trên Cloud. Offline: bản sao danh mục cục bộ; kiểm tra Barcode, trạng thái có thể bán, giá và phiên bản. |
-| D4 | UUID giao dịch, hóa đơn, chi tiết hóa đơn và `Sold` cục bộ; offline phải ghi trong một transaction. |
+| D3 | Dữ liệu hàng và kho trên Cloud qua Web API; kiểm tra Barcode, trạng thái có thể bán, giá niêm yết. |
+| D4 | UUID giao dịch, hóa đơn, chi tiết hóa đơn và `Sold` ghi trong một transaction trực tuyến trên Cloud. |
 | D5 | Hóa đơn bán lẻ in cho người mua. |
 | D6 | Kết quả POS: Online, chờ đồng bộ, đã đồng bộ hoặc cần đối soát. Thông báo người gửi chỉ có sau khi Cloud ghi nhận thành công. |
 
@@ -148,8 +148,8 @@ Danh sách sản phẩm gồm: STT, GUID, tên sản phẩm, brand, đơn giá v
 
 1. Thu ngân quét Barcode hoặc nhập GUID, đọc D3. Nếu không phải `OnSale`, trả lỗi D6.
 2. Nạp hàng vào giỏ với đúng giá niêm yết.
-3. Online: nhận tiền mặt hoặc tạo VietQR và chờ D2. Offline: chỉ nhận tiền mặt.
-4. Online cập nhật giao dịch theo quy tắc nghiệp vụ. Offline kiểm tra lại bản sao cục bộ, rồi ghi hóa đơn, chi tiết, `Sold` và Outbox trong một transaction; thất bại phải rollback.
+3. Nhận tiền mặt hoặc tạo VietQR động trực tuyến.
+4. Cập nhật giao dịch theo quy tắc nghiệp vụ: ghi hóa đơn, chi tiết và chuyển trạng thái `Sold` trong một transaction database.
 5. In D5. Khi có mạng, Sync Service gửi sự kiện `Pending`/`Retry` cùng `EventId` không đổi. Nếu trả về `Conflict`, giữ giao dịch cục bộ để đối soát và không gửi thông báo hay giải ngân dựa trên giao dịch đó.
 
 ## 5. Xử lý sản phẩm hết hạn ký gửi
@@ -239,7 +239,7 @@ Danh sách gồm: STT, GUID, tên sản phẩm, hình ảnh và giá bán.
 
 ### Quy định
 
-- **QĐ7.1:** Chỉ lập bảng chính thức khi đợt kết thúc và đã nhận đủ giao dịch POS offline. Khi còn đồng bộ chờ hoặc xung đột, chỉ được xem bảng tạm tính.
+- **QĐ7.1:** Chỉ lập bảng chính thức khi đợt kết thúc và các giao dịch bán hàng đã hoàn tất trên hệ thống.
 - **QĐ7.2:** Quản lý phải đối soát và tải chứng từ chuyển khoản trước khi thông báo giải ngân.
 - **QĐ7.3:** Đợt chỉ hoàn tất `Completed` khi người ký gửi xác nhận đã nhận tiền; nếu không, hệ thống tự xác nhận sau thời gian cấu hình.
 
