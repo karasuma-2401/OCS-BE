@@ -1,0 +1,3 @@
+# Gitleaks ignore list
+# False positive: Scaffold comment describing DB column rules
+3393f3d615a9a3ec758d5190acd3c726334d47eb:src/OCS.Infrastructure/Persistence/Config/RegistrationGrantConfig.cs:generic-api-key:2
