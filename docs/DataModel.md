@@ -3,7 +3,7 @@
 Tài liệu này tách rõ hai lớp thông tin để không làm sai lệch hiện trạng của dự án:
 
 - **Thiết kế báo cáo:** 30 bảng được đề xuất trong Báo cáo SE100 (Final 3).
-- **Hiện thực backend:** cả 30 bảng đã có entity, cấu hình EF Core và migration. Migration mới nhất là `20261023162400_SeparateDevelopmentSeed`, tách dữ liệu demo khỏi seed dùng chung.
+- **Hiện thực backend:** 30 bảng nghiệp vụ cùng hai bảng auth bổ sung (`OTP_CHALLENGE`, `AUTH_SESSION`) đã có entity, cấu hình EF Core và migration. Migration mới nhất là `20261103101757_NormalizeAccountEmail`; CP1 mới hoàn thành persistence, chưa thay runtime login/OTP/cookie.
 
 `DatabaseScript.txt` là SQL PostgreSQL idempotent được sinh từ toàn bộ migration hiện có. Khi migration thay đổi, cần sinh lại script trước khi phát hành.
 
@@ -27,8 +27,10 @@ Tài liệu này tách rõ hai lớp thông tin để không làm sai lệch hi�
 | `20261015185523_AddProducts` | Lịch hẹn, hợp đồng ký gửi, thu mua, sản phẩm, ảnh và lịch sử trạng thái. |
 | `20261021031023_AddFinancialAndExceptionTables` | Hóa đơn, giải ngân, giao dịch tài chính, rút sớm, xử lý hết hạn, sự cố, thông báo và tham số. |
 | `20261023162400_SeparateDevelopmentSeed` | Giữ seed role/permission; dọn bộ demo nguyên trạng chưa được sử dụng. Không thay đổi schema nghiệp vụ. |
+| `20261103101428_AddAuthenticationIdentityState` | Thêm trạng thái email/khóa tạm và bảng OTP challenge/session. |
+| `20261103101757_NormalizeAccountEmail` | Preflight xung đột, backfill email, unique toàn hệ thống và check constraint chuẩn hóa; giữ nguyên lịch sử tài khoản. |
 
-Tất cả 30 bảng trong mô hình hiện được migration quản lý. Một số tên bảng trong code được đặt rõ nghĩa hơn so với báo cáo; bảng đối chiếu ở cuối tài liệu là nguồn tham chiếu khi đọc SQL.
+Tất cả 30 bảng nghiệp vụ và hai bảng auth bổ sung được migration quản lý. Một số tên bảng trong code được đặt rõ nghĩa hơn so với báo cáo; bảng đối chiếu ở cuối tài liệu là nguồn tham chiếu khi đọc SQL. Quy trình chuyển dữ liệu cũ: [AUTH_DATA_MIGRATION.md](AUTH_DATA_MIGRATION.md).
 
 ## Quan hệ chính đã hiện thực
 
@@ -57,13 +59,27 @@ Các cột `CreatedAt` và `UpdatedAt` xuất hiện ở entity kế thừa `Bas
 | `FullName` | `varchar(200)` | Bắt buộc. |
 | `PhoneNumber` | `varchar(20)` | Bắt buộc; duy nhất theo cặp loại tài khoản và số điện thoại. |
 | `Username` | `varchar(100)` | Duy nhất khi có giá trị; bắt buộc với tài khoản nội bộ. |
-| `Email` | `varchar(254)` | Duy nhất theo cặp loại tài khoản và email khi có giá trị. |
+| `Email` | `varchar(254)` | Địa chỉ gốc, nullable, giữ nguyên để hiển thị. |
+| `NormalizedEmail` | `varchar(254) COLLATE "C"` | Unique toàn hệ thống khi khác null; check constraint nhất quán với email v1. Email thiếu/sai/ngoài chính sách có giá trị null. |
+| `EmailVerifiedAt` | `timestamptz` | Proof email, nullable; migration không suy diễn từ Status/PhoneVerifiedAt. |
+| `FailedLoginAttempts` | `integer` | Không âm, mặc định 0. |
+| `LockoutEndAt` | `timestamptz` | Khóa login tạm, nullable; độc lập với khóa quản trị Status. |
+| `Version` (EF) / `xmin` | `xid` | Concurrency token do PostgreSQL quản lý, không phải cột tự tạo của ứng dụng. |
 | `IdentityNumber` | `varchar(20)` | Duy nhất theo cặp loại tài khoản và CCCD khi có giá trị. |
 | `PasswordHash` | `varchar(512)` | Bắt buộc với tài khoản nội bộ đang `Active`. |
 | `Status` | `varchar(30)` | `PendingActivation`, `Active`, `Locked`, `Deactivated`. |
 | `PhoneVerifiedAt`, `ActivatedAt` | `timestamptz` | Có thể rỗng. |
 | `CreatedByAccountId` | `uuid` | FK tự tham chiếu tới `TAIKHOAN`, có thể rỗng. |
 | `CreatedAt`, `UpdatedAt` | `timestamptz` | Thời điểm tạo/cập nhật. |
+
+#### `OTP_CHALLENGE` và `AUTH_SESSION`
+
+| Bảng | Cột chính | Ràng buộc/ý nghĩa |
+| --- | --- | --- |
+| `OTP_CHALLENGE` | Id, AccountId (FK Restrict), NormalizedEmail, Purpose, CodeHash, ContinuationTokenHash, ContinuationExpiresAt, ExpiresAt, ResendAvailableAt, FailedAttempts, ConsumedAt, InvalidatedAt, DeliveryStatus, SentAt, CreatedAt/UpdatedAt | Purpose hiện là RegistrationActivation; attempts không âm; lifetime hợp lệ; delivery Pending/Sent/Failed; hash không trống. Có index account/purpose và expiry, xmin chống stale update. Không lưu OTP/continuation credential plaintext. |
+| `AUTH_SESSION` | Id, AccountId (FK Restrict), ExpiresAt, RevokedAt, CreatedAt/UpdatedAt | Id dùng làm sid; expiry sau created; revoked không trước created. Index account/expiry và expiry, xmin concurrency. Không lưu JWT/refresh credential plaintext. |
+
+CP2–CP5 triển khai dịch vụ và transaction verify/consume/activate; riêng mapping schema không đồng nghĩa OTP hoặc cookie đã hoạt động.
 
 | Bảng | Cột chính | Ý nghĩa |
 | --- | --- | --- |

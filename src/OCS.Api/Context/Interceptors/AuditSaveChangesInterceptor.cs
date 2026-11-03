@@ -18,8 +18,9 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
     private static readonly Dictionary<Type, string[]> AuditedProperties = new()
     {
         [typeof(Account)] = [nameof(Account.AccountType), nameof(Account.FullName), nameof(Account.PhoneNumber),
-            nameof(Account.Username), nameof(Account.Email), nameof(Account.IdentityNumber), nameof(Account.PasswordHash),
-            nameof(Account.Status), nameof(Account.PhoneVerifiedAt), nameof(Account.ActivatedAt), nameof(Account.CreatedByAccountId)],
+            nameof(Account.Username), nameof(Account.Email), nameof(Account.IdentityNumber),
+            nameof(Account.Status), nameof(Account.PhoneVerifiedAt), nameof(Account.EmailVerifiedAt),
+            nameof(Account.ActivatedAt), nameof(Account.CreatedByAccountId)],
         [typeof(CustomerProfile)] = [nameof(CustomerProfile.Address), nameof(CustomerProfile.BankCode),
             nameof(CustomerProfile.BankAccountNumber), nameof(CustomerProfile.BankAccountHolderName), nameof(CustomerProfile.Status)],
         [typeof(EmployeeProfile)] = [nameof(EmployeeProfile.JobTitle), nameof(EmployeeProfile.HiredOn), nameof(EmployeeProfile.Status)],

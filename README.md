@@ -15,12 +15,15 @@ Các tài liệu dưới đây được chuyển đổi và chuẩn hóa từ B�
 | [DataModel.md](docs/DataModel.md) | Mô hình dữ liệu theo báo cáo và mức độ hiện thực trong EF Core. |
 | [DatabaseScript.txt](docs/DatabaseScript.txt) | SQL PostgreSQL được sinh từ các EF Core migration hiện có. |
 | [API_CONTRACT.md](docs/API_CONTRACT.md) | Hợp đồng HTTP duy nhất: endpoint đang công bố và quy ước mở rộng API. |
+| [AUTH_DATA_MIGRATION.md](docs/AUTH_DATA_MIGRATION.md) | CP1: preflight email cũ, migration OTP/session, test PostgreSQL và xử lý xung đột. |
 
 ## Tình trạng hiện thực
 
 Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, danh mục, lịch hẹn, hợp đồng ký gửi, thu mua đứt, sản phẩm và lịch sử trạng thái. Hệ thống vận hành 100% online qua Web API và React Frontend; các cơ chế offline SQLite đã được loại bỏ hoàn toàn.
 
 ## Công nghệ
+
+CP1 auth đã bổ sung persistence cho email chuẩn hóa/xác thực, khóa tạm, OTP challenge và session. Runtime login/register vẫn dùng luồng cũ; email OTP/cookie/CSRF triển khai ở CP2–CP5. Chưa chạy migration vào database vận hành; xem runbook trước khi triển khai.
 
 - .NET 10 / ASP.NET Core Web API
 - Entity Framework Core + Neon PostgreSQL
@@ -83,6 +86,8 @@ Scalar API reference: `http://localhost:5204/scalar/v1` khi chạy ở Developme
 Cloudflare R2 là dịch vụ bên ngoài Docker; API local dùng bucket R2 được cấu hình trong `.env`.
 
 ## Kiểm tra chất lượng
+
+Để chạy cả test migration/concurrency auth, đặt `OCS_TEST_POSTGRES` tới PostgreSQL test riêng có quyền CREATE DATABASE. Test tạo/xóa database `ocs_auth_test_<guid>`; không dùng connection string vận hành. Nếu thiếu biến, các test PostgreSQL được báo skip. CI cung cấp service PostgreSQL riêng cho bộ test này.
 
 ```powershell
 dotnet format OCS.sln --verify-no-changes

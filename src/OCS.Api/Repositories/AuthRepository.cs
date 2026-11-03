@@ -2,11 +2,32 @@ using Microsoft.EntityFrameworkCore;
 using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
+using OCS.Api.Common;
 
 namespace OCS.Api.Repositories;
 
 public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
 {
+    public Task<Account?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var normalized = EmailIdentity.Normalize(email);
+        return normalized is null
+            ? Task.FromResult<Account?>(null)
+            : dbContext.Accounts
+                .Include(a => a.AccountRoles).ThenInclude(ar => ar.Role)
+                .Include(a => a.EmployeeProfile)
+                .Include(a => a.CustomerProfile)
+                .SingleOrDefaultAsync(a => a.NormalizedEmail == normalized, cancellationToken);
+    }
+
+    public Task<bool> ExistsEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var normalized = EmailIdentity.Normalize(email);
+        return normalized is null
+            ? Task.FromResult(false)
+            : dbContext.Accounts.AnyAsync(a => a.NormalizedEmail == normalized, cancellationToken);
+    }
+
     public Task<Account?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default) =>
         dbContext.Accounts
             .Include(a => a.AccountRoles)

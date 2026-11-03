@@ -49,6 +49,20 @@ jobs:
     name: Build and Test
     needs: format
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: ocs_test
+          POSTGRES_PASSWORD: ocs-ci-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ocs_test -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -68,7 +82,7 @@ jobs:
 
       - name: Run tests
         env:
-          OCS_RUN_POSTGRES_TESTS: "1"
+          OCS_TEST_POSTGRES: "Host=localhost;Port=5432;Database=postgres;Username=ocs_test;Password=ocs-ci-only;Pooling=false"
         run: dotnet test OCS.sln --configuration Release --no-build --logger "trx;LogFileName=results.trx"
 
       - name: Upload failed test results

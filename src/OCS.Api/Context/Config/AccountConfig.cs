@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OCS.Api.Entities;
+using OCS.Api.Common;
 
 namespace OCS.Api.Context.Config;
 
@@ -26,6 +27,9 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
                     'Deactivated'
                 )
                 """);
+
+            table.HasCheckConstraint("CK_TAIKHOAN_LoginAttempts", "\"FailedLoginAttempts\" >= 0");
+            table.HasCheckConstraint("CK_TAIKHOAN_NormalizedEmail", $"\"NormalizedEmail\" IS NOT DISTINCT FROM ({EmailIdentity.SqlNormalization})");
 
             table.HasCheckConstraint(
                 "CK_TAIKHOAN_InternalUsername",
@@ -73,6 +77,12 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
         builder.Property(x => x.Email)
             .HasMaxLength(254);
 
+        builder.Property(x => x.NormalizedEmail).HasMaxLength(254).UseCollation("C");
+        builder.Property(x => x.Version).IsRowVersion();
+        builder.Property(x => x.FailedLoginAttempts).HasDefaultValue(0);
+        builder.Property(x => x.EmailVerifiedAt).HasColumnType("timestamp with time zone");
+        builder.Property(x => x.LockoutEndAt).HasColumnType("timestamp with time zone");
+
         builder.Property(x => x.IdentityNumber)
             .HasMaxLength(20);
 
@@ -105,11 +115,7 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
         builder.HasIndex(x => x.Username)
             .IsUnique();
 
-        builder.HasIndex(x => new
-        {
-            x.AccountType,
-            x.Email
-        }).IsUnique();
+        builder.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("\"NormalizedEmail\" IS NOT NULL");
 
         builder.HasIndex(x => new
         {

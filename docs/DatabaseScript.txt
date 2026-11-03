@@ -1408,3 +1408,191 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "EmailVerifiedAt" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "FailedLoginAttempts" integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "LockoutEndAt" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "NormalizedEmail" character varying(254) COLLATE "C";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE TABLE "AUTH_SESSION" (
+        "Id" uuid NOT NULL,
+        "AccountId" uuid NOT NULL,
+        "ExpiresAt" timestamp with time zone NOT NULL,
+        "RevokedAt" timestamp with time zone,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_AUTH_SESSION" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_AUTH_SESSION_Lifetime" CHECK ("ExpiresAt" > "CreatedAt" AND ("RevokedAt" IS NULL OR "RevokedAt" >= "CreatedAt")),
+        CONSTRAINT "FK_AUTH_SESSION_TAIKHOAN_AccountId" FOREIGN KEY ("AccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE TABLE "OTP_CHALLENGE" (
+        "Id" uuid NOT NULL,
+        "AccountId" uuid NOT NULL,
+        "NormalizedEmail" character varying(254) COLLATE "C" NOT NULL,
+        "Purpose" character varying(40) NOT NULL,
+        "CodeHash" character varying(512) NOT NULL,
+        "ContinuationTokenHash" character varying(512) NOT NULL,
+        "ContinuationExpiresAt" timestamp with time zone NOT NULL,
+        "ExpiresAt" timestamp with time zone NOT NULL,
+        "ResendAvailableAt" timestamp with time zone NOT NULL,
+        "FailedAttempts" integer NOT NULL,
+        "ConsumedAt" timestamp with time zone,
+        "InvalidatedAt" timestamp with time zone,
+        "DeliveryStatus" character varying(20) NOT NULL,
+        "SentAt" timestamp with time zone,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_OTP_CHALLENGE" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_OTP_CHALLENGE_Attempts" CHECK ("FailedAttempts" >= 0),
+        CONSTRAINT "CK_OTP_CHALLENGE_Delivery" CHECK ("DeliveryStatus" IN ('Pending', 'Sent', 'Failed') AND ("DeliveryStatus" <> 'Sent' OR "SentAt" IS NOT NULL)),
+        CONSTRAINT "CK_OTP_CHALLENGE_Hashes" CHECK (length(btrim("CodeHash")) > 0 AND length(btrim("ContinuationTokenHash")) > 0),
+        CONSTRAINT "CK_OTP_CHALLENGE_Lifetime" CHECK ("ExpiresAt" > "CreatedAt" AND "ContinuationExpiresAt" >= "ExpiresAt" AND "ResendAvailableAt" >= "CreatedAt"),
+        CONSTRAINT "CK_OTP_CHALLENGE_Purpose" CHECK ("Purpose" = 'RegistrationActivation'),
+        CONSTRAINT "FK_OTP_CHALLENGE_TAIKHOAN_AccountId" FOREIGN KEY ("AccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD CONSTRAINT "CK_TAIKHOAN_LoginAttempts" CHECK ("FailedLoginAttempts" >= 0);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_AUTH_SESSION_AccountId_ExpiresAt" ON "AUTH_SESSION" ("AccountId", "ExpiresAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_AUTH_SESSION_ExpiresAt" ON "AUTH_SESSION" ("ExpiresAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_OTP_CHALLENGE_AccountId_Purpose" ON "OTP_CHALLENGE" ("AccountId", "Purpose");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_OTP_CHALLENGE_ExpiresAt" ON "OTP_CHALLENGE" ("ExpiresAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261103101428_AddAuthenticationIdentityState', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    LOCK TABLE "TAIKHOAN" IN SHARE ROW EXCLUSIVE MODE;
+    CREATE TEMP TABLE ocs_auth_email_backfill ON COMMIT DROP AS
+    SELECT "Id", CASE WHEN length(btrim("Email", E' \t\n\r\013\f')) <= 254
+        AND length(split_part(btrim("Email", E' \t\n\r\013\f'), '@', 1)) <= 64
+        AND btrim("Email", E' \t\n\r\013\f') COLLATE "C" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+    THEN upper(btrim("Email", E' \t\n\r\013\f') COLLATE "C") ELSE NULL END AS normalized
+    FROM "TAIKHOAN";
+
+    DO $preflight$
+    DECLARE conflict_groups integer;
+    BEGIN
+        SELECT count(*) INTO conflict_groups FROM (
+            SELECT normalized FROM ocs_auth_email_backfill
+            WHERE normalized IS NOT NULL
+            GROUP BY normalized HAVING count(*) > 1
+        ) conflicts;
+        IF conflict_groups > 0 THEN
+            RAISE EXCEPTION 'Email normalization blocked: % conflict group(s). Review docs/AUTH_DATA_MIGRATION.md; no accounts were merged or deleted.', conflict_groups;
+        END IF;
+    END $preflight$;
+
+    UPDATE "TAIKHOAN" account SET "NormalizedEmail" = candidate.normalized
+    FROM ocs_auth_email_backfill candidate
+    WHERE account."Id" = candidate."Id"
+        AND account."NormalizedEmail" IS DISTINCT FROM candidate.normalized;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    DROP INDEX "IX_TAIKHOAN_AccountType_Email";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    CREATE UNIQUE INDEX "IX_TAIKHOAN_NormalizedEmail" ON "TAIKHOAN" ("NormalizedEmail") WHERE "NormalizedEmail" IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    ALTER TABLE "TAIKHOAN" ADD CONSTRAINT "CK_TAIKHOAN_NormalizedEmail" CHECK ("NormalizedEmail" IS NOT DISTINCT FROM (CASE WHEN length(btrim("Email", E' \t\n\r\013\f')) <= 254
+        AND length(split_part(btrim("Email", E' \t\n\r\013\f'), '@', 1)) <= 64
+        AND btrim("Email", E' \t\n\r\013\f') COLLATE "C" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+    THEN upper(btrim("Email", E' \t\n\r\013\f') COLLATE "C") ELSE NULL END));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261103101757_NormalizeAccountEmail', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

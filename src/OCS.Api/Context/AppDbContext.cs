@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Entities;
 using OCS.Api.Context.Seeds;
+using OCS.Api.Common;
 
 namespace OCS.Api.Context;
 
@@ -18,9 +19,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<AccountRole> AccountRoles => Set<AccountRole>();
 
-    // AUTH TODO: Add DbSets for AuthSession, RefreshCredential, OtpChallenge, RegistrationGrant,
-    // IdentityRecoveryRequest and AuthorizationGroupDelegation only after their Domain entities and
-    // IEntityTypeConfiguration classes exist. Do not use this DbContext directly from controllers.
+    public DbSet<AuthSession> AuthSessions => Set<AuthSession>();
+
+    public DbSet<OtpChallenge> OtpChallenges => Set<OtpChallenge>();
+
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
@@ -68,6 +70,34 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<SystemParameter> SystemParameters => Set<SystemParameter>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        NormalizeAccountEmails();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        NormalizeAccountEmails();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void NormalizeAccountEmails()
+    {
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<Account>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
+        {
+            entry.Property(x => x.NormalizedEmail).CurrentValue = EmailIdentity.Normalize(entry.Entity.Email);
+            // Existing proof is bound to the original email, never carried over to a new address.
+            if (entry.State == EntityState.Modified
+                && EmailIdentity.Normalize(entry.Property(x => x.Email).OriginalValue) != entry.Entity.NormalizedEmail)
+            {
+                entry.Property(x => x.EmailVerifiedAt).CurrentValue = null;
+            }
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
