@@ -1,4 +1,6 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
+using System.Text.Json;
 using Amazon.Runtime;
 using Amazon.S3;
 using Hangfire;
@@ -11,12 +13,14 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OCS.Api.Auditing;
 using OCS.Api.Configuration;
+using OCS.Api.Consts;
 using OCS.Api.Context;
 using OCS.Api.Context.Interceptors;
 using OCS.Api.Context.Seeds;
 using OCS.Api.HealthChecks;
 using OCS.Api.Interfaces.Repositories;
 using OCS.Api.Interfaces.Services;
+using OCS.Api.Middleware;
 using OCS.Api.Repositories;
 using OCS.Api.Services;
 using OCS.Api.Storage;
@@ -113,6 +117,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<DevelopmentDataSeeder>();
+
+        services.AddAntiforgery(options =>
+        {
+            options.HeaderName = "X-XSRF-TOKEN";
+            options.Cookie.Name = "ocs_antiforgery";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        });
+
         return services;
     }
 
@@ -120,13 +134,13 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        var issuer = string.IsNullOrWhiteSpace(configuration["Jwt:Issuer"]) ? "OCS" : configuration["Jwt:Issuer"]!;
+        var audience = string.IsNullOrWhiteSpace(configuration["Jwt:Audience"]) ? "OCS" : configuration["Jwt:Audience"]!;
+        var key = string.IsNullOrWhiteSpace(configuration["Jwt:Key"]) ? "ocs-super-secret-key-that-is-at-least-32-bytes-long" : configuration["Jwt:Key"]!;
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
-                var issuer = string.IsNullOrWhiteSpace(configuration["Jwt:Issuer"]) ? "OCS" : configuration["Jwt:Issuer"]!;
-                var audience = string.IsNullOrWhiteSpace(configuration["Jwt:Audience"]) ? "OCS" : configuration["Jwt:Audience"]!;
-                var key = string.IsNullOrWhiteSpace(configuration["Jwt:Key"]) ? "ocs-super-secret-key-that-is-at-least-32-bytes-long" : configuration["Jwt:Key"]!;
-
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -135,7 +149,94 @@ public static class ServiceCollectionExtensions
                     ValidAudience = audience,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        if (context.Request.Cookies.TryGetValue("ocs_session", out var cookieToken) && !string.IsNullOrWhiteSpace(cookieToken))
+                        {
+                            context.Token = cookieToken;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                    OnTokenValidated = async context =>
+                    {
+                        var sidClaim = context.Principal?.FindFirst("sid")?.Value
+                                       ?? context.Principal?.FindFirst(JwtRegisteredClaimNames.Sid)?.Value;
+
+                        if (string.IsNullOrWhiteSpace(sidClaim) || !Guid.TryParse(sidClaim, out var sessionId))
+                        {
+                            context.Fail("Missing or invalid session identifier.");
+                            return;
+                        }
+
+                        var unitOfWork = context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>();
+                        var timeProvider = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>();
+
+                        var session = await unitOfWork.AuthRepository.GetSessionByIdAsync(sessionId, context.HttpContext.RequestAborted);
+                        if (session is null)
+                        {
+                            context.Fail("Session not found.");
+                            return;
+                        }
+
+                        if (session.RevokedAt.HasValue)
+                        {
+                            context.Fail("Session has been revoked.");
+                            return;
+                        }
+
+                        var now = timeProvider.GetUtcNow();
+                        if (now >= session.ExpiresAt)
+                        {
+                            context.Fail("Session has expired.");
+                            return;
+                        }
+
+                        if (session.Account is null || session.Account.Status != AccountStatus.Active)
+                        {
+                            context.Fail("Account is inactive or locked.");
+                            return;
+                        }
+                    },
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        context.Response.ContentType = "application/problem+json";
+                        context.Response.Headers.CacheControl = "no-store";
+
+                        var problem = new ProblemDetails
+                        {
+                            Status = StatusCodes.Status401Unauthorized,
+                            Title = "Phiên đăng nhập không hợp lệ hoặc đã hết hạn."
+                        };
+                        problem.Extensions["code"] = "UNAUTHORIZED";
+                        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+                        await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+                    },
+                    OnForbidden = async context =>
+                    {
+                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                        context.Response.ContentType = "application/problem+json";
+                        context.Response.Headers.CacheControl = "no-store";
+
+                        var problem = new ProblemDetails
+                        {
+                            Status = StatusCodes.Status403Forbidden,
+                            Title = "Bạn không có quyền thực hiện thao tác này."
+                        };
+                        problem.Extensions["code"] = "FORBIDDEN";
+                        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+                        await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+                    }
                 };
             });
 
@@ -259,6 +360,7 @@ public static class ServiceCollectionExtensions
         app.UseCors(CorsPolicyName);
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseMiddleware<CsrfValidationMiddleware>();
         app.MapControllers();
         app.MapHealthChecks("/api/health", new HealthCheckOptions
         {

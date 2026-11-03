@@ -16,4 +16,7 @@ public interface IAuthRepository
     Task<OtpChallenge?> GetOtpChallengeByIdAsync(Guid challengeId, CancellationToken cancellationToken = default);
     Task<int> CountOtpChallengesInWindowAsync(string normalizedEmail, DateTimeOffset windowStart, CancellationToken cancellationToken = default);
     void AddOtpChallenge(OtpChallenge challenge);
+
+    Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    void AddSession(AuthSession session);
 }

@@ -217,10 +217,32 @@ public sealed partial class AuthService : IAuthService
                 ApplicationError.Forbidden("AUTH.ROLE_NOT_CONFIGURED", "Tài khoản chưa được cấu hình quyền hợp lệ trong hệ thống."));
         }
 
-        // 6. Generate access token and session metadata
-        var token = _tokenService.GenerateAccessToken(account, roles);
+        // 6. Generate session & access token
+        var sessionId = Guid.NewGuid();
         const int expiresIn = 28800; // 8 hours
         var expiresAt = now.AddSeconds(expiresIn);
+
+        var session = new AuthSession
+        {
+            Id = sessionId,
+            AccountId = account.Id,
+            Account = account,
+            CreatedAt = now,
+            ExpiresAt = expiresAt,
+            RevokedAt = null
+        };
+        _unitOfWork.AuthRepository.AddSession(session);
+
+        var token = _tokenService.GenerateAccessToken(account, roles, sessionId);
+
+        try
+        {
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // Handled safely
+        }
 
         var userDto = new UserDto(
             account.Id,
@@ -407,6 +429,96 @@ public sealed partial class AuthService : IAuthService
             resendResult.Data.MaskedDestination,
             resendResult.Data.ExpiresAt,
             resendResult.Data.ResendAvailableAt));
+    }
+
+    public async Task<Result<CurrentUserResponseDto>> GetCurrentUserAsync(
+        Guid accountId,
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await _unitOfWork.AuthRepository.GetSessionByIdAsync(sessionId, cancellationToken);
+        if (session is null || session.AccountId != accountId)
+        {
+            return Result.Failure<CurrentUserResponseDto>(
+                ApplicationError.Unauthorized("UNAUTHORIZED", "Phiên đăng nhập không tồn tại."));
+        }
+
+        if (session.RevokedAt.HasValue)
+        {
+            return Result.Failure<CurrentUserResponseDto>(
+                ApplicationError.Unauthorized("UNAUTHORIZED", "Phiên đăng nhập đã bị thu hồi."));
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        if (now >= session.ExpiresAt)
+        {
+            return Result.Failure<CurrentUserResponseDto>(
+                ApplicationError.Unauthorized("UNAUTHORIZED", "Phiên đăng nhập đã hết hạn."));
+        }
+
+        var account = session.Account ?? await _unitOfWork.AuthRepository.GetByIdAsync(accountId, cancellationToken);
+        if (account is null)
+        {
+            return Result.Failure<CurrentUserResponseDto>(
+                ApplicationError.Unauthorized("UNAUTHORIZED", "Tài khoản không tồn tại."));
+        }
+
+        if (account.Status != AccountStatus.Active)
+        {
+            return Result.Failure<CurrentUserResponseDto>(
+                ApplicationError.Unauthorized("UNAUTHORIZED", "Tài khoản không còn hiệu lực hoạt động."));
+        }
+
+        var roles = account.AccountRoles
+            .Select(ar => ar.Role?.Code)
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (roles.Count == 0)
+        {
+            return Result.Failure<CurrentUserResponseDto>(
+                ApplicationError.Forbidden("AUTH.ROLE_NOT_CONFIGURED", "Tài khoản chưa được cấu hình quyền hợp lệ trong hệ thống."));
+        }
+
+        var remainingSeconds = Math.Max(0, (int)Math.Ceiling((session.ExpiresAt - now).TotalSeconds));
+
+        var userDto = new UserDto(
+            account.Id,
+            account.FullName,
+            account.Email,
+            account.PhoneNumber,
+            roles,
+            account.Username);
+
+        return Result.Success(new CurrentUserResponseDto(remainingSeconds, session.ExpiresAt, userDto));
+    }
+
+    public async Task<Result<bool>> LogoutAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var session = await _unitOfWork.AuthRepository.GetSessionByIdAsync(sessionId, cancellationToken);
+        if (session is null)
+        {
+            return Result.Success(true);
+        }
+
+        if (!session.RevokedAt.HasValue)
+        {
+            session.RevokedAt = _timeProvider.GetUtcNow();
+            try
+            {
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Concurrently revoked
+            }
+        }
+
+        return Result.Success(true);
     }
 
     private static bool IsUniqueViolation(DbUpdateException ex) =>

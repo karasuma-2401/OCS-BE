@@ -50,3 +50,11 @@ public record UserDto(
     string? PhoneNumber,
     List<string> Roles,
     string? Username = null);
+
+public sealed record CurrentUserResponseDto(
+    int ExpiresIn,
+    DateTimeOffset ExpiresAt,
+    UserDto User);
+
+public sealed record CsrfTokenResponseDto(
+    string Token);

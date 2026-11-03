@@ -78,4 +78,17 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
         ArgumentNullException.ThrowIfNull(challenge);
         dbContext.OtpChallenges.Add(challenge);
     }
+
+    public Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        dbContext.AuthSessions
+            .Include(s => s.Account)
+                .ThenInclude(a => a.AccountRoles)
+                    .ThenInclude(ar => ar.Role)
+            .SingleOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
+
+    public void AddSession(AuthSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        dbContext.AuthSessions.Add(session);
+    }
 }

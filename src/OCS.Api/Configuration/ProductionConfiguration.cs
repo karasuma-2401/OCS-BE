@@ -25,6 +25,11 @@ public static class ProductionConfiguration
             throw new InvalidOperationException("Jwt:Key must contain at least 32 UTF-8 bytes in Production.");
         }
 
+        if (string.Equals(configuration["Jwt:Key"], "ocs-super-secret-key-that-is-at-least-32-bytes-long", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Production cannot use the default placeholder Jwt:Key.");
+        }
+
         var provider = configuration["Email:Provider"];
         if (string.Equals(provider, "TestSink", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(provider, "Fake", StringComparison.OrdinalIgnoreCase))

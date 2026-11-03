@@ -360,6 +360,13 @@ public sealed class RegistrationActivationTests : IDisposable
             => Task.FromResult(Challenges.Count(c => c.NormalizedEmail == normalizedEmail && c.CreatedAt >= windowStart));
 
         public void AddOtpChallenge(OtpChallenge challenge) => Challenges.Add(challenge);
+
+        public List<AuthSession> Sessions { get; } = [];
+
+        public Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default)
+            => Task.FromResult(Sessions.FirstOrDefault(s => s.Id == sessionId));
+
+        public void AddSession(AuthSession session) => Sessions.Add(session);
     }
 
     private sealed class FakeTimeProvider(DateTimeOffset initialTime) : TimeProvider

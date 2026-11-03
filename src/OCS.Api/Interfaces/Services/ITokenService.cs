@@ -4,5 +4,5 @@ namespace OCS.Api.Interfaces.Services;
 
 public interface ITokenService
 {
-    string GenerateAccessToken(Account account, IEnumerable<string> roles);
+    string GenerateAccessToken(Account account, IEnumerable<string> roles, Guid? sessionId = null);
 }
