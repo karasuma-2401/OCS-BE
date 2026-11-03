@@ -78,7 +78,8 @@ public sealed class RegistrationActivationTests : IDisposable
 
     private string ExtractOtpCodeFromEmail()
     {
-        var email = Assert.Single(_emailSender.SentMessages);
+        Assert.NotEmpty(_emailSender.SentMessages);
+        var email = _emailSender.SentMessages.Last();
         var match = Regex.Match(email.Body, @"\b\d{6}\b");
         Assert.True(match.Success, "Expected 6-digit OTP in email body.");
         return match.Value;
@@ -114,12 +115,14 @@ public sealed class RegistrationActivationTests : IDisposable
         // 2. Pending account cannot log in
         var loginResult = await _authService.LoginAsync(new LoginRequestDto("nguyenvana@example.com", "Password123@"));
         Assert.False(loginResult.IsSuccess);
-        Assert.Equal("AUTH.ACCOUNT_LOCKED", loginResult.Error!.Code);
+        Assert.Equal("AUTH.ACCOUNT_PENDING_ACTIVATION", loginResult.Error!.Code);
+        Assert.NotNull(loginResult.Error.Extensions);
+        var continuationChallengeId = (Guid)loginResult.Error.Extensions["challengeId"]!;
 
         // 3. Verify OTP
         var code = ExtractOtpCodeFromEmail();
         var verifyResult = await _authService.VerifyRegistrationOtpAsync(new VerifyOtpRequestDto(
-            registerResult.Data.ChallengeId,
+            continuationChallengeId,
             code));
 
         Assert.True(verifyResult.IsSuccess);

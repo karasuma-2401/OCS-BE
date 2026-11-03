@@ -10,14 +10,14 @@ namespace OCS.Api.Services;
 /// </summary>
 public sealed class TestInboxEmailSender : IEmailSender
 {
-    private readonly ConcurrentBag<EmailMessage> _sentMessages = new();
+    private readonly ConcurrentQueue<EmailMessage> _sentMessages = new();
 
-    public IReadOnlyCollection<EmailMessage> SentMessages => _sentMessages;
+    public IReadOnlyCollection<EmailMessage> SentMessages => _sentMessages.ToArray();
 
     public Task<Result<bool>> SendEmailAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
-        _sentMessages.Add(message);
+        _sentMessages.Enqueue(message);
         return Task.FromResult(Result.Success(true));
     }
 

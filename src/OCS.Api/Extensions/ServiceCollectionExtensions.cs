@@ -92,6 +92,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.SectionName));
+        services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
 
         var emailProvider = configuration["Email:Provider"];
         if (string.Equals(emailProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
@@ -105,6 +106,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddScoped<IOtpRateLimiter, OtpRateLimiter>();
+        services.AddScoped<ILoginRateLimiter, LoginRateLimiter>();
         services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<ITokenService, TokenService>();

@@ -3,8 +3,19 @@ using System.ComponentModel.DataAnnotations;
 namespace OCS.Api.Models.Auth;
 
 public record LoginRequestDto(
-    [Required] string Username,
+    [Required, EmailAddress, MaxLength(254)] string Email,
     [Required] string Password);
+
+public sealed record LoginResponseDto(
+    int ExpiresIn,
+    DateTimeOffset ExpiresAt,
+    UserDto User);
+
+public sealed record LoginResultDto(
+    string AccessToken,
+    int ExpiresIn,
+    DateTimeOffset ExpiresAt,
+    UserDto User);
 
 public record RegisterRequestDto(
     [Required, MaxLength(150)] string FullName,
@@ -34,13 +45,8 @@ public sealed record ResendOtpRequestDto(
 
 public record UserDto(
     Guid Id,
-    string? Username,
     string? FullName,
     string? Email,
     string? PhoneNumber,
-    List<string> Roles);
-
-public record AuthResponseDto(
-    string AccessToken,
-    int ExpiresIn,
-    UserDto User);
+    List<string> Roles,
+    string? Username = null);

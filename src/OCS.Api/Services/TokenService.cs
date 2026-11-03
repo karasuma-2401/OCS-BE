@@ -7,8 +7,12 @@ using OCS.Api.Interfaces.Services;
 
 namespace OCS.Api.Services;
 
-public sealed class TokenService(IConfiguration configuration) : ITokenService
+public sealed class TokenService(
+    IConfiguration configuration,
+    TimeProvider? timeProvider = null) : ITokenService
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     public string GenerateAccessToken(Account account, IEnumerable<string> roles)
     {
         var issuer = configuration["Jwt:Issuer"] ?? "OCS";
@@ -19,8 +23,13 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
         {
             new(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
             new(ClaimTypes.NameIdentifier, account.Id.ToString()),
-            new(ClaimTypes.Name, account.Username ?? account.PhoneNumber ?? account.Id.ToString()),
+            new(ClaimTypes.Name, account.FullName ?? account.Username ?? account.Email ?? account.Id.ToString()),
         };
+
+        if (!string.IsNullOrWhiteSpace(account.Email))
+        {
+            claims.Add(new Claim(ClaimTypes.Email, account.Email));
+        }
 
         if (!string.IsNullOrWhiteSpace(account.PhoneNumber))
         {
@@ -35,11 +44,13 @@ public sealed class TokenService(IConfiguration configuration) : ITokenService
         var symmetricKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
         var credentials = new SigningCredentials(symmetricKey, SecurityAlgorithms.HmacSha256);
 
+        var now = _timeProvider.GetUtcNow().UtcDateTime;
+
         var token = new JwtSecurityToken(
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddHours(8),
+            expires: now.AddHours(8),
             signingCredentials: credentials);
 
         return new JwtSecurityTokenHandler().WriteToken(token);

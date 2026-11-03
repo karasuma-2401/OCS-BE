@@ -34,6 +34,13 @@ public static class ResultExtensions
         };
         problem.Extensions["code"] = error.Code;
         problem.Extensions["traceId"] = Activity.Current?.Id;
+        if (error.Extensions is not null)
+        {
+            foreach (var (key, value) in error.Extensions)
+            {
+                problem.Extensions[key] = value;
+            }
+        }
 
         return new ObjectResult(problem) { StatusCode = status };
     }
@@ -60,10 +67,24 @@ public static class ResultExtensions
             _ => StatusCodes.Status500InternalServerError
         };
 
+        if (error.Extensions is not null
+            && error.Extensions.TryGetValue("retryAfterSeconds", out var retryAfter)
+            && retryAfter is not null)
+        {
+            controller.Response.Headers.RetryAfter = retryAfter.ToString();
+        }
+
         var response = controller.Problem(statusCode: status, title: error.Message);
         var problem = (ProblemDetails)response.Value!;
         problem.Extensions["code"] = error.Code;
         problem.Extensions["traceId"] = Activity.Current?.Id ?? controller.HttpContext.TraceIdentifier;
+        if (error.Extensions is not null)
+        {
+            foreach (var (key, value) in error.Extensions)
+            {
+                problem.Extensions[key] = value;
+            }
+        }
         return response;
     }
 }
