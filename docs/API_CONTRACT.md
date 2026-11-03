@@ -1,6 +1,16 @@
 # OCS API Contract
 
-Tài liệu này là đặc tả HTTP contract duy nhất cho client (Web frontend OCS) và backend API. Tài liệu định nghĩa các endpoint đã triển khai, các quy ước chung và đặc tả chi tiết cho luồng Xác thực (Authentication & Session Management).
+Tài liệu này là đặc tả HTTP contract cho Web frontend OCS và backend API. Phần 3–6 mô tả contract mục tiêu đã chốt ở CP0; không phải xác nhận các chức năng đó đã được triển khai.
+
+### Trạng thái triển khai tại CP0
+
+| Nhóm | Hiện có trong source | Contract mục tiêu |
+| --- | --- | --- |
+| Auth | `/api/Auth/login` nhận username/SĐT, trả bearer JWT; register tạo Active; `/me` đọc claims | Email + password, pending + email OTP, cookie/session, CSRF; triển khai CP1–CP5 |
+| Products | Controller đã map `/api/Products` và các action con | `/api/v1/*` chỉ là hướng versioning tương lai, chưa đổi route trong task auth |
+| Health | `/api/health`, `/api/health/live` | Giữ nguyên |
+
+ASP.NET Core khớp route không phân biệt hoa/thường. Client dùng `/api/auth` khi chuyển sang contract mới. Không gọi OTP/logout/CSRF hoặc dựa vào cookie trước khi checkpoint tương ứng hoàn tất. CP0 chỉ sửa tài liệu, không thay đổi DTO/controller runtime.
 
 ---
 
@@ -56,16 +66,17 @@ Mọi phản hồi lỗi (4xx, 5xx) đều có `Content-Type: application/proble
 
 ### 3.1. Định danh và tài khoản
 - **Đăng nhập bằng Email + Mật khẩu:** Áp dụng thống nhất cho cả tài khoản Khách hàng (Customer) và Nội bộ (Admin, Manager, Staff).
-- **Số điện thoại:** Là trường thông tin hồ sơ (CustomerProfile/EmployeeProfile) phục vụ liên hệ và nghiệp vụ ký gửi; chưa được xác thực quyền sở hữu qua SMS.
+- **Số điện thoại:** Là thông tin hồ sơ phục vụ liên hệ và nghiệp vụ ký gửi, hiện lưu ở `Account.PhoneNumber`; chưa được xác thực quyền sở hữu qua SMS. OTP email chỉ đặt `EmailVerifiedAt`, không đặt `PhoneVerifiedAt`.
 - **Chuẩn hóa Email:** Email được chuẩn hóa khi đăng ký, tìm kiếm đăng nhập và kiểm tra trùng lặp: `NormalizedEmail = email.Trim().ToUpperInvariant()`. Email gốc của người dùng được lưu trữ nguyên vẹn để hiển thị.
 - **Tính duy nhất (Unique):** Email đăng nhập là duy nhất trên toàn hệ thống (không phân biệt Customer hay Internal).
+- **Định dạng email phiên bản đầu:** Địa chỉ ASCII dạng `local@domain` (domain có nhãn phân cách bằng dấu chấm), tối đa 254 ký tự; không có display name, quoted local-part hoặc khoảng trắng bên trong. Domain quốc tế dùng dạng IDNA ASCII. Chỉ trim khoảng trắng ASCII ngoài địa chỉ; không bỏ dấu chấm/`+tag`. Địa chỉ ngoài định dạng hỗ trợ được giữ nguyên trong hồ sơ cũ và chưa đủ điều kiện email login cho đến khi được xử lý. CP1 cung cấp cùng bộ chuẩn hóa cho backfill và ghi mới.
 - **Phân quyền và vai trò:**
   - Danh sách mã vai trò chuẩn (`Role.Code`): `Admin`, `Manager`, `Staff`, `Customer`.
   - Token và DTO phản hồi trả về danh sách `roles` dưới dạng chuỗi mã vai trò chuẩn tiếng Anh (`Admin/Manager/Staff/Customer`), không trả tên hiển thị tiếng Việt.
   - Public registration (`POST /api/auth/register`) chỉ tạo tài khoản với vai trò `Customer`. Tài khoản nội bộ không được đăng ký công khai.
 
 ### 3.2. Chính sách mật khẩu (Password Policy)
-- Độ dài: **Tối thiểu 8 ký tự, tối đa 70 ký tự** (giữ trong giới hạn 72 bytes của thuật toán BCrypt).
+- Độ dài cho mật khẩu mới: **8–70 Unicode scalar values và không quá 72 byte UTF-8**. Giới hạn số ký tự không thay thế giới hạn byte BCrypt; chuỗi Unicode có thể vượt 72 byte dù dưới 70 ký tự. Không trim/normalize/cắt mật khẩu; vượt giới hạn trả validation error. Login tài khoản cũ vẫn verify hash hiện hữu, không áp quy tắc tạo mật khẩu mới ngược lên mật khẩu cũ. Xem [OWASP Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
 - Độ phức tạp: Mật khẩu bắt buộc phải bao gồm ít nhất:
   1. Một chữ cái in hoa (`[A-Z]`).
   2. Một chữ cái in thường (`[a-z]`).
@@ -84,26 +95,30 @@ Mọi phản hồi lỗi (4xx, 5xx) đều có `Content-Type: application/proble
 - **Chống Race Condition:** Việc xác thực (verify) và tiêu thụ (consume) OTP được thực hiện trong cùng một database transaction nguyên tử. Hai request gửi đồng thời chỉ có đúng một request có thể kích hoạt thành công.
 - **Gửi lại (Resend):** Khi gửi lại OTP thành công, mã OTP cũ bị vô hiệu hóa ngay lập tức.
 - **Gửi Email thật:** Tách biệt `IEmailSender` khỏi `AuthService`. Hệ thống sử dụng SMTP cấu hình qua biến môi trường (hỗ trợ Gmail SMTP qua App Password). Trong môi trường Development, có thể cấu hình tài khoản SMTP thử nghiệm hoặc test inbox sink.
+- Các hạn mức gửi/giờ là mặc định cấu hình CP0, có thể điều chỉnh khi nghiệm thu. Fake sender chỉ ở Development/Testing; Production không fallback sang fake. Không log OTP, password/hash hoặc secret; không trả OTP qua HTTP.
 
 ### 3.4. Giới hạn thử sai mật khẩu và Khóa tạm thời (Temporary Lockout)
 - Đăng nhập sai mật khẩu liên tiếp **5 lần** -> Tài khoản bị khóa tạm thời trong **15 phút** (`LockoutEndAt = DateTimeOffset.UtcNow.AddMinutes(15)`).
 - Đăng nhập thành công sẽ thiết lập lại (reset) số lần thử sai về 0.
+- Kiểm tra đúng mật khẩu trước khi trả trạng thái pending/khóa/deactivated; request bị khóa không kéo dài thời hạn khóa. Hết 15 phút reset cửa sổ đếm sai trước lần thử mới. Khóa tạm chặn login mới, không tự thu hồi phiên đã đăng nhập; khóa quản trị phải chặn cả phiên hiện hữu.
 - Khóa tạm thời khác biệt với trạng thái khóa quản trị (`Status = AccountStatus.Locked` hoặc `Deactivated`). Khi hết hạn 15 phút, tài khoản tự động được phép đăng nhập lại nếu mật khẩu đúng, nhưng nếu tài khoản bị khóa do quản trị viên thì vẫn bị từ chối.
 
 ### 3.5. Chống dò quét thông tin người dùng (Anti-Enumeration Policy)
 - **Khi đăng nhập:** Nếu email không tồn tại hoặc mật khẩu không chính xác, hệ thống luôn trả về cùng mã HTTP `401 Unauthorized`, mã lỗi `AUTH.INVALID_CREDENTIALS` và cùng thông điệp: *"Email hoặc mật khẩu không chính xác."*
 - **Khi đăng ký:** Nếu email đã tồn tại trong hệ thống, hệ thống từ chối đăng ký với mã HTTP `409 Conflict`, mã lỗi `AUTH.EMAIL_EXISTS` kèm thông báo chung: *"Không thể hoàn tất đăng ký với địa chỉ email này. Nếu bạn đã có tài khoản, vui lòng đăng nhập hoặc yêu cầu hỗ trợ."* (Không để lộ thông tin chi tiết về loại tài khoản hay trạng thái nội bộ).
+- `409 AUTH.EMAIL_EXISTS` vẫn làm lộ việc email đã đăng ký: đây là giới hạn được ghi nhận của contract này, không gọi đó là chống enumeration hoàn toàn. Retry tài khoản pending đi qua login đúng password và credential tiếp tục, không ghi đè password/hồ sơ bằng register lại.
 
 ### 3.6. Phiên làm việc (Session Management qua HttpOnly Cookie)
 - **Cơ chế lưu trữ:** Access token (JWT) được đặt trực tiếp trong Cookie **HttpOnly**, không trả về raw JWT token trong body phản hồi JSON cho Web client.
 - **Thuộc tính Cookie:**
   - Tên cookie: `ocs_session`
-  - `HttpOnly`: `true` (chống đánh cắp qua XSS)
+  - `HttpOnly`: `true` (ngăn JavaScript đọc cookie; không thay thế phòng chống XSS)
   - `SameSite`: `Lax` (hoặc `Strict` tùy cấu hình triển khai)
   - `Secure`: `true` trên môi trường Production (HTTPS)
   - `Path`: `/api`
   - `Max-Age` / `Expires`: Khớp với thời hạn của Access Token (8 giờ = 28,800 giây).
 - **Session phía server:** Server lưu trữ bản ghi `AuthSession` (chứa `SessionId`, `AccountId`, `CreatedAt`, `ExpiresAt`, `RevokedAt`). JWT mang claim `sid` tương ứng. Khi nhận request, server kiểm tra session còn hiệu lực và chưa bị thu hồi.
+- TTL tuyệt đối 8 giờ, không sliding/refresh token ở phạm vi này; `expiresIn` tính từ thời gian còn lại, không hardcode ở `/me`. Khi triển khai cookie/session, buộc bearer cũ login lại; không để nhánh bearer bỏ qua kiểm tra session. Thêm `Cache-Control: no-store` cho phản hồi auth/session/CSRF.
 - **Đăng xuất (Logout):** Gọi `POST /api/auth/logout`. Server đánh dấu thu hồi session (`RevokedAt = UtcNow`) và xóa cookie bằng header `Set-Cookie: ocs_session=; Max-Age=0; Path=/api`.
 - **Lưu trữ phía Client:** Frontend **tuyệt đối không** lưu mật khẩu, OTP, access token hay user JSON trong `localStorage`/`sessionStorage` để làm bằng chứng xác thực. Trạng thái đăng nhập được xác minh khi khởi chạy ứng dụng thông qua endpoint `GET /api/auth/me`.
 
@@ -111,6 +126,7 @@ Mọi phản hồi lỗi (4xx, 5xx) đều có `Content-Type: application/proble
 - Vì phiên làm việc sử dụng Cookie, các HTTP mutation (`POST`, `PUT`, `DELETE`, `PATCH`) yêu cầu Anti-Forgery Token.
 - Endpoint `GET /api/auth/csrf` cung cấp token chống CSRF.
 - Frontend đọc token và gửi kèm trong header `X-XSRF-TOKEN` cho mọi request thay đổi trạng thái xác thực và dữ liệu nghiệp vụ.
+- Dùng ASP.NET Core antiforgery: cookie secret riêng có HttpOnly và request token trả trong JSON; không dùng cùng một chuỗi làm cả cookie secret và header token. Lấy request token mới sau login/logout khi identity đổi. CORS allowlist origin cụ thể + credentials, không wildcard; ưu tiên same-origin `/api`.
 
 ---
 
@@ -135,9 +151,9 @@ Mọi phản hồi lỗi (4xx, 5xx) đều có `Content-Type: application/proble
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 | --- | --- | --- | --- |
 | `fullName` | `string` | Có | Tối đa 150 ký tự, được trim khoảng trắng. |
-| `email` | `string` | Có | Định dạng email hợp lệ, tối đa 255 ký tự. |
+| `email` | `string` | Có | Định dạng email hỗ trợ ở mục 3.1, tối đa 254 ký tự. |
 | `phoneNumber` | `string` | Có | Định dạng số điện thoại Việt Nam hợp lệ (10 số). |
-| `password` | `string` | Có | 8–70 ký tự, gồm ít nhất 1 chữ hoa, 1 chữ thường, 1 số/ký tự đặc biệt. |
+| `password` | `string` | Có | Theo mục 3.2, bao gồm cả giới hạn 72 byte UTF-8. |
 
 #### Phản hồi thành công (`200 OK`)
 ```json
@@ -146,7 +162,8 @@ Mọi phản hồi lỗi (4xx, 5xx) đều có `Content-Type: application/proble
   "purpose": "RegistrationActivation",
   "maskedDestination": "n***a@example.com",
   "expiresAt": "2026-11-03T09:35:00Z",
-  "resendAvailableAt": "2026-11-03T09:31:00Z"
+  "resendAvailableAt": "2026-11-03T09:31:00Z",
+  "continuationToken": "opaque-registration-only-credential"
 }
 ```
 
@@ -168,6 +185,7 @@ Xác thực mã OTP 6 chữ số để kích hoạt tài khoản.
 ```json
 {
   "challengeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "continuationToken": "opaque-registration-only-credential",
   "code": "123456"
 }
 ```
@@ -175,7 +193,8 @@ Xác thực mã OTP 6 chữ số để kích hoạt tài khoản.
 | Trường | Kiểu | Bắt buộc | Ràng buộc |
 | --- | --- | --- | --- |
 | `challengeId` | `string (UUID)` | Có | Mã định danh challenge được cấp khi register hoặc resend. |
-| `code` | `string` | Có | Đúng 6 chữ số (`^\d{6}$`). |
+| `continuationToken` | `string` | Có | Credential tiếp tục ngắn hạn, bind với account/email/purpose; không phải access token. |
+| `code` | `string` | Có | Đúng 6 chữ số ASCII (`^[0-9]{6}$`). |
 
 #### Phản hồi thành công (`200 OK`)
 Kích hoạt tài khoản thành công (`Status = Active`, `EmailVerifiedAt = UtcNow`). **Không tự động cấp Access Token hay tạo phiên đăng nhập.** Client nhận kết quả và chuyển hướng người dùng sang màn hình Đăng nhập.
@@ -204,7 +223,8 @@ Yêu cầu gửi lại mã OTP cho challenge hiện hành.
 #### Request Body
 ```json
 {
-  "challengeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+  "challengeId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "continuationToken": "opaque-registration-only-credential"
 }
 ```
 
@@ -217,7 +237,8 @@ Vô hiệu hóa mã cũ và cấp mã mới gửi tới email.
   "purpose": "RegistrationActivation",
   "maskedDestination": "n***a@example.com",
   "expiresAt": "2026-11-03T09:37:00Z",
-  "resendAvailableAt": "2026-11-03T09:33:00Z"
+  "resendAvailableAt": "2026-11-03T09:33:00Z",
+  "continuationToken": "opaque-registration-only-credential"
 }
 ```
 
@@ -303,7 +324,7 @@ Lấy thông tin người dùng hiện tại và kiểm tra thời hạn phiên 
 
 #### Phản hồi lỗi
 - `401 UNAUTHORIZED`: Cookie không tồn tại, JWT sai chữ ký, session đã hết hạn hoặc session đã bị thu hồi (`RevokedAt`).
-- `403 FORBIDDEN`: Tài khoản bị khóa hoặc vô hiệu hóa sau thời điểm đăng nhập.
+- `401 UNAUTHORIZED`: Tài khoản không còn hợp lệ/bị quản trị khóa sau khi đăng nhập. `403 FORBIDDEN` dành cho identity còn hợp lệ nhưng thiếu quyền, không làm frontend logout.
 
 ---
 
@@ -324,7 +345,7 @@ Cấp Anti-Forgery Request Token cho Web client để sử dụng trong header `
 
 - **Yêu cầu xác thực:** Không (Anonymous).
 - **Phản hồi thành công (`200 OK`):**
-  - **Headers:** `Set-Cookie: XSRF-TOKEN=<token>; Path=/; SameSite=Lax`
+  - **Headers:** cookie secret antiforgery riêng của framework, `HttpOnly; Secure` trên Production; request token trả trong JSON, gửi bằng header `X-XSRF-TOKEN`.
   - **Body:**
   ```json
   {
@@ -367,3 +388,13 @@ Cấp Anti-Forgery Request Token cho Web client để sử dụng trong header `
 | `Customer` | `/` | Đặt lịch ký gửi, theo dõi hợp đồng và sản phẩm của mình. |
 
 *Lưu ý:* Khi một tài khoản có nhiều vai trò, Frontend áp dụng thứ tự ưu tiên: `Admin` > `Manager` > `Staff` > `Customer`.
+
+## 7. Chuyển tài khoản cũ và trạng thái bàn giao
+
+- CP1 thêm field nullable và backfill email hợp lệ. Không đặt `EmailVerifiedAt`, không đổi `Status`, Id, profile, role hoặc liên kết nghiệp vụ cho tài khoản cũ chỉ vì đã có email/password.
+- Thiếu/sai email vẫn giữ dữ liệu gốc, `NormalizedEmail = null`. Tài khoản đó chưa đủ điều kiện email login; cần hỗ trợ kiểm tra danh tính và bổ sung email/password qua quy trình được quản lý, không nhận quyền từ SĐT do khách tự nhập.
+- Email trùng sau chuẩn hóa giữa bất kỳ AccountType nào: dừng migration áp unique, chỉ báo số lượng; người vận hành xử lý mapping có review rồi chạy lại. Không tự gộp/xóa tài khoản hay lấy tài khoản đầu tiên.
+- Tài khoản cũ có email/password nhưng chưa có `EmailVerifiedAt` phải hoàn tất email OTP trước khi được cấp cookie ở CP3–CP5, kể cả `Status = Active` cũ. Giữ nguyên khóa quản trị và lịch sử kích hoạt.
+- Credential tiếp tục OTP có TTL tối đa 15 phút, ngẫu nhiên khó đoán, lưu hash và bind account/email/purpose; không nhận địa chỉ email thay thế từ client. Resend thay challenge nhưng không reset limiter theo subject/IP. SMTP lỗi trả `503`, account vẫn pending; người dùng tiếp tục bằng login đúng password. Không gửi email trước khi DB ghi được trạng thái challenge bền vững.
+- Cấu hình SMTP dự kiến dùng các khóa `Email__Provider`, `Email__SmtpHost`, `Email__SmtpPort`, `Email__Security`, `Email__Username`, `Email__AppPassword`, `Email__FromAddress`, `Email__FromName` trong `.env.example`; secret chỉ qua môi trường/local secrets. CP2 thêm timeout và OTP/limiter options cùng runtime validation.
+- Các thay đổi này bổ sung cho project `OCS.Api`: DTO tại `Models/Auth`, service tại `Services`, repository tại `Repositories`, entity/config/migration tại `Entities` và `Context`. Không tạo lại các project Application/Domain không tồn tại.
