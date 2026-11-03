@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using OCS.Api.Common;
 using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
-using OCS.Api.Common;
 
 namespace OCS.Api.Repositories;
 
@@ -62,5 +62,20 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
     {
         ArgumentNullException.ThrowIfNull(account);
         dbContext.Accounts.Add(account);
+    }
+
+    public Task<OtpChallenge?> GetOtpChallengeByIdAsync(Guid challengeId, CancellationToken cancellationToken = default) =>
+        dbContext.OtpChallenges
+            .Include(c => c.Account)
+            .SingleOrDefaultAsync(c => c.Id == challengeId, cancellationToken);
+
+    public Task<int> CountOtpChallengesInWindowAsync(string normalizedEmail, DateTimeOffset windowStart, CancellationToken cancellationToken = default) =>
+        dbContext.OtpChallenges
+            .CountAsync(c => c.NormalizedEmail == normalizedEmail && c.CreatedAt >= windowStart, cancellationToken);
+
+    public void AddOtpChallenge(OtpChallenge challenge)
+    {
+        ArgumentNullException.ThrowIfNull(challenge);
+        dbContext.OtpChallenges.Add(challenge);
     }
 }

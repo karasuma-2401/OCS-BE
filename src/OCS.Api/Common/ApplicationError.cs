@@ -6,7 +6,9 @@ public enum ErrorType
     NotFound,
     Conflict,
     Unauthorized,
-    Forbidden
+    Forbidden,
+    RateLimited,
+    ServiceUnavailable
 }
 
 public sealed record ApplicationError
@@ -34,4 +36,6 @@ public sealed record ApplicationError
     public static ApplicationError Conflict(string code, string message) => new(code, message, ErrorType.Conflict);
     public static ApplicationError Unauthorized(string code, string message) => new(code, message, ErrorType.Unauthorized);
     public static ApplicationError Forbidden(string code, string message) => new(code, message, ErrorType.Forbidden);
+    public static ApplicationError RateLimited(string code, string message) => new(code, message, ErrorType.RateLimited);
+    public static ApplicationError ServiceUnavailable(string code, string message) => new(code, message, ErrorType.ServiceUnavailable);
 }

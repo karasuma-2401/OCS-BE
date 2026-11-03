@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OCS.Api.Auditing;
+using OCS.Api.Configuration;
 using OCS.Api.Context;
 using OCS.Api.Context.Interceptors;
 using OCS.Api.Context.Seeds;
@@ -88,6 +89,23 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddSingleton(TimeProvider.System);
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
+        services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.SectionName));
+
+        var emailProvider = configuration["Email:Provider"];
+        if (string.Equals(emailProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<TestInboxEmailSender>();
+            services.AddSingleton<IEmailSender>(sp => sp.GetRequiredService<TestInboxEmailSender>());
+        }
+        else
+        {
+            services.AddScoped<IEmailSender, SmtpEmailSender>();
+        }
+
+        services.AddScoped<IOtpRateLimiter, OtpRateLimiter>();
+        services.AddScoped<IOtpService, OtpService>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
