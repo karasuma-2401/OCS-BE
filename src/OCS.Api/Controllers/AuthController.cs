@@ -24,7 +24,25 @@ public class AuthController(IAuthService authService) : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Register([FromBody] RegisterRequestDto request, CancellationToken cancellationToken)
     {
-        var result = await authService.RegisterAsync(request, cancellationToken);
+        var clientIp = HttpContext.GetClientIp();
+        var result = await authService.RegisterAsync(request, clientIp, cancellationToken);
+        return result.ToActionResult();
+    }
+
+    [HttpPost("otp/verify")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequestDto request, CancellationToken cancellationToken)
+    {
+        var result = await authService.VerifyRegistrationOtpAsync(request, cancellationToken);
+        return result.ToActionResult();
+    }
+
+    [HttpPost("otp/resend")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResendOtp([FromBody] ResendOtpRequestDto request, CancellationToken cancellationToken)
+    {
+        var clientIp = HttpContext.GetClientIp();
+        var result = await authService.ResendRegistrationOtpAsync(request, clientIp, cancellationToken);
         return result.ToActionResult();
     }
 
