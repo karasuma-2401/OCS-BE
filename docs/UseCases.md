@@ -10,9 +10,9 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Người ký gửi |
+| Tác nhân | Người ký gửi (vai trò `Customer`) |
 | Kích hoạt | Người ký gửi chọn **Đặt lịch hẹn mới** trên ứng dụng. |
-| Điều kiện trước | Đã đăng nhập bằng tài khoản hợp lệ qua số điện thoại và OTP. |
+| Điều kiện trước | Đã đăng nhập bằng tài khoản hợp lệ qua email và mật khẩu (đã hoàn tất kích hoạt qua OTP email). |
 | Kết quả | Thành công: tạo mã phiếu hẹn, lịch hiển thị cho nhân viên. Thất bại: không tạo lịch và báo lỗi. |
 
 **Luồng chính**
@@ -29,14 +29,14 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Nhân viên |
+| Tác nhân | Nhân viên (`Staff`) |
 | Kích hoạt | Nhân viên tiếp nhận bằng mã lịch hẹn hoặc tạo tiếp nhận trực tiếp tại quầy. |
-| Điều kiện trước | Quần áo đã được mang đến quầy; nhân viên đã đăng nhập. |
+| Điều kiện trước | Quần áo đã được mang đến quầy; nhân viên đã đăng nhập hệ thống. |
 | Kết quả | Thành công: sản phẩm có GUID, Barcode, tem nhãn và chuyển sang `OnSale`. Hàng không đạt chuẩn được trả lại. |
 
 **Luồng chính**
 
-1. Nhân viên nhập số điện thoại hoặc quét mã lịch hẹn. Nếu chưa có hồ sơ, hệ thống tạo tài khoản theo số điện thoại và gửi thông tin kích hoạt.
+1. Nhân viên nhập số điện thoại hoặc quét mã lịch hẹn. Nếu chưa có hồ sơ, nhân viên tạo hồ sơ khách hàng mới. Để truy cập trực tuyến, khách hàng cần đăng ký tài khoản qua email và xác thực OTP; không tự động chuyển quyền sở hữu hồ sơ chỉ dựa trên số điện thoại nhập tại quầy.
 2. Nhân viên kiểm tra độ mới, chất liệu, tem mác và khuyết tật của từng món.
 3. Nhân viên chọn phân hạng thương hiệu, nhập giá niêm yết; hệ thống tính dự trù tiền người gửi nhận được.
 4. Người ký gửi xác nhận phương án ký gửi và chọn hoàn trả hoặc quyên góp khi hết hạn.
@@ -51,7 +51,7 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Nhân viên; Quản lý duyệt giá |
+| Tác nhân | Nhân viên (`Staff`); Quản lý (`Manager`) duyệt giá |
 | Kích hoạt | Khách chọn **Bán đứt lấy tiền ngay** trong lúc thẩm định. |
 | Điều kiện trước | Sản phẩm đã đạt tiêu chuẩn kiểm định. |
 | Kết quả | Tạo phiếu thu mua, chi tiền; quyền sở hữu chuyển sang cửa hàng và sản phẩm được đưa lên bán. |
@@ -69,9 +69,9 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Nhân viên/thu ngân |
+| Tác nhân | Nhân viên / Thu ngân (`Staff`) |
 | Kích hoạt | Khách mua mang sản phẩm đến quầy. |
-| Điều kiện trước | Sản phẩm ở trạng thái `OnSale`, chưa được giao dịch khác bán. Quản lý / Thu ngân truy cập màn hình Web POS trực tuyến. |
+| Điều kiện trước | Sản phẩm ở trạng thái `OnSale`, chưa được giao dịch khác bán. Thu ngân đã đăng nhập vào giao diện Web POS trực tuyến. |
 | Kết quả | Lưu hóa đơn, dòng chi tiết và trạng thái `Sold` trên Cloud Database trong cùng một transaction. |
 
 **Luồng chính**
@@ -89,7 +89,7 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Hệ thống; Nhân viên khi giao trả |
+| Tác nhân | Hệ thống; Nhân viên (`Staff`) khi giao trả |
 | Kích hoạt | Hangfire kiểm tra hạn ký gửi mỗi ngày lúc 00:00. |
 | Điều kiện trước | Sản phẩm `OnSale` đã vượt chu kỳ ký gửi. |
 | Kết quả | Sản phẩm bị khóa bán. Hàng được quyên góp thành `Donated` hoặc giao trả thành `Returned`. |
@@ -108,9 +108,9 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Người ký gửi, Nhân viên |
+| Tác nhân | Người ký gửi (`Customer`), Nhân viên (`Staff`) |
 | Kích hoạt | Người ký gửi chọn **Yêu cầu rút hàng sớm** trong ứng dụng. |
-| Điều kiện trước | Sản phẩm đang `OnSale` và đợt ký gửi chưa hết hạn. |
+| Điều kiện trước | Người ký gửi đã đăng nhập; sản phẩm đang `OnSale` và đợt ký gửi chưa hết hạn. |
 | Kết quả | Tạo biên nhận phí, giao lại sản phẩm và chuyển trạng thái sang `EarlyWithdrawn`. |
 
 **Luồng chính**
@@ -125,7 +125,7 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Quản lý, Người ký gửi |
+| Tác nhân | Quản lý (`Manager`), Người ký gửi (`Customer`) |
 | Kích hoạt | Đợt ký gửi đã hết hạn hoặc mọi sản phẩm trong đợt đã được xử lý. |
 | Điều kiện trước | Không còn sản phẩm `OnSale` hay sự cố chưa xử lý; POS đã đồng bộ các giao dịch liên quan. |
 | Kết quả | Phiếu giải ngân hoàn tất và hợp đồng/đợt ký gửi chuyển `Completed`. |
@@ -146,7 +146,7 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Nhân viên, Quản lý |
+| Tác nhân | Nhân viên (`Staff`), Quản lý (`Manager`) |
 | Kích hoạt | Phát hiện sản phẩm bị hư hỏng nặng hoặc thất lạc trong kho/trưng bày. |
 | Điều kiện trước | Sản phẩm đang được cửa hàng quản lý. |
 | Kết quả | Sản phẩm chuyển `Compensated`; khoản bồi thường được đưa vào bảng quyết toán của người ký gửi. |
@@ -159,9 +159,9 @@ Sơ đồ được lưu dưới dạng PlantUML tại [diagrams/use-case-overvie
 
 | Thuộc tính | Mô tả |
 | --- | --- |
-| Tác nhân | Admin, Quản lý |
+| Tác nhân | Quản trị viên (`Admin`), Quản lý (`Manager`) |
 | Kích hoạt | Người có quyền mở mục **Cài đặt / Cấu hình hệ thống**. |
-| Điều kiện trước | Tài khoản có vai trò Admin hoặc Manager. |
+| Điều kiện trước | Tài khoản có vai trò `Admin` hoặc `Manager` đã đăng nhập hợp lệ. |
 | Kết quả | Tham số hợp lệ được áp dụng và có audit log về người thực hiện, thời điểm, giá trị cũ/mới. |
 
 **Luồng chính:** người dùng điều chỉnh chu kỳ ký gửi, biên độ hoa hồng theo phân hạng và các tham số liên quan; hệ thống kiểm tra giá trị, lưu cấu hình rồi ghi audit log.

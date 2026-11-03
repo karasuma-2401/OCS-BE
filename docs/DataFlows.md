@@ -15,7 +15,7 @@ Tài liệu chuyển đổi các biểu mẫu, quy định, luồng D1–D6 và 
 
 ### Quy định
 
-- **QĐ1.1:** Người ký gửi phải có tài khoản hợp lệ, định danh bằng số điện thoại đã xác thực OTP.
+- **QĐ1.1:** Người ký gửi phải có tài khoản hợp lệ (vai trò `Customer`), định danh bằng email đã xác thực kích hoạt qua OTP.
 - **QĐ1.2:** Ngày hẹn không trước ngày hiện tại và phải thuộc khung giờ tiếp nhận hợp lệ.
 - **QĐ1.3:** Lịch hẹn tạo thành công có trạng thái mặc định `Scheduled`.
 
@@ -53,7 +53,7 @@ Danh sách sản phẩm đạt chuẩn gồm: STT, GUID, tên sản phẩm, ph�
 
 ### Quy định
 
-- **QĐ2.1:** Khách vãng lai chưa có tài khoản được kích hoạt theo số điện thoại tại quầy.
+- **QĐ2.1:** Khách vãng lai chưa có hồ sơ được tạo hồ sơ khách hàng theo số điện thoại tại quầy. Tài khoản truy cập trực tuyến cần đăng ký email và xác thực OTP riêng, không tự động biến hồ sơ tại quầy thành tài khoản web Active.
 - **QĐ2.2:** Mỗi sản phẩm đạt chuẩn phải được phân hạng thương hiệu, áp tỷ lệ hoa hồng cấu hình và tính sẵn khoản dự trù thực nhận.
 - **QĐ2.3:** Hợp đồng phải chốt phương án khi hết hạn: quyên góp hoặc hẹn nhận lại.
 - **QĐ2.4:** Món được duyệt lên kệ phải có GUID, Barcode riêng, tem nhãn và trạng thái `OnSale`.
@@ -72,7 +72,7 @@ Danh sách sản phẩm đạt chuẩn gồm: STT, GUID, tên sản phẩm, ph�
 ### Thuật toán
 
 1. Nhận dữ liệu kiểm định D1, đọc cấu hình hoa hồng D3.
-2. Tìm khách theo số điện thoại; tạo tài khoản nếu chưa có.
+2. Tìm khách theo số điện thoại; tạo hồ sơ khách hàng nếu chưa có.
 3. Với từng sản phẩm: kiểm tra chất lượng, áp tỷ lệ hoa hồng, tính `dự trù thực nhận = giá niêm yết × (100% − % hoa hồng)`, sinh GUID/Barcode và gán `OnSale`.
 4. Lưu hợp đồng, danh mục sản phẩm và ngày hết hạn vào D4.
 5. Gửi D5 tới máy in tem, trả D6 rồi kết thúc.

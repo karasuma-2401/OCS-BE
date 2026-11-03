@@ -16,13 +16,13 @@ Hệ thống phục vụ một cửa hàng độc lập và một kho tại ch�
 
 ## Vai trò trong hệ thống
 
-| Vai trò | Trách nhiệm chính |
-| --- | --- |
-| Quản trị hệ thống | Quản lý tài khoản, quyền và tham số vận hành. |
-| Quản lý cửa hàng | Giám sát doanh thu, duyệt thu mua đứt và duyệt giải ngân. |
-| Nhân viên cửa hàng | Tiếp nhận, kiểm định, quản lý kho, bán hàng POS và bàn giao hàng tồn. |
-| Người ký gửi | Đặt lịch, theo dõi sản phẩm/đợt ký gửi và nhận thông báo quyết toán. |
-| Người mua | Tra cứu sản phẩm đang bán và mua trực tiếp tại quầy. |
+| Vai trò | Trách nhiệm chính | Mã vai trò kỹ thuật |
+| --- | --- | --- |
+| Quản trị hệ thống | Quản lý tài khoản, quyền và tham số vận hành. | `Admin` |
+| Quản lý cửa hàng | Giám sát doanh thu, duyệt thu mua đứt và duyệt giải ngân. | `Manager` |
+| Nhân viên cửa hàng | Tiếp nhận, kiểm định, quản lý kho, bán hàng POS và bàn giao hàng tồn. | `Staff` |
+| Người ký gửi / Khách hàng | Đặt lịch, theo dõi sản phẩm/đợt ký gửi và nhận thông báo quyết toán. | `Customer` |
+| Người mua | Tra cứu sản phẩm đang bán và mua trực tiếp tại quầy. | Khách vãng lai / `Customer` |
 
 ## Yêu cầu chức năng
 
@@ -30,23 +30,23 @@ Hệ thống phục vụ một cửa hàng độc lập và một kho tại ch�
 
 | Mã | Nghiệp vụ | Yêu cầu | Vai trò |
 | --- | --- | --- | --- |
-| FR-001 | Đăng ký và đăng nhập | Người dùng đăng ký, đăng nhập bằng số điện thoại và xác thực OTP/mật khẩu. | Tất cả tác nhân |
-| FR-002 | Phân quyền vai trò (RBAC) | Quản lý và gán quyền theo Admin, Manager, Staff và Consignor. | Admin |
+| FR-001 | Đăng ký và đăng nhập | Người dùng đăng ký tài khoản (họ tên, email, số điện thoại, mật khẩu), kích hoạt tài khoản bằng OTP gửi qua email. Đăng nhập bằng email và mật khẩu; phiên làm việc được duy trì qua cookie HttpOnly. Số điện thoại được lưu trong hồ sơ để liên hệ, chưa được chứng minh quyền sở hữu qua SMS. | Tất cả tác nhân |
+| FR-002 | Phân quyền vai trò (RBAC) | Quản lý và gán quyền theo các mã vai trò chuẩn `Admin`, `Manager`, `Staff` và `Customer`. | Admin |
 | FR-003 | Cấu hình tham số | Cấu hình thời hạn ký gửi, biên độ hoa hồng trần/sàn theo từng phân hạng. | Admin, Manager |
 | FR-004 | Audit log | Ghi nhận các thao tác nhạy cảm như đổi tỷ lệ hoa hồng, duyệt mua đứt, điều chỉnh thanh toán. | Hệ thống |
-| FR-005 | Tạo tài khoản tại quầy | Khởi tạo tài khoản theo số điện thoại khi tiếp nhận khách chưa có hồ sơ. | Hệ thống, Staff |
-| FR-006 | Tra cứu hồ sơ | Người ký gửi tra cứu hồ sơ, tài khoản nhận tiền và các đợt ký gửi của mình. | Consignor |
+| FR-005 | Tạo hồ sơ khách hàng tại quầy | Khởi tạo thông tin hồ sơ khách hàng theo số điện thoại khi tiếp nhận khách chưa có hồ sơ. Tài khoản trực tuyến (nếu cấp) yêu cầu xác thực email trước khi kích hoạt; không tự động chuyển quyền sở hữu hồ sơ chỉ dựa trên số điện thoại nhập vào. | Hệ thống, Staff |
+| FR-006 | Tra cứu hồ sơ | Người ký gửi tra cứu hồ sơ, tài khoản nhận tiền và các đợt ký gửi của mình. | Customer |
 
 ### Tiếp nhận, thẩm định và mã định danh
 
 | Mã | Nghiệp vụ | Yêu cầu | Vai trò |
 | --- | --- | --- | --- |
-| FR-007 | Đặt lịch ký gửi | Chọn ngày, khung giờ tiếp nhận và số lượng quần áo ước tính. | Consignor |
+| FR-007 | Đặt lịch ký gửi | Chọn ngày, khung giờ tiếp nhận và số lượng quần áo ước tính. | Customer |
 | FR-008 | Điều phối lịch hẹn | Hiển thị lịch hẹn trong ngày và gửi thông báo nhắc lịch. | Staff, Hệ thống |
 | FR-009 | Đánh giá chất lượng | Kiểm tra độ mới, chất liệu, khuyết tật nhỏ và độ nguyên bản của tem mác. | Staff |
 | FR-010 | Phân hạng thương hiệu | Gắn một trong bốn hạng: No Brand, Local Brand, Commercial hoặc Luxury. | Staff |
 | FR-011 | Định giá và dự trù | Nhập giá niêm yết; hệ thống tính khoản dự trù người gửi nhận được nếu bán thành công. | Staff, Hệ thống |
-| FR-012 | Thu mua đứt | Tạo phiếu thu mua, chi tiền ngay và chuyển quyền sở hữu cho cửa hàng. | Consignor, Staff, Manager |
+| FR-012 | Thu mua đứt | Tạo phiếu thu mua, chi tiền ngay và chuyển quyền sở hữu cho cửa hàng. | Customer, Staff, Manager |
 | FR-013 | Sinh GUID và Barcode | Sinh GUID và Barcode/QR duy nhất cho sản phẩm được duyệt lên kệ. | Hệ thống |
 | FR-014 | In tem nhãn | In Barcode, GUID, tên đồ, phân hạng, size, giá niêm yết và ngày hết hạn. | Staff |
 | FR-015 | Gán vị trí trưng bày | Cập nhật vị trí kho/quầy kệ thực tế của món hàng. | Staff |
@@ -71,11 +71,11 @@ Hệ thống phục vụ một cửa hàng độc lập và một kho tại ch�
 
 | Mã | Nghiệp vụ | Yêu cầu | Vai trò |
 | --- | --- | --- | --- |
-| FR-027 | Theo dõi đợt ký gửi | Theo dõi chu kỳ 60/70 ngày và danh mục đã bán/chưa bán theo thời gian thực. | Consignor, Staff |
+| FR-027 | Theo dõi đợt ký gửi | Theo dõi chu kỳ 60/70 ngày và danh mục đã bán/chưa bán theo thời gian thực. | Customer, Staff |
 | FR-028 | Khóa bán khi hết hạn | Hangfire quét hằng ngày, chuyển món chưa bán sang `Expired`. | Hệ thống |
 | FR-029 | Quyên góp | Chuyển hàng hết hạn sang `Donated` theo điều khoản hợp đồng. | Hệ thống, Staff |
 | FR-030 | Trả hàng tồn | Quét Barcode để giao trả và đổi trạng thái sang `Returned`. | Staff |
-| FR-031 | Yêu cầu rút sớm | Người ký gửi yêu cầu lấy sản phẩm trước khi đợt kết thúc. | Consignor |
+| FR-031 | Yêu cầu rút sớm | Người ký gửi yêu cầu lấy sản phẩm trước khi đợt kết thúc. | Customer |
 | FR-032 | Tính phí rút sớm | Tính phí quản lý/lưu kho theo tỷ lệ đã thỏa thuận trong hợp đồng. | Hệ thống |
 | FR-033 | Bồi thường sự cố | Lập biên bản, duyệt bồi thường và chuyển sản phẩm sang `Compensated`. | Staff, Manager |
 
@@ -88,7 +88,7 @@ Hệ thống phục vụ một cửa hàng độc lập và một kho tại ch�
 | FR-036 | Tính tiền thực nhận | Tổng giá bán món `Sold` trừ hoa hồng, phí dịch vụ và cộng tiền bồi thường (nếu có). | Hệ thống |
 | FR-037 | Duyệt lệnh chi | Quản lý kiểm tra bảng quyết toán và duyệt chi một lần cho người ký gửi. | Manager |
 | FR-038 | Lưu chứng từ | Tải ảnh biên lai/ủy nhiệm chi của giao dịch giải ngân. | Manager |
-| FR-039 | Xác nhận tất toán | Người gửi xác nhận đã nhận tiền; hết thời gian cấu hình thì tự xác nhận nếu không có khiếu nại. | Consignor |
+| FR-039 | Xác nhận tất toán | Người gửi xác nhận đã nhận tiền; hết thời gian cấu hình thì tự xác nhận nếu không có khiếu nại. | Customer |
 | FR-040 | Báo cáo doanh thu POS | Thống kê theo ngày, tháng và phương thức thanh toán. | Manager |
 | FR-041 | Báo cáo hoa hồng | Thống kê hoa hồng thực tế từ các đợt ký gửi hoàn tất. | Manager |
 | FR-042 | Báo cáo thu mua | Thống kê ngân sách thu mua đứt và lợi nhuận khi bán lại. | Manager |
@@ -109,8 +109,12 @@ Hệ thống phục vụ một cửa hàng độc lập và một kho tại ch�
 
 ### An toàn và bảo mật
 
-- Phải đăng nhập trước khi xem thông tin cá nhân hoặc lịch sử giao dịch; mật khẩu được băm trước khi lưu.
-- Dữ liệu truyền giữa client và server dùng HTTPS; quyền truy cập dữ liệu giới hạn theo vai trò.
+- Phải đăng nhập trước khi xem thông tin cá nhân hoặc lịch sử giao dịch; mật khẩu được băm bằng thuật toán an toàn (BCrypt) trước khi lưu.
+- Chính sách mật khẩu: tối thiểu 8 ký tự, tối đa 70 ký tự; bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 số hoặc ký tự đặc biệt.
+- Khóa tạm thời tài khoản trong 15 phút sau 5 lần nhập sai mật khẩu liên tiếp.
+- Xác thực đăng ký qua mã OTP email có thời hạn 5 phút, giới hạn 5 lần thử sai/challenge, thời gian chờ gửi lại 60 giây và rate limit 5 lần gửi/email/giờ, 20 lần/IP/giờ.
+- Phiên đăng nhập được quản lý bằng cookie HttpOnly, bảo vệ chống CSRF bằng Anti-Forgery token (`X-XSRF-TOKEN`).
+- Dữ liệu truyền giữa client và server dùng HTTPS; quyền truy cập dữ liệu giới hạn nghiêm ngặt theo vai trò (`Admin`, `Manager`, `Staff`, `Customer`).
 - Ghi audit log cho các thao tác quan trọng như sửa giá, đổi hoa hồng hoặc xóa sản phẩm.
 
 ### Tính chính xác và toàn vẹn dữ liệu
@@ -123,5 +127,5 @@ Hệ thống phục vụ một cửa hàng độc lập và một kho tại ch�
 
 - POS ưu tiên bàn phím, máy quét mã vạch và máy in hóa đơn; biểu mẫu phải báo lỗi rõ ràng tại thời điểm nhập.
 - Người ký gửi có thể hoàn tất đăng ký thông tin trực tuyến trong vòng 5 phút.
-- Client hướng tới Android, iOS và Web; backend theo Clean Architecture, Dependency Injection và kiểm thử tự động.
+- Giao diện Web xây dựng trên React 19/Vite/TypeScript; backend theo monolithic N-tier tinh gọn, Dependency Injection và kiểm thử tự động.
 - Các tham số như hoa hồng, thời gian giữ hàng và mốc hạ giá được điều chỉnh từ màn hình quản lý, không sửa trực tiếp mã nguồn.
