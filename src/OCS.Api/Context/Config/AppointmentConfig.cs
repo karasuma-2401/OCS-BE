@@ -19,7 +19,7 @@ public sealed class AppointmentConfig : IEntityTypeConfiguration<Appointment>
             table.HasCheckConstraint(
                 "CK_Appointments_Enums",
                 """
-                "Status" IN ('Scheduled', 'Cancelled', 'Completed')
+                "Status" IN ('Scheduled', 'CheckedIn', 'Completed', 'Cancelled', 'NoShow')
                 AND "SubmissionMethod" IN ('InPerson', 'Shipping')
                 """);
         });
@@ -34,6 +34,14 @@ public sealed class AppointmentConfig : IEntityTypeConfiguration<Appointment>
 
         builder.Property(x => x.TrackingNumber)
             .HasMaxLength(100);
+
+        builder.Property(x => x.Note)
+            .HasMaxLength(1000);
+
+        builder.Property(x => x.CancellationReason)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.ReminderSentAt);
 
         builder.Property(x => x.SubmissionMethod)
             .HasConversion<string>()

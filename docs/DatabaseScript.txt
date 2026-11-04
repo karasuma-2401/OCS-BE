@@ -1600,6 +1600,34 @@ START TRANSACTION;
 
 DO $EF$
 BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104100000_UpdateAppointmentStatusAndFields') THEN
+    ALTER TABLE IF EXISTS "DATLICH" ADD COLUMN IF NOT EXISTS "CancellationReason" character varying(500);
+    ALTER TABLE IF EXISTS "DATLICH" ADD COLUMN IF NOT EXISTS "Note" character varying(1000);
+    ALTER TABLE IF EXISTS "DATLICH" ADD COLUMN IF NOT EXISTS "ReminderSentAt" timestamp with time zone;
+    ALTER TABLE IF EXISTS "DATLICH" DROP CONSTRAINT IF EXISTS "CK_DATLICH_Enums";
+    ALTER TABLE IF EXISTS "DATLICH" ADD CONSTRAINT "CK_DATLICH_Enums" CHECK ("Status" IN ('Scheduled', 'CheckedIn', 'Completed', 'Cancelled', 'NoShow') AND "SubmissionMethod" IN ('InPerson', 'Shipping'));
+
+    ALTER TABLE IF EXISTS "Appointments" ADD COLUMN IF NOT EXISTS "CancellationReason" character varying(500);
+    ALTER TABLE IF EXISTS "Appointments" ADD COLUMN IF NOT EXISTS "Note" character varying(1000);
+    ALTER TABLE IF EXISTS "Appointments" ADD COLUMN IF NOT EXISTS "ReminderSentAt" timestamp with time zone;
+    ALTER TABLE IF EXISTS "Appointments" DROP CONSTRAINT IF EXISTS "CK_Appointments_Enums";
+    ALTER TABLE IF EXISTS "Appointments" ADD CONSTRAINT "CK_Appointments_Enums" CHECK ("Status" IN ('Scheduled', 'CheckedIn', 'Completed', 'Cancelled', 'NoShow') AND "SubmissionMethod" IN ('InPerson', 'Shipping'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104100000_UpdateAppointmentStatusAndFields') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261104100000_UpdateAppointmentStatusAndFields', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
     IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
     ALTER TABLE "VAITRO" RENAME TO "Roles";
     END IF;
