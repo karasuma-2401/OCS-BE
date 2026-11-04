@@ -197,3 +197,20 @@ authorization requirement, and XML summary so Scalar remains the current API ref
    documented response status codes.
 4. Use the common error and pagination conventions in this document.
 5. Add unit/integration tests and verify the endpoint in Scalar.
+
+
+## Published Appointments and Notifications Endpoints
+
+| Method | Path | Purpose | Authentication |
+| --- | --- | --- | --- |
+| `GET` | `/api/appointments/available-slots?date={YYYY-MM-DD}` | Lấy khung giờ còn trống và sức chứa theo ngày | None (Public) |
+| `POST` | `/api/appointments` | Khách đặt lịch hẹn ký gửi mới (có concurrency lock) | Bearer (Customer) |
+| `GET` | `/api/appointments/my-history` | Khách xem lịch sử cuộc hẹn của mình | Bearer (Customer) |
+| `GET` | `/api/appointments/{id}` | Xem chi tiết cuộc hẹn | Bearer |
+| `PUT` | `/api/appointments/{id}/cancel` | Hủy cuộc hẹn theo quy định (trước giờ hẹn 2 tiếng) | Bearer (Customer) |
+| `GET` | `/api/appointments` | Nhân viên tra cứu danh sách cuộc hẹn (ngày, slot, trạng thái, keyword) | Bearer (Staff) |
+| `PATCH` | `/api/appointments/{id}/status` | Nhân viên cập nhật trạng thái (CheckedIn, NoShow, Completed, Cancelled) | Bearer (Staff) |
+| `POST` | `/api/appointments/{id}/start-reception` | Bắt đầu tiếp nhận từ lịch hẹn hợp lệ | Bearer (Staff) |
+| `GET` | `/api/notifications` | Lấy danh sách thông báo và số lượng chưa đọc | Bearer |
+| `PATCH` | `/api/notifications/{id}/read` | Đánh dấu thông báo đã đọc | Bearer |
+| `PATCH` | `/api/notifications/read-all` | Đánh dấu tất cả thông báo đã đọc | Bearer |

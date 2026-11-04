@@ -17,6 +17,12 @@ public sealed class Appointment : BaseEntity
 
     public string? TrackingNumber { get; set; }
 
+    public string? Note { get; set; }
+
+    public string? CancellationReason { get; set; }
+
+    public DateTimeOffset? ReminderSentAt { get; set; }
+
     public AppointmentStatus Status { get; set; } = AppointmentStatus.Scheduled;
 
     public CustomerProfile Customer { get; set; } = null!;

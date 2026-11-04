@@ -80,6 +80,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<IAuthRepository, AuthRepository>();
+        services.AddScoped<IAppointmentRepository, AppointmentRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         return services;
     }
@@ -92,6 +94,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IAppointmentService, AppointmentService>();
+        services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
         return services;
     }
@@ -250,6 +255,22 @@ public static class ServiceCollectionExtensions
             Predicate = _ => false,
             ResponseWriter = HealthCheckResponseWriter.WriteAsync
         });
+
+        var connectionString = app.Configuration.GetConnectionString("DefaultConnection");
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            try
+            {
+                RecurringJob.AddOrUpdate<IAppointmentReminderJob>(
+                    "appointment-reminder-job",
+                    job => job.ExecuteAsync(CancellationToken.None),
+                    "*/15 * * * *");
+            }
+            catch
+            {
+                // In environments without active database or tests, recurring job registration can be safely ignored
+            }
+        }
 
         return app;
     }

@@ -6,10 +6,14 @@ namespace OCS.Api.Repositories;
 public sealed class UnitOfWork(
     AppDbContext dbContext,
     IProductRepository productRepository,
-    IAuthRepository authRepository) : IUnitOfWork
+    IAuthRepository authRepository,
+    IAppointmentRepository appointmentRepository,
+    INotificationRepository notificationRepository) : IUnitOfWork
 {
     public IProductRepository ProductRepository => productRepository;
     public IAuthRepository AuthRepository => authRepository;
+    public IAppointmentRepository AppointmentRepository => appointmentRepository;
+    public INotificationRepository NotificationRepository => notificationRepository;
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);
@@ -25,4 +29,3 @@ public sealed class UnitOfWork(
 
     public void Dispose() => dbContext.Dispose();
 }
-

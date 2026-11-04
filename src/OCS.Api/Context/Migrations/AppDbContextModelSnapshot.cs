@@ -155,6 +155,17 @@ namespace OCS.Api.Context.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -168,7 +179,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.ToTable("DATLICH", null, t =>
                         {
-                            t.HasCheckConstraint("CK_DATLICH_Enums", "\"Status\" IN ('Scheduled', 'Cancelled', 'Completed')\r\nAND \"SubmissionMethod\" IN ('InPerson', 'Shipping')");
+                            t.HasCheckConstraint("CK_DATLICH_Enums", "\"Status\" IN ('Scheduled', 'CheckedIn', 'Completed', 'Cancelled', 'NoShow')\r\nAND \"SubmissionMethod\" IN ('InPerson', 'Shipping')");
 
                             t.HasCheckConstraint("CK_DATLICH_ItemCount", "\"EstimatedItemCount\" >= 0");
                         });
