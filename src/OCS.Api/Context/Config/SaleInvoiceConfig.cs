@@ -8,11 +8,11 @@ public sealed class SaleInvoiceConfig : IEntityTypeConfiguration<SaleInvoice>
 {
     public void Configure(EntityTypeBuilder<SaleInvoice> builder)
     {
-        builder.ToTable("HOADONBAN", table =>
+        builder.ToTable("SaleInvoices", table =>
         {
-            table.HasCheckConstraint("CK_HOADONBAN_Total", "\"TotalAmount\" >= 0");
+            table.HasCheckConstraint("CK_SaleInvoices_Total", "\"TotalAmount\" >= 0");
             table.HasCheckConstraint(
-                "CK_HOADONBAN_PaymentStatus",
+                "CK_SaleInvoices_PaymentStatus",
                 "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
         });
 

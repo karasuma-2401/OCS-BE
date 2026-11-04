@@ -8,7 +8,7 @@ public sealed class AccountRoleConfig : IEntityTypeConfiguration<AccountRole>
 {
     public void Configure(EntityTypeBuilder<AccountRole> builder)
     {
-        builder.ToTable("TAIKHOAN_VAITRO");
+        builder.ToTable("AccountRoles");
 
         builder.HasKey(x => new
         {

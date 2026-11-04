@@ -8,11 +8,11 @@ public sealed class IncidentReportConfig : IEntityTypeConfiguration<IncidentRepo
 {
     public void Configure(EntityTypeBuilder<IncidentReport> builder)
     {
-        builder.ToTable("BIENBANSUCO", table =>
+        builder.ToTable("IncidentReports", table =>
         {
-            table.HasCheckConstraint("CK_BIENBANSUCO_Compensation", "\"CompensationAmount\" >= 0");
+            table.HasCheckConstraint("CK_IncidentReports_Compensation", "\"CompensationAmount\" >= 0");
             table.HasCheckConstraint(
-                "CK_BIENBANSUCO_Enums",
+                "CK_IncidentReports_Enums",
                 "\"Type\" IN ('Lost', 'Damaged', 'TagSwapped') " +
                 "AND \"Status\" IN ('Pending', 'Approved', 'Compensated')");
         });

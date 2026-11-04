@@ -141,7 +141,7 @@ public sealed class AuthPersistenceTests
         Assert.Null(account.EmailVerifiedAt);
         Assert.Equal(proof, account.PhoneVerifiedAt);
         await using var connection = await database.OpenAsync();
-        await using var command = new NpgsqlCommand("UPDATE \"TAIKHOAN\" SET \"NormalizedEmail\" = 'WRONG@EXAMPLE.COM' WHERE \"Id\" = $1", connection);
+        await using var command = new NpgsqlCommand("UPDATE \"Accounts\" SET \"NormalizedEmail\" = 'WRONG@EXAMPLE.COM' WHERE \"Id\" = $1", connection);
         command.Parameters.AddWithValue(account.Id);
         var error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
         Assert.Equal(PostgresErrorCodes.CheckViolation, error.SqlState);

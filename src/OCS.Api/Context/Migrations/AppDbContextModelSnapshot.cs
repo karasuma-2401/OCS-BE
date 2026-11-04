@@ -117,19 +117,19 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("AccountType", "PhoneNumber")
                         .IsUnique();
 
-                    b.ToTable("TAIKHOAN", null, t =>
+                    b.ToTable("Accounts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_TAIKHOAN_AccountType", "\"AccountType\" IN ('Customer', 'Internal')");
+                            t.HasCheckConstraint("CK_Accounts_AccountType", "\"AccountType\" IN ('Customer', 'Internal')");
 
-                            t.HasCheckConstraint("CK_TAIKHOAN_ActiveInternalPassword", "\"AccountType\" <> 'Internal'\r\nOR \"Status\" <> 'Active'\r\nOR (\r\n    \"PasswordHash\" IS NOT NULL\r\n    AND length(btrim(\"PasswordHash\")) > 0\r\n)");
+                            t.HasCheckConstraint("CK_Accounts_ActiveInternalPassword", "\"AccountType\" <> 'Internal'\r\nOR \"Status\" <> 'Active'\r\nOR (\r\n    \"PasswordHash\" IS NOT NULL\r\n    AND length(btrim(\"PasswordHash\")) > 0\r\n)");
 
-                            t.HasCheckConstraint("CK_TAIKHOAN_InternalUsername", "\"AccountType\" <> 'Internal'\r\nOR (\r\n    \"Username\" IS NOT NULL\r\n    AND length(btrim(\"Username\")) > 0\r\n)");
+                            t.HasCheckConstraint("CK_Accounts_InternalUsername", "\"AccountType\" <> 'Internal'\r\nOR (\r\n    \"Username\" IS NOT NULL\r\n    AND length(btrim(\"Username\")) > 0\r\n)");
 
-                            t.HasCheckConstraint("CK_TAIKHOAN_LoginAttempts", "\"FailedLoginAttempts\" >= 0");
+                            t.HasCheckConstraint("CK_Accounts_LoginAttempts", "\"FailedLoginAttempts\" >= 0");
 
-                            t.HasCheckConstraint("CK_TAIKHOAN_NormalizedEmail", "\"NormalizedEmail\" IS NOT DISTINCT FROM (CASE WHEN length(btrim(\"Email\", E' \\t\\n\\r\\013\\f')) <= 254\n    AND length(split_part(btrim(\"Email\", E' \\t\\n\\r\\013\\f'), '@', 1)) <= 64\n    AND btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'\nTHEN upper(btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\") ELSE NULL END)");
+                            t.HasCheckConstraint("CK_Accounts_NormalizedEmail", "\"NormalizedEmail\" IS NOT DISTINCT FROM (CASE WHEN length(btrim(\"Email\", E' \\t\\n\\r\\013\\f')) <= 254\n    AND length(split_part(btrim(\"Email\", E' \\t\\n\\r\\013\\f'), '@', 1)) <= 64\n    AND btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'\nTHEN upper(btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\") ELSE NULL END)");
 
-                            t.HasCheckConstraint("CK_TAIKHOAN_Status", "\"Status\" IN (\r\n    'PendingActivation',\r\n    'Active',\r\n    'Locked',\r\n    'Deactivated'\r\n)");
+                            t.HasCheckConstraint("CK_Accounts_Status", "\"Status\" IN (\r\n    'PendingActivation',\r\n    'Active',\r\n    'Locked',\r\n    'Deactivated'\r\n)");
                         });
                 });
 
@@ -145,7 +145,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("RoleId");
 
-                    b.ToTable("TAIKHOAN_VAITRO", (string)null);
+                    b.ToTable("AccountRoles", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.Appointment", b =>
@@ -193,11 +193,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("AppointmentDate", "TimeSlotId", "Status");
 
-                    b.ToTable("DATLICH", null, t =>
+                    b.ToTable("Appointments", null, t =>
                         {
-                            t.HasCheckConstraint("CK_DATLICH_Enums", "\"Status\" IN ('Scheduled', 'Cancelled', 'Completed')\r\nAND \"SubmissionMethod\" IN ('InPerson', 'Shipping')");
+                            t.HasCheckConstraint("CK_Appointments_Enums", "\"Status\" IN ('Scheduled', 'Cancelled', 'Completed')\r\nAND \"SubmissionMethod\" IN ('InPerson', 'Shipping')");
 
-                            t.HasCheckConstraint("CK_DATLICH_ItemCount", "\"EstimatedItemCount\" >= 0");
+                            t.HasCheckConstraint("CK_Appointments_ItemCount", "\"EstimatedItemCount\" >= 0");
                         });
                 });
 
@@ -229,11 +229,11 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("StartTime", "EndTime")
                         .IsUnique();
 
-                    b.ToTable("KHUNGGIOHEN", null, t =>
+                    b.ToTable("AppointmentTimeSlots", null, t =>
                         {
-                            t.HasCheckConstraint("CK_KHUNGGIOHEN_MaxCustomers", "\"MaxCustomers\" > 0");
+                            t.HasCheckConstraint("CK_AppointmentTimeSlots_MaxCustomers", "\"MaxCustomers\" > 0");
 
-                            t.HasCheckConstraint("CK_KHUNGGIOHEN_TimeRange", "\"EndTime\" > \"StartTime\"");
+                            t.HasCheckConstraint("CK_AppointmentTimeSlots_TimeRange", "\"EndTime\" > \"StartTime\"");
                         });
                 });
 
@@ -300,11 +300,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("EntityType", "EntityId", "OccurredAt");
 
-                    b.ToTable("NHATKYHETHONG", null, t =>
+                    b.ToTable("AuditLogs", null, t =>
                         {
-                            t.HasCheckConstraint("CK_NHATKYHETHONG_ActorType", "\"ActorType\" IN ('User', 'System', 'Anonymous')");
+                            t.HasCheckConstraint("CK_AuditLogs_ActorType", "\"ActorType\" IN ('User', 'System', 'Anonymous')");
 
-                            t.HasCheckConstraint("CK_NHATKYHETHONG_UserActor", "\"ActorType\" <> 'User'\r\nOR \"ActorAccountId\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_AuditLogs_UserActor", "\"ActorType\" <> 'User'\r\nOR \"ActorAccountId\" IS NOT NULL");
                         });
                 });
 
@@ -340,9 +340,9 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("AccountId", "ExpiresAt");
 
-                    b.ToTable("AUTH_SESSION", null, t =>
+                    b.ToTable("AuthSessions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_AUTH_SESSION_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND (\"RevokedAt\" IS NULL OR \"RevokedAt\" >= \"CreatedAt\")");
+                            t.HasCheckConstraint("CK_AuthSessions_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND (\"RevokedAt\" IS NULL OR \"RevokedAt\" >= \"CreatedAt\")");
                         });
                 });
 
@@ -379,11 +379,11 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("THUONGHIEU", null, t =>
+                    b.ToTable("Brands", null, t =>
                         {
-                            t.HasCheckConstraint("CK_THUONGHIEU_CommissionRate", "\"DefaultCommissionRate\" BETWEEN 0 AND 100");
+                            t.HasCheckConstraint("CK_Brands_CommissionRate", "\"DefaultCommissionRate\" BETWEEN 0 AND 100");
 
-                            t.HasCheckConstraint("CK_THUONGHIEU_Tier", "\"Tier\" IN (\r\n    'NoBrand',\r\n    'LocalBrand',\r\n    'Commercial',\r\n    'Luxury'\r\n)");
+                            t.HasCheckConstraint("CK_Brands_Tier", "\"Tier\" IN (\r\n    'NoBrand',\r\n    'LocalBrand',\r\n    'Commercial',\r\n    'Luxury'\r\n)");
                         });
                 });
 
@@ -432,13 +432,13 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("CustomerId");
 
-                    b.ToTable("THUMUA", null, t =>
+                    b.ToTable("Buyouts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_THUMUA_Approver", "\"Status\" <> 'Approved'\r\nOR \"ApprovedByEmployeeId\" IS NOT NULL");
+                            t.HasCheckConstraint("CK_Buyouts_Approver", "\"Status\" <> 'Approved'\r\nOR \"ApprovedByEmployeeId\" IS NOT NULL");
 
-                            t.HasCheckConstraint("CK_THUMUA_Status", "\"Status\" IN ('Pending', 'Approved', 'Rejected')");
+                            t.HasCheckConstraint("CK_Buyouts_Status", "\"Status\" IN ('Pending', 'Approved', 'Rejected')");
 
-                            t.HasCheckConstraint("CK_THUMUA_Total", "\"TotalPurchasePrice\" >= 0");
+                            t.HasCheckConstraint("CK_Buyouts_Total", "\"TotalPurchasePrice\" >= 0");
                         });
                 });
 
@@ -466,7 +466,7 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("DANHMUC", (string)null);
+                    b.ToTable("Categories", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.ConsignmentContract", b =>
@@ -523,11 +523,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("Status", "EndsAt");
 
-                    b.ToTable("HOPDONGKYGUI", null, t =>
+                    b.ToTable("ConsignmentContracts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_HOPDONGKYGUI_Dates", "\"EndsAt\" > \"SignedAt\"");
+                            t.HasCheckConstraint("CK_ConsignmentContracts_Dates", "\"EndsAt\" > \"SignedAt\"");
 
-                            t.HasCheckConstraint("CK_HOPDONGKYGUI_Enums", "\"Status\" IN ('Active', 'Completed', 'Cancelled')\r\nAND \"ExpiryHandling\" IN ('Return', 'Donate')");
+                            t.HasCheckConstraint("CK_ConsignmentContracts_Enums", "\"Status\" IN ('Active', 'Completed', 'Cancelled')\r\nAND \"ExpiryHandling\" IN ('Return', 'Donate')");
                         });
                 });
 
@@ -559,7 +559,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("KHACHHANG", (string)null);
+                    b.ToTable("CustomerProfiles", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.EarlyWithdrawal", b =>
@@ -594,11 +594,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("ProcessedByEmployeeId");
 
-                    b.ToTable("PHIEURUTHANGSOM", null, t =>
+                    b.ToTable("EarlyWithdrawals", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PHIEURUTHANGSOM_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
+                            t.HasCheckConstraint("CK_EarlyWithdrawals_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
 
-                            t.HasCheckConstraint("CK_PHIEURUTHANGSOM_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
+                            t.HasCheckConstraint("CK_EarlyWithdrawals_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
                         });
                 });
 
@@ -623,11 +623,11 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("ProductId")
                         .IsUnique();
 
-                    b.ToTable("CT_RUTSOM", null, t =>
+                    b.ToTable("EarlyWithdrawalItems", null, t =>
                         {
-                            t.HasCheckConstraint("CK_CT_RUTSOM_ListedPrice", "\"ListedPrice\" >= 0");
+                            t.HasCheckConstraint("CK_EarlyWithdrawalItems_ListedPrice", "\"ListedPrice\" >= 0");
 
-                            t.HasCheckConstraint("CK_CT_RUTSOM_Penalty", "\"PenaltyAmount\" >= 0");
+                            t.HasCheckConstraint("CK_EarlyWithdrawalItems_Penalty", "\"PenaltyAmount\" >= 0");
                         });
                 });
 
@@ -654,7 +654,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("NHANVIEN", (string)null);
+                    b.ToTable("EmployeeProfiles", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.ExpiryProcessing", b =>
@@ -691,9 +691,9 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("ProcessedByEmployeeId");
 
-                    b.ToTable("PHIEUXULYHETHAN", null, t =>
+                    b.ToTable("ExpiryProcessings", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PHIEUXULYHETHAN_Enums", "\"Type\" IN ('Donate', 'Return') AND \"Status\" IN ('Pending', 'Completed', 'OverdueDonated')");
+                            t.HasCheckConstraint("CK_ExpiryProcessings_Enums", "\"Type\" IN ('Donate', 'Return') AND \"Status\" IN ('Pending', 'Completed', 'OverdueDonated')");
                         });
                 });
 
@@ -710,7 +710,7 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("ProductId")
                         .IsUnique();
 
-                    b.ToTable("CT_XULY", (string)null);
+                    b.ToTable("ExpiryProcessingItems", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.FinancialTransaction", b =>
@@ -788,11 +788,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("Status", "OccurredAt");
 
-                    b.ToTable("GIAODICHTAICHINH", null, t =>
+                    b.ToTable("FinancialTransactions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_GIAODICHTAICHINH_Amount", "\"Amount\" >= 0");
+                            t.HasCheckConstraint("CK_FinancialTransactions_Amount", "\"Amount\" >= 0");
 
-                            t.HasCheckConstraint("CK_GIAODICHTAICHINH_Enums", "\"Type\" IN ('Income', 'Expense', 'CashFloat', 'BankDeposit') AND \"PaymentMethod\" IN ('Cash', 'VietQr', 'BankTransfer') AND \"Status\" IN ('Pending', 'Success', 'Failed', 'Refunded')");
+                            t.HasCheckConstraint("CK_FinancialTransactions_Enums", "\"Type\" IN ('Income', 'Expense', 'CashFloat', 'BankDeposit') AND \"PaymentMethod\" IN ('Cash', 'VietQr', 'BankTransfer') AND \"Status\" IN ('Pending', 'Success', 'Failed', 'Refunded')");
                         });
                 });
 
@@ -839,11 +839,11 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("ProductId")
                         .IsUnique();
 
-                    b.ToTable("BIENBANSUCO", null, t =>
+                    b.ToTable("IncidentReports", null, t =>
                         {
-                            t.HasCheckConstraint("CK_BIENBANSUCO_Compensation", "\"CompensationAmount\" >= 0");
+                            t.HasCheckConstraint("CK_IncidentReports_Compensation", "\"CompensationAmount\" >= 0");
 
-                            t.HasCheckConstraint("CK_BIENBANSUCO_Enums", "\"Type\" IN ('Lost', 'Damaged', 'TagSwapped') AND \"Status\" IN ('Pending', 'Approved', 'Compensated')");
+                            t.HasCheckConstraint("CK_IncidentReports_Enums", "\"Type\" IN ('Lost', 'Damaged', 'TagSwapped') AND \"Status\" IN ('Pending', 'Approved', 'Compensated')");
                         });
                 });
 
@@ -891,9 +891,9 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("RecipientAccountId", "IsRead", "SentAt");
 
-                    b.ToTable("THONGBAO", null, t =>
+                    b.ToTable("Notifications", null, t =>
                         {
-                            t.HasCheckConstraint("CK_THONGBAO_Type", "\"Type\" IN ('System', 'Manual', 'Promotion')");
+                            t.HasCheckConstraint("CK_Notifications_Type", "\"Type\" IN ('System', 'Manual', 'Promotion')");
                         });
                 });
 
@@ -970,17 +970,17 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("AccountId", "Purpose");
 
-                    b.ToTable("OTP_CHALLENGE", null, t =>
+                    b.ToTable("OtpChallenges", null, t =>
                         {
-                            t.HasCheckConstraint("CK_OTP_CHALLENGE_Attempts", "\"FailedAttempts\" >= 0");
+                            t.HasCheckConstraint("CK_OtpChallenges_Attempts", "\"FailedAttempts\" >= 0");
 
-                            t.HasCheckConstraint("CK_OTP_CHALLENGE_Delivery", "\"DeliveryStatus\" IN ('Pending', 'Sent', 'Failed') AND (\"DeliveryStatus\" <> 'Sent' OR \"SentAt\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_OtpChallenges_Delivery", "\"DeliveryStatus\" IN ('Pending', 'Sent', 'Failed') AND (\"DeliveryStatus\" <> 'Sent' OR \"SentAt\" IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_OTP_CHALLENGE_Hashes", "length(btrim(\"CodeHash\")) > 0 AND length(btrim(\"ContinuationTokenHash\")) > 0");
+                            t.HasCheckConstraint("CK_OtpChallenges_Hashes", "length(btrim(\"CodeHash\")) > 0 AND length(btrim(\"ContinuationTokenHash\")) > 0");
 
-                            t.HasCheckConstraint("CK_OTP_CHALLENGE_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND \"ContinuationExpiresAt\" >= \"ExpiresAt\" AND \"ResendAvailableAt\" >= \"CreatedAt\"");
+                            t.HasCheckConstraint("CK_OtpChallenges_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND \"ContinuationExpiresAt\" >= \"ExpiresAt\" AND \"ResendAvailableAt\" >= \"CreatedAt\"");
 
-                            t.HasCheckConstraint("CK_OTP_CHALLENGE_Purpose", "\"Purpose\" = 'RegistrationActivation'");
+                            t.HasCheckConstraint("CK_OtpChallenges_Purpose", "\"Purpose\" = 'RegistrationActivation'");
                         });
                 });
 
@@ -1032,11 +1032,11 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("PayoutNumber")
                         .IsUnique();
 
-                    b.ToTable("PHIEUGIAINGAN", null, t =>
+                    b.ToTable("Payouts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_PHIEUGIAINGAN_Status", "\"Status\" IN ('Pending', 'Transferred', 'Completed')");
+                            t.HasCheckConstraint("CK_Payouts_Status", "\"Status\" IN ('Pending', 'Transferred', 'Completed')");
 
-                            t.HasCheckConstraint("CK_PHIEUGIAINGAN_Total", "\"TotalAmount\" >= 0");
+                            t.HasCheckConstraint("CK_Payouts_Total", "\"TotalAmount\" >= 0");
                         });
                 });
 
@@ -1082,11 +1082,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("ProductId");
 
-                    b.ToTable("CT_GIAINGAN", null, t =>
+                    b.ToTable("PayoutDetails", null, t =>
                         {
-                            t.HasCheckConstraint("CK_CT_GIAINGAN_Source", "NOT (\"ProductId\" IS NOT NULL AND \"IncidentReportId\" IS NOT NULL)");
+                            t.HasCheckConstraint("CK_PayoutDetails_Source", "NOT (\"ProductId\" IS NOT NULL AND \"IncidentReportId\" IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_CT_GIAINGAN_Type", "\"Type\" IN ('Commission', 'Compensation', 'ServiceFee')");
+                            t.HasCheckConstraint("CK_PayoutDetails_Type", "\"Type\" IN ('Commission', 'Compensation', 'ServiceFee')");
                         });
                 });
 
@@ -1114,7 +1114,7 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("QUYEN", (string)null);
+                    b.ToTable("Permissions", (string)null);
 
                     b.HasData(
                         new
@@ -1231,17 +1231,17 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("Status", "CategoryId");
 
-                    b.ToTable("SANPHAM", null, t =>
+                    b.ToTable("Products", null, t =>
                         {
-                            t.HasCheckConstraint("CK_SANPHAM_Commission", "\"AgreedCommissionRate\" IS NULL\r\nOR \"AgreedCommissionRate\" BETWEEN 0 AND 100");
+                            t.HasCheckConstraint("CK_Products_Commission", "\"AgreedCommissionRate\" IS NULL\r\nOR \"AgreedCommissionRate\" BETWEEN 0 AND 100");
 
-                            t.HasCheckConstraint("CK_SANPHAM_Condition", "\"ConditionPercentage\" BETWEEN 0 AND 100");
+                            t.HasCheckConstraint("CK_Products_Condition", "\"ConditionPercentage\" BETWEEN 0 AND 100");
 
-                            t.HasCheckConstraint("CK_SANPHAM_Enums", "\"Status\" IN (\r\n    'PendingProcessing', 'OnSale', 'Sold',\r\n    'Expired', 'Donated', 'Returned',\r\n    'EarlyWithdrawn', 'Compensated', 'Cancelled'\r\n)\r\nAND (\r\n    \"AgreedBrandTier\" IS NULL\r\n    OR \"AgreedBrandTier\" IN (\r\n        'NoBrand', 'LocalBrand',\r\n        'Commercial', 'Luxury'\r\n    )\r\n)");
+                            t.HasCheckConstraint("CK_Products_Enums", "\"Status\" IN (\r\n    'PendingProcessing', 'OnSale', 'Sold',\r\n    'Expired', 'Donated', 'Returned',\r\n    'EarlyWithdrawn', 'Compensated', 'Cancelled'\r\n)\r\nAND (\r\n    \"AgreedBrandTier\" IS NULL\r\n    OR \"AgreedBrandTier\" IN (\r\n        'NoBrand', 'LocalBrand',\r\n        'Commercial', 'Luxury'\r\n    )\r\n)");
 
-                            t.HasCheckConstraint("CK_SANPHAM_Prices", "\"ListedPrice\" >= 0\r\nAND (\r\n    \"PurchasePrice\" IS NULL\r\n    OR \"PurchasePrice\" >= 0\r\n)");
+                            t.HasCheckConstraint("CK_Products_Prices", "\"ListedPrice\" >= 0\r\nAND (\r\n    \"PurchasePrice\" IS NULL\r\n    OR \"PurchasePrice\" >= 0\r\n)");
 
-                            t.HasCheckConstraint("CK_SANPHAM_Source", "(\r\n    \"SourceType\" = 'Consignment'\r\n    AND \"ConsignmentContractId\" IS NOT NULL\r\n    AND \"BuyoutId\" IS NULL\r\n    AND \"PurchasePrice\" IS NULL\r\n    AND \"AgreedCommissionRate\" IS NOT NULL\r\n    AND \"AgreedBrandTier\" IS NOT NULL\r\n)\r\nOR\r\n(\r\n    \"SourceType\" = 'Buyout'\r\n    AND \"ConsignmentContractId\" IS NULL\r\n    AND \"BuyoutId\" IS NOT NULL\r\n    AND \"PurchasePrice\" IS NOT NULL\r\n    AND \"AgreedCommissionRate\" IS NULL\r\n    AND \"AgreedBrandTier\" IS NULL\r\n)");
+                            t.HasCheckConstraint("CK_Products_Source", "(\r\n    \"SourceType\" = 'Consignment'\r\n    AND \"ConsignmentContractId\" IS NOT NULL\r\n    AND \"BuyoutId\" IS NULL\r\n    AND \"PurchasePrice\" IS NULL\r\n    AND \"AgreedCommissionRate\" IS NOT NULL\r\n    AND \"AgreedBrandTier\" IS NOT NULL\r\n)\r\nOR\r\n(\r\n    \"SourceType\" = 'Buyout'\r\n    AND \"ConsignmentContractId\" IS NULL\r\n    AND \"BuyoutId\" IS NOT NULL\r\n    AND \"PurchasePrice\" IS NOT NULL\r\n    AND \"AgreedCommissionRate\" IS NULL\r\n    AND \"AgreedBrandTier\" IS NULL\r\n)");
                         });
                 });
 
@@ -1280,13 +1280,13 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("ProductId", "SortOrder");
 
-                    b.ToTable("ANH_SANPHAM", null, t =>
+                    b.ToTable("ProductImages", null, t =>
                         {
-                            t.HasCheckConstraint("CK_ANH_SANPHAM_ImageType", "\"ImageType\" IN ('Cover', 'Detail', 'Incident')");
+                            t.HasCheckConstraint("CK_ProductImages_ImageType", "\"ImageType\" IN ('Cover', 'Detail', 'Incident')");
 
-                            t.HasCheckConstraint("CK_ANH_SANPHAM_SortOrder", "\"SortOrder\" >= 0");
+                            t.HasCheckConstraint("CK_ProductImages_SortOrder", "\"SortOrder\" >= 0");
 
-                            t.HasCheckConstraint("CK_ANH_SANPHAM_Url", "length(btrim(\"Url\")) > 0");
+                            t.HasCheckConstraint("CK_ProductImages_Url", "length(btrim(\"Url\")) > 0");
                         });
                 });
 
@@ -1323,13 +1323,13 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("ProductId", "OccurredAt");
 
-                    b.ToTable("LICHSUTRANGTHAISP", null, t =>
+                    b.ToTable("ProductStatusHistories", null, t =>
                         {
-                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_DifferentStatus", "\"PreviousStatus\" IS NULL\r\nOR \"PreviousStatus\" <> \"NewStatus\"");
+                            t.HasCheckConstraint("CK_ProductStatusHistories_DifferentStatus", "\"PreviousStatus\" IS NULL\r\nOR \"PreviousStatus\" <> \"NewStatus\"");
 
-                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_NewStatus", "\"NewStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
+                            t.HasCheckConstraint("CK_ProductStatusHistories_NewStatus", "\"NewStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
 
-                            t.HasCheckConstraint("CK_LICHSUTRANGTHAISP_PreviousStatus", "\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
+                            t.HasCheckConstraint("CK_ProductStatusHistories_PreviousStatus", "\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN ('PendingProcessing', 'OnSale', 'Sold', 'Expired', 'Donated', 'Returned', 'EarlyWithdrawn', 'Compensated', 'Cancelled')");
                         });
                 });
 
@@ -1357,7 +1357,7 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("VAITRO", (string)null);
+                    b.ToTable("Roles", (string)null);
 
                     b.HasData(
                         new
@@ -1402,7 +1402,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("PermissionId");
 
-                    b.ToTable("PHANQUYEN", (string)null);
+                    b.ToTable("RolePermissions", (string)null);
 
                     b.HasData(
                         new
@@ -1472,11 +1472,11 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("SoldByEmployeeId");
 
-                    b.ToTable("HOADONBAN", null, t =>
+                    b.ToTable("SaleInvoices", null, t =>
                         {
-                            t.HasCheckConstraint("CK_HOADONBAN_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
+                            t.HasCheckConstraint("CK_SaleInvoices_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
 
-                            t.HasCheckConstraint("CK_HOADONBAN_Total", "\"TotalAmount\" >= 0");
+                            t.HasCheckConstraint("CK_SaleInvoices_Total", "\"TotalAmount\" >= 0");
                         });
                 });
 
@@ -1497,9 +1497,9 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("ProductId")
                         .IsUnique();
 
-                    b.ToTable("CT_HOADON", null, t =>
+                    b.ToTable("SaleInvoiceLines", null, t =>
                         {
-                            t.HasCheckConstraint("CK_CT_HOADON_SalePrice", "\"SalePrice\" >= 0");
+                            t.HasCheckConstraint("CK_SaleInvoiceLines_SalePrice", "\"SalePrice\" >= 0");
                         });
                 });
 
@@ -1532,7 +1532,7 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("Code")
                         .IsUnique();
 
-                    b.ToTable("KHOLUU", (string)null);
+                    b.ToTable("StorageLocations", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.SystemParameter", b =>
@@ -1552,7 +1552,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasKey("Key");
 
-                    b.ToTable("THAMSO", (string)null);
+                    b.ToTable("SystemParameters", (string)null);
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.Account", b =>

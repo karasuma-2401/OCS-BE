@@ -8,7 +8,7 @@ public sealed class EmployeeProfileConfig : IEntityTypeConfiguration<EmployeePro
 {
     public void Configure(EntityTypeBuilder<EmployeeProfile> builder)
     {
-        builder.ToTable("NHANVIEN");
+        builder.ToTable("EmployeeProfiles");
 
         builder.HasKey(x => x.Id);
 

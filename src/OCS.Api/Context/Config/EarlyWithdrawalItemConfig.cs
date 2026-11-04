@@ -8,10 +8,10 @@ public sealed class EarlyWithdrawalItemConfig : IEntityTypeConfiguration<EarlyWi
 {
     public void Configure(EntityTypeBuilder<EarlyWithdrawalItem> builder)
     {
-        builder.ToTable("CT_RUTSOM", table =>
+        builder.ToTable("EarlyWithdrawalItems", table =>
         {
-            table.HasCheckConstraint("CK_CT_RUTSOM_ListedPrice", "\"ListedPrice\" >= 0");
-            table.HasCheckConstraint("CK_CT_RUTSOM_Penalty", "\"PenaltyAmount\" >= 0");
+            table.HasCheckConstraint("CK_EarlyWithdrawalItems_ListedPrice", "\"ListedPrice\" >= 0");
+            table.HasCheckConstraint("CK_EarlyWithdrawalItems_Penalty", "\"PenaltyAmount\" >= 0");
         });
 
         builder.HasKey(x => new { x.EarlyWithdrawalId, x.ProductId });

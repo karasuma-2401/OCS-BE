@@ -8,16 +8,16 @@ public sealed class AppointmentConfig : IEntityTypeConfiguration<Appointment>
 {
     public void Configure(EntityTypeBuilder<Appointment> builder)
     {
-        builder.ToTable("DATLICH", table =>
+        builder.ToTable("Appointments", table =>
         {
             table.HasCheckConstraint(
-                "CK_DATLICH_ItemCount",
+                "CK_Appointments_ItemCount",
                 """
                 "EstimatedItemCount" >= 0
                 """);
 
             table.HasCheckConstraint(
-                "CK_DATLICH_Enums",
+                "CK_Appointments_Enums",
                 """
                 "Status" IN ('Scheduled', 'Cancelled', 'Completed')
                 AND "SubmissionMethod" IN ('InPerson', 'Shipping')

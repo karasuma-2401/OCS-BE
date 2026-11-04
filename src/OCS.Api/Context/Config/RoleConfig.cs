@@ -8,7 +8,7 @@ public sealed class RoleConfig : IEntityTypeConfiguration<Role>
 {
     public void Configure(EntityTypeBuilder<Role> builder)
     {
-        builder.ToTable("VAITRO");
+        builder.ToTable("Roles");
 
         builder.HasKey(x => x.Id);
 

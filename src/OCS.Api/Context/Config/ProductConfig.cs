@@ -8,16 +8,16 @@ public sealed class ProductConfig : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
     {
-        builder.ToTable("SANPHAM", table =>
+        builder.ToTable("Products", table =>
         {
             table.HasCheckConstraint(
-                "CK_SANPHAM_Condition",
+                "CK_Products_Condition",
                 """
                 "ConditionPercentage" BETWEEN 0 AND 100
                 """);
 
             table.HasCheckConstraint(
-                "CK_SANPHAM_Prices",
+                "CK_Products_Prices",
                 """
                 "ListedPrice" >= 0
                 AND (
@@ -27,14 +27,14 @@ public sealed class ProductConfig : IEntityTypeConfiguration<Product>
                 """);
 
             table.HasCheckConstraint(
-                "CK_SANPHAM_Commission",
+                "CK_Products_Commission",
                 """
                 "AgreedCommissionRate" IS NULL
                 OR "AgreedCommissionRate" BETWEEN 0 AND 100
                 """);
 
             table.HasCheckConstraint(
-                "CK_SANPHAM_Source",
+                "CK_Products_Source",
                 """
                 (
                     "SourceType" = 'Consignment'
@@ -56,7 +56,7 @@ public sealed class ProductConfig : IEntityTypeConfiguration<Product>
                 """);
 
             table.HasCheckConstraint(
-                "CK_SANPHAM_Enums",
+                "CK_Products_Enums",
                 """
                 "Status" IN (
                     'PendingProcessing', 'OnSale', 'Sold',

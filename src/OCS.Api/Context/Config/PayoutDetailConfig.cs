@@ -8,13 +8,13 @@ public sealed class PayoutDetailConfig : IEntityTypeConfiguration<PayoutDetail>
 {
     public void Configure(EntityTypeBuilder<PayoutDetail> builder)
     {
-        builder.ToTable("CT_GIAINGAN", table =>
+        builder.ToTable("PayoutDetails", table =>
         {
             table.HasCheckConstraint(
-                "CK_CT_GIAINGAN_Type",
+                "CK_PayoutDetails_Type",
                 "\"Type\" IN ('Commission', 'Compensation', 'ServiceFee')");
             table.HasCheckConstraint(
-                "CK_CT_GIAINGAN_Source",
+                "CK_PayoutDetails_Source",
                 "NOT (\"ProductId\" IS NOT NULL AND \"IncidentReportId\" IS NOT NULL)");
         });
 

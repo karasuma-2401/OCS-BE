@@ -9,22 +9,22 @@ public sealed class ProductImageConfig
 {
     public void Configure(EntityTypeBuilder<ProductImage> builder)
     {
-        builder.ToTable("ANH_SANPHAM", table =>
+        builder.ToTable("ProductImages", table =>
         {
             table.HasCheckConstraint(
-                "CK_ANH_SANPHAM_ImageType",
+                "CK_ProductImages_ImageType",
                 """
                 "ImageType" IN ('Cover', 'Detail', 'Incident')
                 """);
 
             table.HasCheckConstraint(
-                "CK_ANH_SANPHAM_SortOrder",
+                "CK_ProductImages_SortOrder",
                 """
                 "SortOrder" >= 0
                 """);
 
             table.HasCheckConstraint(
-                "CK_ANH_SANPHAM_Url",
+                "CK_ProductImages_Url",
                 """
                 length(btrim("Url")) > 0
                 """);

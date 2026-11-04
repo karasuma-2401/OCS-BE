@@ -82,7 +82,7 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
             && c.ConsumedAt == null && c.InvalidatedAt == null).ToListAsync(cancellationToken);
 
     public Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default) =>
-        dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"TAIKHOAN\" WHERE \"Id\" = {accountId} FOR UPDATE", cancellationToken);
+        dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Accounts\" WHERE \"Id\" = {accountId} FOR UPDATE", cancellationToken);
 
     public Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default) =>
         dbContext.Entry(challenge).ReloadAsync(cancellationToken);

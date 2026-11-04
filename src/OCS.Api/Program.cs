@@ -27,6 +27,13 @@ if (args.Contains("--check-migrations", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--apply-migrations", StringComparer.Ordinal))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<AppDbContext>().Database.MigrateAsync();
+    return;
+}
+
 if (args.Contains("--seed-demo", StringComparer.Ordinal))
 {
     if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))

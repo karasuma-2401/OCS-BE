@@ -8,22 +8,22 @@ public sealed class BuyoutConfig : IEntityTypeConfiguration<Buyout>
 {
     public void Configure(EntityTypeBuilder<Buyout> builder)
     {
-        builder.ToTable("THUMUA", table =>
+        builder.ToTable("Buyouts", table =>
         {
             table.HasCheckConstraint(
-                "CK_THUMUA_Total",
+                "CK_Buyouts_Total",
                 """
                 "TotalPurchasePrice" >= 0
                 """);
 
             table.HasCheckConstraint(
-                "CK_THUMUA_Status",
+                "CK_Buyouts_Status",
                 """
                 "Status" IN ('Pending', 'Approved', 'Rejected')
                 """);
 
             table.HasCheckConstraint(
-                "CK_THUMUA_Approver",
+                "CK_Buyouts_Approver",
                 """
                 "Status" <> 'Approved'
                 OR "ApprovedByEmployeeId" IS NOT NULL

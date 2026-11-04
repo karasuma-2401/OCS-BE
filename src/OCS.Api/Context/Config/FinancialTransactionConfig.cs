@@ -8,11 +8,11 @@ public sealed class FinancialTransactionConfig : IEntityTypeConfiguration<Financ
 {
     public void Configure(EntityTypeBuilder<FinancialTransaction> builder)
     {
-        builder.ToTable("GIAODICHTAICHINH", table =>
+        builder.ToTable("FinancialTransactions", table =>
         {
-            table.HasCheckConstraint("CK_GIAODICHTAICHINH_Amount", "\"Amount\" >= 0");
+            table.HasCheckConstraint("CK_FinancialTransactions_Amount", "\"Amount\" >= 0");
             table.HasCheckConstraint(
-                "CK_GIAODICHTAICHINH_Enums",
+                "CK_FinancialTransactions_Enums",
                 "\"Type\" IN ('Income', 'Expense', 'CashFloat', 'BankDeposit') " +
                 "AND \"PaymentMethod\" IN ('Cash', 'VietQr', 'BankTransfer') " +
                 "AND \"Status\" IN ('Pending', 'Success', 'Failed', 'Refunded')");

@@ -9,16 +9,16 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
 {
     public void Configure(EntityTypeBuilder<Account> builder)
     {
-        builder.ToTable("TAIKHOAN", table =>
+        builder.ToTable("Accounts", table =>
         {
             table.HasCheckConstraint(
-                "CK_TAIKHOAN_AccountType",
+                "CK_Accounts_AccountType",
                 """
                 "AccountType" IN ('Customer', 'Internal')
                 """);
 
             table.HasCheckConstraint(
-                "CK_TAIKHOAN_Status",
+                "CK_Accounts_Status",
                 """
                 "Status" IN (
                     'PendingActivation',
@@ -28,11 +28,11 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
                 )
                 """);
 
-            table.HasCheckConstraint("CK_TAIKHOAN_LoginAttempts", "\"FailedLoginAttempts\" >= 0");
-            table.HasCheckConstraint("CK_TAIKHOAN_NormalizedEmail", $"\"NormalizedEmail\" IS NOT DISTINCT FROM ({EmailIdentity.SqlNormalization})");
+            table.HasCheckConstraint("CK_Accounts_LoginAttempts", "\"FailedLoginAttempts\" >= 0");
+            table.HasCheckConstraint("CK_Accounts_NormalizedEmail", $"\"NormalizedEmail\" IS NOT DISTINCT FROM ({EmailIdentity.SqlNormalization})");
 
             table.HasCheckConstraint(
-                "CK_TAIKHOAN_InternalUsername",
+                "CK_Accounts_InternalUsername",
                 """
                 "AccountType" <> 'Internal'
                 OR (
@@ -42,7 +42,7 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
                 """);
 
             table.HasCheckConstraint(
-                "CK_TAIKHOAN_ActiveInternalPassword",
+                "CK_Accounts_ActiveInternalPassword",
                 """
                 "AccountType" <> 'Internal'
                 OR "Status" <> 'Active'

@@ -8,13 +8,13 @@ public sealed class OtpChallengeConfig : IEntityTypeConfiguration<OtpChallenge>
 {
     public void Configure(EntityTypeBuilder<OtpChallenge> builder)
     {
-        builder.ToTable("OTP_CHALLENGE", table =>
+        builder.ToTable("OtpChallenges", table =>
         {
-            table.HasCheckConstraint("CK_OTP_CHALLENGE_Purpose", "\"Purpose\" = 'RegistrationActivation'");
-            table.HasCheckConstraint("CK_OTP_CHALLENGE_Attempts", "\"FailedAttempts\" >= 0");
-            table.HasCheckConstraint("CK_OTP_CHALLENGE_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND \"ContinuationExpiresAt\" >= \"ExpiresAt\" AND \"ResendAvailableAt\" >= \"CreatedAt\"");
-            table.HasCheckConstraint("CK_OTP_CHALLENGE_Delivery", "\"DeliveryStatus\" IN ('Pending', 'Sent', 'Failed') AND (\"DeliveryStatus\" <> 'Sent' OR \"SentAt\" IS NOT NULL)");
-            table.HasCheckConstraint("CK_OTP_CHALLENGE_Hashes", "length(btrim(\"CodeHash\")) > 0 AND length(btrim(\"ContinuationTokenHash\")) > 0");
+            table.HasCheckConstraint("CK_OtpChallenges_Purpose", "\"Purpose\" = 'RegistrationActivation'");
+            table.HasCheckConstraint("CK_OtpChallenges_Attempts", "\"FailedAttempts\" >= 0");
+            table.HasCheckConstraint("CK_OtpChallenges_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND \"ContinuationExpiresAt\" >= \"ExpiresAt\" AND \"ResendAvailableAt\" >= \"CreatedAt\"");
+            table.HasCheckConstraint("CK_OtpChallenges_Delivery", "\"DeliveryStatus\" IN ('Pending', 'Sent', 'Failed') AND (\"DeliveryStatus\" <> 'Sent' OR \"SentAt\" IS NOT NULL)");
+            table.HasCheckConstraint("CK_OtpChallenges_Hashes", "length(btrim(\"CodeHash\")) > 0 AND length(btrim(\"ContinuationTokenHash\")) > 0");
         });
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();

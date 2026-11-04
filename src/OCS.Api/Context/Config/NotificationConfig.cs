@@ -8,9 +8,9 @@ public sealed class NotificationConfig : IEntityTypeConfiguration<Notification>
 {
     public void Configure(EntityTypeBuilder<Notification> builder)
     {
-        builder.ToTable("THONGBAO", table =>
+        builder.ToTable("Notifications", table =>
             table.HasCheckConstraint(
-                "CK_THONGBAO_Type",
+                "CK_Notifications_Type",
                 "\"Type\" IN ('System', 'Manual', 'Promotion')"));
 
         builder.HasKey(x => x.Id);
