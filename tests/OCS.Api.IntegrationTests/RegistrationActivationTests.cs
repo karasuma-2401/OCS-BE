@@ -112,19 +112,15 @@ public sealed class RegistrationActivationTests : IDisposable
         Assert.Single(account.AccountRoles);
         Assert.Equal(Role.CustomerRoleId, account.AccountRoles.First().RoleId);
 
-        // 2. Pending account cannot log in
+        // 2. Pending account cannot log in while the existing challenge is cooling down.
         var loginResult = await _authService.LoginAsync(new LoginRequestDto("nguyenvana@example.com", "Password123@"));
         Assert.False(loginResult.IsSuccess);
-        Assert.Equal("AUTH.ACCOUNT_PENDING_ACTIVATION", loginResult.Error!.Code);
-        Assert.NotNull(loginResult.Error.Extensions);
-        var continuationChallengeId = (Guid)loginResult.Error.Extensions["challengeId"]!;
+        Assert.Equal("AUTH.RESEND_COOLDOWN", loginResult.Error!.Code);
 
-        // 3. Verify OTP
+        // 3. Verify using the credential returned by registration.
         var code = ExtractOtpCodeFromEmail();
         var verifyResult = await _authService.VerifyRegistrationOtpAsync(new VerifyOtpRequestDto(
-            continuationChallengeId,
-            code));
-
+            registerResult.Data.ChallengeId, code, registerResult.Data.ContinuationToken));
         Assert.True(verifyResult.IsSuccess);
         Assert.Contains("thành công", verifyResult.Data!.Message, StringComparison.OrdinalIgnoreCase);
 
@@ -161,7 +157,7 @@ public sealed class RegistrationActivationTests : IDisposable
     }
 
     [Fact]
-    public async Task RegistrationForPendingAccountAllowsReissuingOtpIfPasswordMatches()
+    public async Task RegistrationForPendingAccountDoesNotExposePasswordOracle()
     {
         var password = "Password123@";
         var account = new Account
@@ -182,9 +178,9 @@ public sealed class RegistrationActivationTests : IDisposable
             Password: password);
 
         var result = await _authService.RegisterAsync(request, "127.0.0.1");
-        Assert.True(result.IsSuccess);
-        Assert.NotEqual(Guid.Empty, result.Data!.ChallengeId);
-        Assert.Single(_emailSender.SentMessages);
+        Assert.False(result.IsSuccess);
+        Assert.Equal("AUTH.EMAIL_EXISTS", result.Error!.Code);
+        Assert.Empty(_emailSender.SentMessages);
     }
 
     [Fact]
@@ -243,7 +239,7 @@ public sealed class RegistrationActivationTests : IDisposable
         _timeProvider.Advance(TimeSpan.FromSeconds(65));
 
         var resendResult = await _authService.ResendRegistrationOtpAsync(
-            new ResendOtpRequestDto(registerResult.Data!.ChallengeId),
+            new ResendOtpRequestDto(registerResult.Data!.ChallengeId, registerResult.Data.ContinuationToken),
             "127.0.0.1");
 
         Assert.True(resendResult.IsSuccess);
@@ -253,7 +249,7 @@ public sealed class RegistrationActivationTests : IDisposable
 
         var verifyResult = await _authService.VerifyRegistrationOtpAsync(new VerifyOtpRequestDto(
             resendResult.Data.ChallengeId,
-            newCode));
+            newCode, resendResult.Data.ContinuationToken));
 
         Assert.True(verifyResult.IsSuccess);
         var account = await _authRepository.GetByEmailAsync("resend@example.com");
@@ -308,6 +304,7 @@ public sealed class RegistrationActivationTests : IDisposable
         public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> ReloadAccountAsync(Account account, CancellationToken cancellationToken = default) => Task.FromResult(repository.Accounts.Contains(account));
         public void Dispose() { }
     }
 
@@ -359,6 +356,12 @@ public sealed class RegistrationActivationTests : IDisposable
         public Task<int> CountOtpChallengesInWindowAsync(string normalizedEmail, DateTimeOffset windowStart, CancellationToken cancellationToken = default)
             => Task.FromResult(Challenges.Count(c => c.NormalizedEmail == normalizedEmail && c.CreatedAt >= windowStart));
 
+        public Task<OtpChallenge?> GetLatestOtpChallengeAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(Challenges.Where(c => c.AccountId == id).OrderByDescending(c => c.CreatedAt).FirstOrDefault());
+        public Task<List<OtpChallenge>> GetActiveOtpChallengesAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(Challenges.Where(c => c.AccountId == id && c.ConsumedAt == null && c.InvalidatedAt == null).ToList());
+        public Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void AddOtpChallenge(OtpChallenge challenge) => Challenges.Add(challenge);
 
         public List<AuthSession> Sessions { get; } = [];

@@ -512,6 +512,7 @@ public sealed class SessionValidationTests : IDisposable
         public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> ReloadAccountAsync(Account account, CancellationToken cancellationToken = default) => Task.FromResult(repository.Accounts.Contains(account));
         public void Dispose() { }
     }
 
@@ -564,6 +565,10 @@ public sealed class SessionValidationTests : IDisposable
         public Task<int> CountOtpChallengesInWindowAsync(string normalizedEmail, DateTimeOffset windowStart, CancellationToken cancellationToken = default)
             => Task.FromResult(Challenges.Count(c => c.NormalizedEmail == normalizedEmail && c.CreatedAt >= windowStart));
 
+        public Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<OtpChallenge?> GetLatestOtpChallengeAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Challenges.Where(c => c.AccountId == id && c.DeliveryStatus != "Failed").OrderByDescending(c => c.CreatedAt).FirstOrDefault());
+        public Task<List<OtpChallenge>> GetActiveOtpChallengesAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Challenges.Where(c => c.AccountId == id && !c.InvalidatedAt.HasValue && !c.ConsumedAt.HasValue).ToList());
         public void AddOtpChallenge(OtpChallenge challenge) => Challenges.Add(challenge);
 
         public Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default)

@@ -35,6 +35,15 @@ services:
       Jwt__Audience: ${JWT_AUDIENCE}
       Jwt__Key: ${JWT_KEY}
       Cors__AllowedOrigins__0: ${CORS_ALLOWED_ORIGIN}
+      ReverseProxy__KnownProxies__0: ${TRUSTED_PROXY_IP:-}
+      Email__Provider: GmailSmtp
+      Email__SmtpHost: ${SMTP_HOST}
+      Email__SmtpPort: ${SMTP_PORT:-587}
+      Email__Security: ${SMTP_SECURITY:-StartTls}
+      Email__Username: ${SMTP_USERNAME}
+      Email__AppPassword: ${SMTP_APP_PASSWORD}
+      Email__FromAddress: ${SMTP_FROM_ADDRESS}
+      Email__FromName: ${SMTP_FROM_NAME:-OCS}
       R2__ServiceUrl: ${R2_SERVICE_URL}
       R2__AccessKeyId: ${R2_ACCESS_KEY_ID}
       R2__SecretAccessKey: ${R2_SECRET_ACCESS_KEY}

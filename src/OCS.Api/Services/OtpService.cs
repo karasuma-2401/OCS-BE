@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OCS.Api.Common;
 using OCS.Api.Configuration;
+using OCS.Api.Consts;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
 using OCS.Api.Interfaces.Services;
@@ -52,294 +53,222 @@ public sealed partial class OtpService : IOtpService
         _secretKeyBytes = Encoding.UTF8.GetBytes(secret);
     }
 
-    public async Task<Result<OtpChallengeResultDto>> IssueRegistrationOtpAsync(
-        Account account,
-        string? clientIp,
-        CancellationToken cancellationToken = default)
+    public Task<Result<OtpChallengeResultDto>> IssueRegistrationOtpAsync(
+        Account account, string? clientIp, CancellationToken cancellationToken = default) =>
+        IssueRegistrationOtpCoreAsync(account, clientIp, null, null, cancellationToken);
+
+    private async Task<Result<OtpChallengeResultDto>> IssueRegistrationOtpCoreAsync(
+        Account account, string? clientIp, Guid? priorChallengeId, string? continuationToken,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(account);
         if (string.IsNullOrWhiteSpace(account.Email) || string.IsNullOrWhiteSpace(account.NormalizedEmail))
-        {
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.Validation(
-                "AUTH.EMAIL_REQUIRED",
-                "Tài khoản chưa có địa chỉ email hợp lệ để nhận mã OTP."));
-        }
+            return Result.Failure<OtpChallengeResultDto>(ApplicationError.Validation("AUTH.EMAIL_REQUIRED", "Tài khoản chưa có email hợp lệ."));
+        if (!await _rateLimiter.AllowIpRequestAsync(clientIp, cancellationToken))
+            return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited("AUTH.RATE_LIMITED", "Vượt quá giới hạn gửi mã OTP."));
 
         var now = _timeProvider.GetUtcNow();
-
-        var recentSends = await _unitOfWork.AuthRepository.CountOtpChallengesInWindowAsync(
-            account.NormalizedEmail,
-            now.AddHours(-1),
-            cancellationToken);
-
-        if (recentSends >= _options.MaxSendsPerEmailPerHour)
-        {
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited(
-                "AUTH.RATE_LIMITED",
-                "Bạn đã yêu cầu gửi mã OTP quá số lần cho phép trong 1 giờ. Vui lòng thử lại sau."));
-        }
-
-        if (!await _rateLimiter.AllowIpRequestAsync(clientIp, cancellationToken))
-        {
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited(
-                "AUTH.RATE_LIMITED",
-                "Vượt quá giới hạn yêu cầu từ địa chỉ IP này. Vui lòng thử lại sau."));
-        }
-
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
-        var continuationToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-
-        var challenge = new OtpChallenge
+        var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+        var challenge = new OtpChallenge();
+        List<OtpChallenge> prior = [];
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
         {
-            Id = Guid.NewGuid(),
-            AccountId = account.Id,
-            Account = account,
-            NormalizedEmail = account.NormalizedEmail,
-            Purpose = "RegistrationActivation",
-            CodeHash = ComputeHmac(code),
-            ContinuationTokenHash = ComputeHmac(continuationToken),
-            CreatedAt = now,
-            ExpiresAt = now.AddMinutes(_options.ExpiryMinutes),
-            ResendAvailableAt = now.AddSeconds(_options.ResendCooldownSeconds),
-            ContinuationExpiresAt = now.AddMinutes(_options.ContinuationExpiryMinutes),
-            FailedAttempts = 0,
-            DeliveryStatus = "Pending"
-        };
+            await _unitOfWork.AuthRepository.LockAccountAsync(account.Id, cancellationToken);
+            if (!await _unitOfWork.ReloadAccountAsync(account, cancellationToken)
+                || account.Status is AccountStatus.Locked or AccountStatus.Deactivated
+                || account.EmailVerifiedAt.HasValue || string.IsNullOrWhiteSpace(account.NormalizedEmail))
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpChallengeResultDto>(ApplicationError.Forbidden("AUTH.ACCOUNT_UNAVAILABLE", "Không thể xác thực tài khoản này."));
+            }
 
-        var emailBody = BuildActivationEmailBody(code, _options.ExpiryMinutes);
-        var emailMessage = new EmailMessage(
-            account.Email,
-            "[OCS] Mã xác thực kích hoạt tài khoản",
-            emailBody,
-            true);
+            var latest = await _unitOfWork.AuthRepository.GetLatestOtpChallengeAsync(account.Id, cancellationToken);
+            if (latest is not null)
+                await _unitOfWork.AuthRepository.ReloadChallengeAsync(latest, cancellationToken);
+            if (priorChallengeId.HasValue && (latest is null || latest.Id != priorChallengeId.Value
+                || latest.ConsumedAt.HasValue || now >= latest.ContinuationExpiresAt
+                || (latest.InvalidatedAt.HasValue && latest.FailedAttempts < _options.MaxFailedAttempts)
+                || !ValidContinuation(latest, continuationToken ?? string.Empty)
+                || !string.Equals(latest.NormalizedEmail, account.NormalizedEmail, StringComparison.Ordinal)))
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpChallengeResultDto>(ApplicationError.NotFound(
+                    "AUTH.CHALLENGE_NOT_FOUND", "Yêu cầu xác thực không tồn tại hoặc đã hết hiệu lực."));
+            }
+            if (latest is not null && latest.ResendAvailableAt > now)
+            {
+                var seconds = Math.Max(1, (int)Math.Ceiling((latest.ResendAvailableAt - now).TotalSeconds));
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited(
+                    "AUTH.RESEND_COOLDOWN", "Vui lòng đợi trước khi yêu cầu mã mới.",
+                    new Dictionary<string, object?> { ["retryAfterSeconds"] = seconds }));
+            }
+            var sends = await _unitOfWork.AuthRepository.CountOtpChallengesInWindowAsync(
+                account.NormalizedEmail, now.AddHours(-1), cancellationToken);
+            if (sends >= _options.MaxSendsPerEmailPerHour)
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited("AUTH.RATE_LIMITED", "Bạn đã yêu cầu quá nhiều mã OTP."));
+            }
 
-        var sendResult = await _emailSender.SendEmailAsync(emailMessage, cancellationToken);
-        if (!sendResult.IsSuccess)
-        {
-            challenge.DeliveryStatus = "Failed";
+            prior = await _unitOfWork.AuthRepository.GetActiveOtpChallengesAsync(account.Id, cancellationToken);
+            foreach (var previous in prior) previous.InvalidatedAt = now;
+            challenge = new OtpChallenge
+            {
+                Id = Guid.NewGuid(),
+                AccountId = account.Id,
+                Account = account,
+                NormalizedEmail = account.NormalizedEmail,
+                Purpose = "RegistrationActivation",
+                CodeHash = ComputeHmac(code),
+                ContinuationTokenHash = ComputeHmac(token),
+                CreatedAt = now,
+                ExpiresAt = now.AddMinutes(_options.ExpiryMinutes),
+                ResendAvailableAt = now.AddSeconds(_options.ResendCooldownSeconds),
+                ContinuationExpiresAt = now.AddMinutes(_options.ContinuationExpiryMinutes),
+                DeliveryStatus = "Pending"
+            };
             _unitOfWork.AuthRepository.AddOtpChallenge(challenge);
+            // Persist reservation, cooldown and invalidation before external delivery.
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return Result.Failure<OtpChallengeResultDto>(sendResult.Error!);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+        }
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+
+        var delivery = await _emailSender.SendEmailAsync(new EmailMessage(
+            account.Email!.Trim(), "[OCS] Mã xác thực kích hoạt tài khoản",
+            BuildActivationEmailBody(code, _options.ExpiryMinutes), true), cancellationToken);
+        if (!delivery.IsSuccess)
+        {
+            await _unitOfWork.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await _unitOfWork.AuthRepository.LockAccountAsync(account.Id, cancellationToken);
+                await _unitOfWork.AuthRepository.ReloadChallengeAsync(challenge, cancellationToken);
+                var latest = await _unitOfWork.AuthRepository.GetLatestOtpChallengeAsync(account.Id, cancellationToken);
+                challenge.DeliveryStatus = "Failed";
+                // Restore the previous code only if no newer request replaced this one.
+                if (latest?.Id == challenge.Id)
+                    foreach (var previous in prior)
+                    {
+                        await _unitOfWork.AuthRepository.ReloadChallengeAsync(previous, cancellationToken);
+                        if (!previous.ConsumedAt.HasValue) previous.InvalidatedAt = null;
+                    }
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            }
+            catch
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                throw;
+            }
+            return Result.Failure<OtpChallengeResultDto>(delivery.Error!);
         }
 
         challenge.DeliveryStatus = "Sent";
         challenge.SentAt = _timeProvider.GetUtcNow();
-        _unitOfWork.AuthRepository.AddOtpChallenge(challenge);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _rateLimiter.RecordIpRequestAsync(clientIp, cancellationToken);
-
         LogOtpIssued(_logger, challenge.Id, account.Id);
-
-        return Result.Success(new OtpChallengeResultDto(
-            challenge.Id,
-            challenge.Purpose,
-            MaskEmail(account.Email),
-            challenge.ExpiresAt,
-            challenge.ResendAvailableAt,
-            continuationToken));
+        return Result.Success(new OtpChallengeResultDto(challenge.Id, challenge.Purpose,
+            MaskEmail(account.Email!.Trim()), challenge.ExpiresAt, challenge.ResendAvailableAt, token));
     }
 
     public async Task<Result<OtpChallengeResultDto>> ResendOtpAsync(
-        Guid challengeId,
-        string? clientIp,
-        CancellationToken cancellationToken = default)
+        Guid challengeId, string continuationToken, string? clientIp, CancellationToken cancellationToken = default)
     {
         var challenge = await _unitOfWork.AuthRepository.GetOtpChallengeByIdAsync(challengeId, cancellationToken);
-        if (challenge is null || challenge.InvalidatedAt != null || challenge.ConsumedAt != null)
-        {
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.NotFound(
-                "AUTH.CHALLENGE_NOT_FOUND",
-                "Yêu cầu xác thực không tồn tại hoặc đã hết hiệu lực."));
-        }
-
         var now = _timeProvider.GetUtcNow();
-        if (now < challenge.ResendAvailableAt)
-        {
-            var retryAfter = (int)Math.Ceiling((challenge.ResendAvailableAt - now).TotalSeconds);
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited(
-                "AUTH.RESEND_COOLDOWN",
-                $"Vui lòng đợi {retryAfter} giây trước khi yêu cầu gửi lại mã OTP."));
-        }
-
-        var recentSends = await _unitOfWork.AuthRepository.CountOtpChallengesInWindowAsync(
-            challenge.NormalizedEmail,
-            now.AddHours(-1),
-            cancellationToken);
-
-        if (recentSends >= _options.MaxSendsPerEmailPerHour)
-        {
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited(
-                "AUTH.RATE_LIMITED",
-                "Bạn đã yêu cầu gửi mã OTP quá số lần cho phép trong 1 giờ. Vui lòng thử lại sau."));
-        }
-
-        if (!await _rateLimiter.AllowIpRequestAsync(clientIp, cancellationToken))
-        {
-            return Result.Failure<OtpChallengeResultDto>(ApplicationError.RateLimited(
-                "AUTH.RATE_LIMITED",
-                "Vượt quá giới hạn yêu cầu từ địa chỉ IP này. Vui lòng thử lại sau."));
-        }
-
-        // Invalidate old challenge
-        challenge.InvalidatedAt = now;
-
-        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString(CultureInfo.InvariantCulture);
-        var continuationToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-
-        var newChallenge = new OtpChallenge
-        {
-            Id = Guid.NewGuid(),
-            AccountId = challenge.AccountId,
-            Account = challenge.Account,
-            NormalizedEmail = challenge.NormalizedEmail,
-            Purpose = challenge.Purpose,
-            CodeHash = ComputeHmac(code),
-            ContinuationTokenHash = ComputeHmac(continuationToken),
-            CreatedAt = now,
-            ExpiresAt = now.AddMinutes(_options.ExpiryMinutes),
-            ResendAvailableAt = now.AddSeconds(_options.ResendCooldownSeconds),
-            ContinuationExpiresAt = now.AddMinutes(_options.ContinuationExpiryMinutes),
-            FailedAttempts = 0,
-            DeliveryStatus = "Pending"
-        };
-
-        var emailBody = BuildActivationEmailBody(code, _options.ExpiryMinutes);
-        var email = challenge.Account.Email ?? challenge.NormalizedEmail;
-        var emailMessage = new EmailMessage(
-            email,
-            "[OCS] Mã xác thực kích hoạt tài khoản",
-            emailBody,
-            true);
-
-        var sendResult = await _emailSender.SendEmailAsync(emailMessage, cancellationToken);
-        if (!sendResult.IsSuccess)
-        {
-            newChallenge.DeliveryStatus = "Failed";
-            _unitOfWork.AuthRepository.AddOtpChallenge(newChallenge);
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return Result.Failure<OtpChallengeResultDto>(sendResult.Error!);
-        }
-
-        newChallenge.DeliveryStatus = "Sent";
-        newChallenge.SentAt = _timeProvider.GetUtcNow();
-        _unitOfWork.AuthRepository.AddOtpChallenge(newChallenge);
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-        await _rateLimiter.RecordIpRequestAsync(clientIp, cancellationToken);
-
-        LogOtpResent(_logger, newChallenge.Id, challengeId);
-
-        return Result.Success(new OtpChallengeResultDto(
-            newChallenge.Id,
-            newChallenge.Purpose,
-            MaskEmail(email),
-            newChallenge.ExpiresAt,
-            newChallenge.ResendAvailableAt,
-            continuationToken));
+        if (challenge is null || challenge.ConsumedAt.HasValue
+            || (challenge.InvalidatedAt.HasValue && challenge.FailedAttempts < _options.MaxFailedAttempts)
+            || now >= challenge.ContinuationExpiresAt || !ValidContinuation(challenge, continuationToken))
+            return Result.Failure<OtpChallengeResultDto>(ApplicationError.NotFound(
+                "AUTH.CHALLENGE_NOT_FOUND", "Yêu cầu xác thực không tồn tại hoặc đã hết hiệu lực."));
+        if (!string.Equals(challenge.NormalizedEmail, challenge.Account.NormalizedEmail, StringComparison.Ordinal))
+            return Result.Failure<OtpChallengeResultDto>(ApplicationError.Forbidden("AUTH.ACCOUNT_UNAVAILABLE", "Email tài khoản đã thay đổi."));
+        return await IssueRegistrationOtpCoreAsync(challenge.Account, clientIp, challengeId, continuationToken, cancellationToken);
     }
 
     public async Task<Result<OtpVerificationResultDto>> VerifyOtpAsync(
-        Guid challengeId,
-        string code,
-        string purpose,
+        Guid challengeId, string code, string purpose, string continuationToken,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
-                "AUTH.OTP_INVALID",
-                "Mã OTP không được để trống."));
-        }
-
-        var challenge = await _unitOfWork.AuthRepository.GetOtpChallengeByIdAsync(challengeId, cancellationToken);
-        if (challenge is null)
-        {
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.NotFound(
-                "AUTH.CHALLENGE_NOT_FOUND",
-                "Yêu cầu xác thực không tồn tại."));
-        }
-
-        if (challenge.ConsumedAt != null)
-        {
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
-                "AUTH.CHALLENGE_NOT_FOUND",
-                "Mã OTP đã được sử dụng."));
-        }
-
-        if (challenge.InvalidatedAt != null)
-        {
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
-                "AUTH.OTP_EXPIRED",
-                "Mã OTP đã hết hiệu lực do yêu cầu mới hoặc quá số lần thử."));
-        }
-
-        if (!string.Equals(challenge.Purpose, purpose, StringComparison.Ordinal))
-        {
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
-                "AUTH.OTP_INVALID",
-                "Mục đích xác thực không hợp lệ."));
-        }
-
-        var now = _timeProvider.GetUtcNow();
-        if (now > challenge.ExpiresAt)
-        {
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
-                "AUTH.OTP_EXPIRED",
-                "Mã OTP đã hết hạn. Vui lòng yêu cầu mã mới."));
-        }
-
-        if (challenge.FailedAttempts >= _options.MaxFailedAttempts)
-        {
-            challenge.InvalidatedAt = now;
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
-                "AUTH.OTP_ATTEMPTS_EXCEEDED",
-                "Bạn đã nhập sai mã OTP quá 5 lần. Vui lòng yêu cầu mã mới."));
-        }
-
-        var actualHash = ComputeHmac(code.Trim());
-        var codeMatches = FixedTimeEquals(actualHash, challenge.CodeHash);
-
-        if (!codeMatches)
-        {
-            challenge.FailedAttempts++;
-            if (challenge.FailedAttempts >= _options.MaxFailedAttempts)
-            {
-                challenge.InvalidatedAt = now;
-            }
-
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-
-            var attemptsLeft = Math.Max(0, _options.MaxFailedAttempts - challenge.FailedAttempts);
-            var (errCode, msg) = attemptsLeft > 0
-                ? ("AUTH.OTP_INVALID", $"Mã OTP không chính xác. Bạn còn {attemptsLeft} lần thử.")
-                : ("AUTH.OTP_ATTEMPTS_EXCEEDED", "Bạn đã nhập sai mã OTP quá 5 lần. Yêu cầu đã bị hủy, vui lòng lấy mã mới.");
-
-            return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(errCode, msg));
-        }
-
-        // Code matches -> mark consumed
-        challenge.ConsumedAt = now;
-
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
         try
         {
+            var challenge = await _unitOfWork.AuthRepository.GetOtpChallengeByIdAsync(challengeId, cancellationToken);
+            if (challenge is null)
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpVerificationResultDto>(ApplicationError.NotFound("AUTH.CHALLENGE_NOT_FOUND", "Yêu cầu xác thực không tồn tại."));
+            }
+            await _unitOfWork.AuthRepository.LockAccountAsync(challenge.AccountId, cancellationToken);
+            if (!await _unitOfWork.ReloadAccountAsync(challenge.Account, cancellationToken))
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpVerificationResultDto>(ApplicationError.NotFound("AUTH.CHALLENGE_NOT_FOUND", "Yêu cầu xác thực không tồn tại."));
+            }
+            await _unitOfWork.AuthRepository.ReloadChallengeAsync(challenge, cancellationToken);
+            var account = challenge.Account;
+            var now = _timeProvider.GetUtcNow();
+            if (challenge.ConsumedAt.HasValue || challenge.InvalidatedAt.HasValue || now >= challenge.ContinuationExpiresAt
+                || !ValidContinuation(challenge, continuationToken) || !string.Equals(challenge.Purpose, purpose, StringComparison.Ordinal))
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpVerificationResultDto>(ApplicationError.NotFound("AUTH.CHALLENGE_NOT_FOUND", "Yêu cầu xác thực không còn hiệu lực."));
+            }
+            if (account.Status is AccountStatus.Locked or AccountStatus.Deactivated || account.EmailVerifiedAt.HasValue
+                || !string.Equals(account.NormalizedEmail, challenge.NormalizedEmail, StringComparison.Ordinal))
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpVerificationResultDto>(ApplicationError.Forbidden("AUTH.ACCOUNT_UNAVAILABLE", "Không thể xác thực tài khoản này."));
+            }
+            if (now >= challenge.ExpiresAt || challenge.DeliveryStatus != "Sent")
+            {
+                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation("AUTH.OTP_EXPIRED", "Mã OTP đã hết hạn hoặc chưa được gửi."));
+            }
+            if (!FixedTimeEquals(ComputeHmac(code), challenge.CodeHash))
+            {
+                challenge.FailedAttempts++;
+                if (challenge.FailedAttempts >= _options.MaxFailedAttempts) challenge.InvalidatedAt = now;
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                await _unitOfWork.CommitTransactionAsync(cancellationToken);
+                var remaining = Math.Max(0, _options.MaxFailedAttempts - challenge.FailedAttempts);
+                return Result.Failure<OtpVerificationResultDto>(ApplicationError.Validation(
+                    remaining == 0 ? "AUTH.OTP_ATTEMPTS_EXCEEDED" : "AUTH.OTP_INVALID",
+                    remaining == 0 ? "Mã đã bị khóa. Vui lòng yêu cầu mã mới." : $"Mã OTP không chính xác. Bạn còn {remaining} lần thử."));
+            }
+            challenge.ConsumedAt = now;
+            account.Status = AccountStatus.Active;
+            account.EmailVerifiedAt = now;
+            account.ActivatedAt ??= now;
+            // Challenge consumption and account activation are committed together.
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            LogOtpVerified(_logger, challengeId, challenge.AccountId);
+            return Result.Success(new OtpVerificationResultDto(account.Id, challenge.NormalizedEmail, now));
         }
         catch (DbUpdateConcurrencyException)
         {
-            LogConcurrentOtpConsumption(_logger, challengeId);
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
             return Result.Failure<OtpVerificationResultDto>(ApplicationError.Conflict(
-                "AUTH.OTP_CONCURRENT_CONSUMPTION",
-                "Yêu cầu xác thực đang được xử lý hoặc đã hoàn tất."));
+                "AUTH.OTP_CONCURRENT_CONSUMPTION", "Yêu cầu đang được xử lý hoặc đã hoàn tất."));
         }
-
-        LogOtpVerified(_logger, challengeId, challenge.AccountId);
-
-        return Result.Success(new OtpVerificationResultDto(
-            challenge.AccountId,
-            challenge.NormalizedEmail,
-            now));
+        catch
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
     }
 
+    private bool ValidContinuation(OtpChallenge challenge, string token) =>
+        !string.IsNullOrWhiteSpace(token) && FixedTimeEquals(ComputeHmac(token), challenge.ContinuationTokenHash);
     private string ComputeHmac(string data)
     {
         using var hmac = new HMACSHA256(_secretKeyBytes);

@@ -2,7 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using Microsoft.Extensions.Options;
 using OCS.Api.Common;
+using OCS.Api.Configuration;
 using OCS.Api.Consts;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
@@ -23,6 +25,7 @@ public sealed partial class AuthService : IAuthService
     private readonly ILoginRateLimiter _loginRateLimiter;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AuthService> _logger;
+    private readonly AuthOptions _options;
 
     public AuthService(
         IUnitOfWork unitOfWork,
@@ -31,7 +34,8 @@ public sealed partial class AuthService : IAuthService
         IOtpService otpService,
         ILoginRateLimiter? loginRateLimiter = null,
         TimeProvider? timeProvider = null,
-        ILogger<AuthService>? logger = null)
+        ILogger<AuthService>? logger = null,
+        IOptions<AuthOptions>? options = null)
     {
         _unitOfWork = unitOfWork;
         _passwordHasher = passwordHasher;
@@ -40,6 +44,7 @@ public sealed partial class AuthService : IAuthService
         _loginRateLimiter = loginRateLimiter ?? new NullLoginRateLimiter();
         _timeProvider = timeProvider ?? TimeProvider.System;
         _logger = logger ?? NullLogger<AuthService>.Instance;
+        _options = options?.Value ?? new AuthOptions();
     }
 
     public async Task<Result<LoginResultDto>> LoginAsync(
@@ -48,215 +53,134 @@ public sealed partial class AuthService : IAuthService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-
-        var normalizedEmail = EmailIdentity.Normalize(request.Email);
-        if (normalizedEmail is null)
-        {
-            _passwordHasher.VerifyPassword(request.Password, DummyPasswordHash);
-            await _loginRateLimiter.RecordFailedAttemptAsync(clientIp, cancellationToken);
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Unauthorized("AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
-        }
-
         if (!await _loginRateLimiter.AllowIpRequestAsync(clientIp, cancellationToken))
         {
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.RateLimited("AUTH.RATE_LIMITED", "Quá nhiều lần thử đăng nhập từ địa chỉ IP của bạn. Vui lòng thử lại sau."));
+            return Result.Failure<LoginResultDto>(ApplicationError.RateLimited(
+                "AUTH.RATE_LIMITED", "Quá nhiều lần thử đăng nhập. Vui lòng thử lại sau."));
         }
 
-        var account = await _unitOfWork.AuthRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
+        var normalizedEmail = EmailIdentity.Normalize(request.Email);
+        var account = normalizedEmail is null ? null :
+            await _unitOfWork.AuthRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
         if (account is null)
         {
             _passwordHasher.VerifyPassword(request.Password, DummyPasswordHash);
-            await _loginRateLimiter.RecordFailedAttemptAsync(clientIp, cancellationToken);
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Unauthorized("AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
+            return Result.Failure<LoginResultDto>(ApplicationError.Unauthorized(
+                "AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
         }
 
-        var now = _timeProvider.GetUtcNow();
-
-        // 1. Check active temporary lockout
-        if (account.LockoutEndAt.HasValue)
+        // xmin detects lost updates. Reload and recompute instead of silently dropping attempts.
+        for (var attempt = 0; attempt < 32; attempt++)
         {
-            if (account.LockoutEndAt.Value > now)
+            var now = _timeProvider.GetUtcNow();
+            if (account.LockoutEndAt > now)
             {
-                await _loginRateLimiter.RecordFailedAttemptAsync(clientIp, cancellationToken);
-
-                var remainingSeconds = Math.Max(1, (int)Math.Ceiling((account.LockoutEndAt.Value - now).TotalSeconds));
-                var extensions = new Dictionary<string, object?>
-                {
-                    ["lockoutEndAt"] = account.LockoutEndAt.Value,
-                    ["retryAfterSeconds"] = remainingSeconds
-                };
-
-                return Result.Failure<LoginResultDto>(
-                    ApplicationError.Forbidden(
-                        "AUTH.ACCOUNT_LOCKED",
-                        "Tài khoản tạm thời bị khóa do nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.",
-                        extensions));
+                var seconds = Math.Max(1, (int)Math.Ceiling((account.LockoutEndAt.Value - now).TotalSeconds));
+                return Result.Failure<LoginResultDto>(ApplicationError.Forbidden(
+                    "AUTH.ACCOUNT_LOCKED", "Tài khoản tạm thời bị khóa. Vui lòng thử lại sau.",
+                    new Dictionary<string, object?> { ["lockoutEndAt"] = account.LockoutEndAt, ["retryAfterSeconds"] = seconds }));
+            }
+            if (account.LockoutEndAt.HasValue)
+            {
+                account.LockoutEndAt = null;
+                account.FailedLoginAttempts = 0;
             }
 
-            // Lockout period has elapsed: clear temporary lockout window
-            account.LockoutEndAt = null;
-            account.FailedLoginAttempts = 0;
-        }
-
-        // 2. Verify password
-        var isPasswordValid = _passwordHasher.VerifyPassword(request.Password, account.PasswordHash ?? string.Empty);
-        if (!isPasswordValid)
-        {
-            account.FailedLoginAttempts++;
-            await _loginRateLimiter.RecordFailedAttemptAsync(clientIp, cancellationToken);
-
-            if (account.FailedLoginAttempts >= 5)
+            if (!_passwordHasher.VerifyPassword(request.Password, account.PasswordHash ?? string.Empty))
             {
-                account.FailedLoginAttempts = 5;
-                account.LockoutEndAt = now.AddMinutes(15);
-
-                try
+                account.FailedLoginAttempts++;
+                if (account.FailedLoginAttempts >= _options.MaxFailedLoginAttempts)
                 {
-                    await _unitOfWork.SaveChangesAsync(cancellationToken);
+                    account.FailedLoginAttempts = _options.MaxFailedLoginAttempts;
+                    account.LockoutEndAt = now.AddMinutes(_options.LockoutDurationMinutes);
                 }
+
+                try { await _unitOfWork.SaveChangesAsync(cancellationToken); }
                 catch (DbUpdateConcurrencyException)
                 {
-                    // Concurrent update; lockout state still holds
+                    if (!await _unitOfWork.ReloadAccountAsync(account, cancellationToken))
+                        return Result.Failure<LoginResultDto>(ApplicationError.Unauthorized("AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
+                    continue;
                 }
 
-                LogAccountLockedOut(_logger, account.Id, account.LockoutEndAt.Value);
-
-                var remainingSeconds = Math.Max(1, (int)Math.Ceiling((account.LockoutEndAt.Value - now).TotalSeconds));
-                var extensions = new Dictionary<string, object?>
+                if (account.LockoutEndAt.HasValue)
                 {
-                    ["lockoutEndAt"] = account.LockoutEndAt.Value,
-                    ["retryAfterSeconds"] = remainingSeconds
-                };
-
-                return Result.Failure<LoginResultDto>(
-                    ApplicationError.Forbidden(
-                        "AUTH.ACCOUNT_LOCKED",
-                        "Tài khoản tạm thời bị khóa do nhập sai mật khẩu nhiều lần. Vui lòng thử lại sau.",
-                        extensions));
+                    LogAccountLockedOut(_logger, account.Id, account.LockoutEndAt.Value);
+                    return Result.Failure<LoginResultDto>(ApplicationError.Forbidden(
+                        "AUTH.ACCOUNT_LOCKED", "Tài khoản tạm thời bị khóa. Vui lòng thử lại sau.",
+                        new Dictionary<string, object?>
+                        {
+                            ["lockoutEndAt"] = account.LockoutEndAt,
+                            ["retryAfterSeconds"] = (int)TimeSpan.FromMinutes(_options.LockoutDurationMinutes).TotalSeconds
+                        }));
+                }
+                return Result.Failure<LoginResultDto>(ApplicationError.Unauthorized(
+                    "AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
             }
 
-            try
-            {
-                await _unitOfWork.SaveChangesAsync(cancellationToken);
-            }
+            if (account.Status == AccountStatus.Deactivated)
+                return Result.Failure<LoginResultDto>(ApplicationError.Forbidden("AUTH.ACCOUNT_DEACTIVATED", "Tài khoản đã bị vô hiệu hóa."));
+            if (account.Status == AccountStatus.Locked)
+                return Result.Failure<LoginResultDto>(ApplicationError.Forbidden("AUTH.ACCOUNT_LOCKED", "Tài khoản đã bị khóa bởi quản trị viên."));
+
+            account.FailedLoginAttempts = 0;
+            account.LockoutEndAt = null;
+            try { await _unitOfWork.SaveChangesAsync(cancellationToken); }
             catch (DbUpdateConcurrencyException)
             {
-                // Handled safely
+                if (!await _unitOfWork.ReloadAccountAsync(account, cancellationToken))
+                    return Result.Failure<LoginResultDto>(ApplicationError.Unauthorized("AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
+                continue;
             }
 
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Unauthorized("AUTH.INVALID_CREDENTIALS", "Email hoặc mật khẩu không chính xác."));
-        }
-
-        // 3. Password verified successfully: check account status
-        if (account.Status == AccountStatus.Deactivated)
-        {
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Forbidden("AUTH.ACCOUNT_DEACTIVATED", "Tài khoản đã bị vô hiệu hóa."));
-        }
-
-        if (account.Status == AccountStatus.Locked)
-        {
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Forbidden("AUTH.ACCOUNT_LOCKED", "Tài khoản đã bị khóa bởi quản trị viên."));
-        }
-
-        if (account.Status == AccountStatus.PendingActivation)
-        {
-            var otpResult = await _otpService.IssueRegistrationOtpAsync(account, clientIp, cancellationToken);
-            if (!otpResult.IsSuccess)
+            if (account.Status == AccountStatus.PendingActivation || account.EmailVerifiedAt is null)
             {
-                return Result.Failure<LoginResultDto>(otpResult.Error!);
+                var otp = await _otpService.IssueRegistrationOtpAsync(account, clientIp, cancellationToken);
+                if (!otp.IsSuccess) return Result.Failure<LoginResultDto>(otp.Error!);
+                return Result.Failure<LoginResultDto>(ApplicationError.Forbidden(
+                    "AUTH.ACCOUNT_PENDING_ACTIVATION", "Tài khoản chưa được xác thực email.",
+                    new Dictionary<string, object?>
+                    {
+                        ["challengeId"] = otp.Data!.ChallengeId,
+                        ["purpose"] = otp.Data.Purpose,
+                        ["maskedDestination"] = otp.Data.MaskedDestination,
+                        ["expiresAt"] = otp.Data.ExpiresAt,
+                        ["resendAvailableAt"] = otp.Data.ResendAvailableAt,
+                        ["continuationToken"] = otp.Data.ContinuationToken
+                    }));
             }
 
-            var extensions = new Dictionary<string, object?>
+            var roles = account.AccountRoles.Select(ar => ar.Role?.Code)
+                .Where(code => !string.IsNullOrWhiteSpace(code)).Select(code => code!)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (roles.Count == 0)
             {
-                ["challengeId"] = otpResult.Data!.ChallengeId,
-                ["purpose"] = otpResult.Data.Purpose,
-                ["maskedDestination"] = otpResult.Data.MaskedDestination,
-                ["expiresAt"] = otpResult.Data.ExpiresAt,
-                ["resendAvailableAt"] = otpResult.Data.ResendAvailableAt,
-                ["email"] = otpResult.Data.MaskedDestination
-            };
+                LogAccountMissingRoles(_logger, account.Id);
+                return Result.Failure<LoginResultDto>(ApplicationError.Forbidden("AUTH.ROLE_NOT_CONFIGURED", "Tài khoản chưa được cấu hình quyền hợp lệ."));
+            }
 
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Forbidden(
-                    "AUTH.ACCOUNT_PENDING_ACTIVATION",
-                    "Tài khoản chưa được kích hoạt.",
-                    extensions));
-        }
-
-        // 4. Active account: reset counters
-        account.FailedLoginAttempts = 0;
-        account.LockoutEndAt = null;
-
-        try
-        {
+            var sessionId = Guid.NewGuid();
+            var expiresIn = _options.SessionExpirySeconds;
+            var expiresAt = now.AddSeconds(expiresIn);
+            _unitOfWork.AuthRepository.AddSession(new AuthSession
+            {
+                Id = sessionId,
+                AccountId = account.Id,
+                Account = account,
+                CreatedAt = now,
+                ExpiresAt = expiresAt
+            });
+            var token = _tokenService.GenerateAccessToken(account, roles, sessionId);
+            // Never return success when session persistence fails.
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Handled safely
-        }
-
-        // 5. Extract role codes
-        var roles = account.AccountRoles
-            .Select(ar => ar.Role?.Code)
-            .Where(code => !string.IsNullOrWhiteSpace(code))
-            .Select(code => code!)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (roles.Count == 0)
-        {
-            LogAccountMissingRoles(_logger, account.Id);
-            return Result.Failure<LoginResultDto>(
-                ApplicationError.Forbidden("AUTH.ROLE_NOT_CONFIGURED", "Tài khoản chưa được cấu hình quyền hợp lệ trong hệ thống."));
+            var user = new UserDto(account.Id, account.FullName, account.Email, account.PhoneNumber, roles, account.Username);
+            LogLoginSuccess(_logger, account.Id);
+            return Result.Success(new LoginResultDto(token, expiresIn, expiresAt, user));
         }
 
-        // 6. Generate session & access token
-        var sessionId = Guid.NewGuid();
-        const int expiresIn = 28800; // 8 hours
-        var expiresAt = now.AddSeconds(expiresIn);
-
-        var session = new AuthSession
-        {
-            Id = sessionId,
-            AccountId = account.Id,
-            Account = account,
-            CreatedAt = now,
-            ExpiresAt = expiresAt,
-            RevokedAt = null
-        };
-        _unitOfWork.AuthRepository.AddSession(session);
-
-        var token = _tokenService.GenerateAccessToken(account, roles, sessionId);
-
-        try
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // Handled safely
-        }
-
-        var userDto = new UserDto(
-            account.Id,
-            account.FullName,
-            account.Email,
-            account.PhoneNumber,
-            roles,
-            account.Username);
-
-        LogLoginSuccess(_logger, account.Id);
-
-        return Result.Success(new LoginResultDto(token, expiresIn, expiresAt, userDto));
+        return Result.Failure<LoginResultDto>(ApplicationError.ServiceUnavailable(
+            "AUTH.CONCURRENT_REQUESTS", "Không thể xử lý đăng nhập đồng thời. Vui lòng thử lại."));
     }
-
     public async Task<Result<OtpChallengeResponseDto>> RegisterAsync(
         RegisterRequestDto request,
         string? clientIp = null,
@@ -274,38 +198,11 @@ public sealed partial class AuthService : IAuthService
         var existingAccount = await _unitOfWork.AuthRepository.GetByEmailAsync(normalizedEmail, cancellationToken);
         if (existingAccount is not null)
         {
-            if (existingAccount.Status != AccountStatus.PendingActivation)
-            {
-                // Active, locked or deactivated account: reject registration with uniform conflict error
-                return Result.Failure<OtpChallengeResponseDto>(ApplicationError.Conflict(
-                    "AUTH.EMAIL_EXISTS",
-                    "Không thể hoàn tất đăng ký với địa chỉ email này. Nếu bạn đã có tài khoản, vui lòng đăng nhập hoặc yêu cầu hỗ trợ."));
-            }
-
-            // Account is PendingActivation: verify password before allowing challenge continuation
-            if (!_passwordHasher.VerifyPassword(request.Password, existingAccount.PasswordHash ?? string.Empty))
-            {
-                // Different password provided for existing pending account: reject to prevent takeover
-                return Result.Failure<OtpChallengeResponseDto>(ApplicationError.Conflict(
-                    "AUTH.EMAIL_EXISTS",
-                    "Không thể hoàn tất đăng ký với địa chỉ email này. Nếu bạn đã có tài khoản, vui lòng đăng nhập hoặc yêu cầu hỗ trợ."));
-            }
-
-            // Same credentials for pending account: re-issue registration OTP
-            var reIssueResult = await _otpService.IssueRegistrationOtpAsync(existingAccount, clientIp, cancellationToken);
-            if (!reIssueResult.IsSuccess)
-            {
-                return Result.Failure<OtpChallengeResponseDto>(reIssueResult.Error!);
-            }
-
-            return Result.Success(new OtpChallengeResponseDto(
-                reIssueResult.Data!.ChallengeId,
-                reIssueResult.Data.Purpose,
-                reIssueResult.Data.MaskedDestination,
-                reIssueResult.Data.ExpiresAt,
-                reIssueResult.Data.ResendAvailableAt));
+            // A public registration endpoint must not become a password oracle for pending accounts.
+            return Result.Failure<OtpChallengeResponseDto>(ApplicationError.Conflict(
+                "AUTH.EMAIL_EXISTS",
+                "Không thể hoàn tất đăng ký với địa chỉ email này. Nếu bạn đã có tài khoản, vui lòng đăng nhập hoặc yêu cầu hỗ trợ."));
         }
-
         var accountId = Guid.NewGuid();
         var hashedPassword = _passwordHasher.HashPassword(request.Password);
 
@@ -359,7 +256,8 @@ public sealed partial class AuthService : IAuthService
             otpResult.Data.Purpose,
             otpResult.Data.MaskedDestination,
             otpResult.Data.ExpiresAt,
-            otpResult.Data.ResendAvailableAt));
+            otpResult.Data.ResendAvailableAt,
+            otpResult.Data.ContinuationToken));
     }
 
     public async Task<Result<VerifyOtpResponseDto>> VerifyRegistrationOtpAsync(
@@ -367,49 +265,12 @@ public sealed partial class AuthService : IAuthService
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-
-        var verifyResult = await _otpService.VerifyOtpAsync(
-            request.ChallengeId,
-            request.Code,
-            "RegistrationActivation",
-            cancellationToken);
-
-        if (!verifyResult.IsSuccess)
-        {
-            return Result.Failure<VerifyOtpResponseDto>(verifyResult.Error!);
-        }
-
-        var account = await _unitOfWork.AuthRepository.GetByIdAsync(verifyResult.Data!.AccountId, cancellationToken);
-        if (account is null)
-        {
-            return Result.Failure<VerifyOtpResponseDto>(ApplicationError.NotFound(
-                "AUTH.ACCOUNT_NOT_FOUND",
-                "Tài khoản không tồn tại."));
-        }
-
-        // Activate account atomically; phone verification is never asserted by email OTP
-        account.Status = AccountStatus.Active;
-        account.EmailVerifiedAt = verifyResult.Data.VerifiedAt;
-        account.ActivatedAt = verifyResult.Data.VerifiedAt;
-        account.FailedLoginAttempts = 0;
-        account.LockoutEndAt = null;
-
-        try
-        {
-            await _unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            return Result.Failure<VerifyOtpResponseDto>(ApplicationError.Conflict(
-                "AUTH.CONCURRENT_ACTIVATION",
-                "Tài khoản đang được kích hoạt bởi một yêu cầu khác."));
-        }
-
+        var result = await _otpService.VerifyOtpAsync(
+            request.ChallengeId, request.Code, "RegistrationActivation", request.ContinuationToken, cancellationToken);
+        if (!result.IsSuccess) return Result.Failure<VerifyOtpResponseDto>(result.Error!);
         return Result.Success(new VerifyOtpResponseDto(
-            "Kích hoạt tài khoản thành công. Vui lòng đăng nhập để tiếp tục.",
-            verifyResult.Data.VerifiedAt));
+            "Kích hoạt tài khoản thành công. Vui lòng đăng nhập để tiếp tục.", result.Data!.VerifiedAt));
     }
-
     public async Task<Result<OtpChallengeResponseDto>> ResendRegistrationOtpAsync(
         ResendOtpRequestDto request,
         string? clientIp = null,
@@ -417,7 +278,7 @@ public sealed partial class AuthService : IAuthService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var resendResult = await _otpService.ResendOtpAsync(request.ChallengeId, clientIp, cancellationToken);
+        var resendResult = await _otpService.ResendOtpAsync(request.ChallengeId, request.ContinuationToken, clientIp, cancellationToken);
         if (!resendResult.IsSuccess)
         {
             return Result.Failure<OtpChallengeResponseDto>(resendResult.Error!);
@@ -428,7 +289,8 @@ public sealed partial class AuthService : IAuthService
             resendResult.Data.Purpose,
             resendResult.Data.MaskedDestination,
             resendResult.Data.ExpiresAt,
-            resendResult.Data.ResendAvailableAt));
+            resendResult.Data.ResendAvailableAt,
+            resendResult.Data.ContinuationToken));
     }
 
     public async Task<Result<CurrentUserResponseDto>> GetCurrentUserAsync(

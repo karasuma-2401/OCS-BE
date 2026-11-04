@@ -50,6 +50,15 @@ jobs:
     needs: format
     runs-on: ubuntu-latest
     services:
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
       postgres:
         image: postgres:18-alpine
         env:
@@ -83,6 +92,7 @@ jobs:
       - name: Run tests
         env:
           OCS_TEST_POSTGRES: "Host=localhost;Port=5432;Database=postgres;Username=ocs_test;Password=ocs-ci-only;Pooling=false"
+          OCS_TEST_REDIS: "localhost:6379,abortConnect=true"
         run: dotnet test OCS.sln --configuration Release --no-build --logger "trx;LogFileName=results.trx"
 
       - name: Upload failed test results

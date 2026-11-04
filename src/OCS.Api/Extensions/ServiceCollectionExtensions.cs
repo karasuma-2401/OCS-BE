@@ -1,6 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Text.Json;
+using System.Net;
+using System.Security.Claims;
 using Amazon.Runtime;
 using Amazon.S3;
 using Hangfire;
@@ -8,6 +10,7 @@ using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
@@ -25,6 +28,7 @@ using OCS.Api.Repositories;
 using OCS.Api.Services;
 using OCS.Api.Storage;
 using Scalar.AspNetCore;
+using StackExchange.Redis;
 
 namespace OCS.Api.Extensions;
 
@@ -40,6 +44,22 @@ public static class ServiceCollectionExtensions
         services.AddApiConventions();
         services.AddOpenApi();
         services.AddHttpContextAccessor();
+        services.Configure<ForwardedHeadersOptions>(options =>
+        {
+            var addresses = (configuration.GetSection("ReverseProxy:KnownProxies").Get<string[]>() ?? [])
+                .Where(address => !string.IsNullOrWhiteSpace(address)).ToArray();
+            // An empty known-proxy list means the middleware would trust everyone, so disable it.
+            options.ForwardedHeaders = addresses.Length == 0
+                ? ForwardedHeaders.None
+                : ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
+            foreach (var address in addresses)
+            {
+                if (!IPAddress.TryParse(address, out var proxy)) throw new InvalidOperationException("Invalid trusted reverse proxy address.");
+                options.KnownProxies.Add(proxy);
+            }
+        });
         services.AddScoped<SystemAuditContext>();
         services.AddScoped<IAuditContext, HttpAuditContext>();
 
@@ -198,10 +218,21 @@ public static class ServiceCollectionExtensions
                             return;
                         }
 
-                        if (session.Account is null || session.Account.Status != AccountStatus.Active)
+                        var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                        if (session.Account is null || session.Account.Status != AccountStatus.Active
+                            || session.Account.EmailVerifiedAt is null || !Guid.TryParse(subject, out var accountId)
+                            || accountId != session.AccountId)
                         {
                             context.Fail("Account is inactive or locked.");
                             return;
+                        }
+
+                        // Authorization must use current roles, not claims from a stale JWT.
+                        if (context.Principal?.Identity is ClaimsIdentity identity)
+                        {
+                            foreach (var role in identity.FindAll(ClaimTypes.Role).ToList()) identity.RemoveClaim(role);
+                            foreach (var role in session.Account.AccountRoles.Select(x => x.Role?.Code).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
+                                identity.AddClaim(new Claim(ClaimTypes.Role, role!));
                         }
                     },
                     OnChallenge = async context =>
@@ -279,6 +310,7 @@ public static class ServiceCollectionExtensions
             options.Configuration = redisConnection;
             options.InstanceName = "ocs:";
         });
+        services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConnection));
         return services;
     }
 
@@ -339,6 +371,7 @@ public static class ServiceCollectionExtensions
 
     public static WebApplication UseOcsApi(this WebApplication app)
     {
+        app.UseForwardedHeaders();
         app.UseExceptionHandler();
         app.UseStatusCodePages(async context =>
         {

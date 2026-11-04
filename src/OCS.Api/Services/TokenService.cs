@@ -21,7 +21,8 @@ public sealed class TokenService(
     {
         var issuer = configuration["Jwt:Issuer"] ?? "OCS";
         var audience = configuration["Jwt:Audience"] ?? "OCS";
-        var key = configuration["Jwt:Key"] ?? "ocs-super-secret-key-that-is-at-least-32-bytes-long";
+        var key = string.IsNullOrWhiteSpace(configuration["Jwt:Key"])
+            ? "ocs-super-secret-key-that-is-at-least-32-bytes-long" : configuration["Jwt:Key"]!;
 
         var sid = (sessionId ?? Guid.NewGuid()).ToString();
 

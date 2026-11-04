@@ -49,10 +49,14 @@ jobs:
           R2_SERVICE_URL: ${{ secrets.R2_SERVICE_URL }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          SMTP_FROM_ADDRESS: ${{ secrets.SMTP_FROM_ADDRESS }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || 'ocs' }}
         run: |
           missing=0
-          for name in VPS_HOST VPS_SSH_KEY NEON_CONNECTION_STRING JWT_KEY CORS_ALLOWED_ORIGIN REDIS_PASSWORD R2_SERVICE_URL R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
+          for name in VPS_HOST VPS_SSH_KEY NEON_CONNECTION_STRING JWT_KEY CORS_ALLOWED_ORIGIN REDIS_PASSWORD R2_SERVICE_URL R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME SMTP_HOST SMTP_USERNAME SMTP_APP_PASSWORD SMTP_FROM_ADDRESS; do
             if [ -z "${!name}" ]; then
               echo "::error ::Missing required GitHub Actions secret: ${name}"
               missing=1
@@ -88,13 +92,18 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME || 'ocs' }}
           R2_PUBLIC_BASE_URL: ${{ vars.R2_PUBLIC_BASE_URL }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          SMTP_FROM_ADDRESS: ${{ secrets.SMTP_FROM_ADDRESS }}
           COMPOSE_FILE_BASE64: ${{ steps.compose.outputs.payload }}
+          TRUSTED_PROXY_IP: ${{ vars.TRUSTED_PROXY_IP }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USERNAME || 'ubuntu' }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: DEPLOY_TAG,REPOSITORY_OWNER,GHCR_TOKEN,GHCR_USERNAME,NEON_CONNECTION_STRING,JWT_KEY,JWT_ISSUER,JWT_AUDIENCE,CORS_ALLOWED_ORIGIN,REDIS_PASSWORD,R2_SERVICE_URL,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,R2_PUBLIC_BASE_URL,COMPOSE_FILE_BASE64
+          envs: DEPLOY_TAG,REPOSITORY_OWNER,GHCR_TOKEN,GHCR_USERNAME,NEON_CONNECTION_STRING,JWT_KEY,JWT_ISSUER,JWT_AUDIENCE,CORS_ALLOWED_ORIGIN,REDIS_PASSWORD,R2_SERVICE_URL,R2_ACCESS_KEY_ID,R2_SECRET_ACCESS_KEY,R2_BUCKET_NAME,R2_PUBLIC_BASE_URL,SMTP_HOST,SMTP_USERNAME,SMTP_APP_PASSWORD,SMTP_FROM_ADDRESS,COMPOSE_FILE_BASE64,TRUSTED_PROXY_IP
           script: |
             set -eu
 
@@ -110,6 +119,7 @@ jobs:
 
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
             docker compose -f compose.prod.yaml pull
+            docker compose -f compose.prod.yaml run --rm --no-deps api --check-migrations
             docker compose -f compose.prod.yaml up -d --remove-orphans
             docker image prune -f
 

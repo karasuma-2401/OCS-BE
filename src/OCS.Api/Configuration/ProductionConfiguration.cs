@@ -45,5 +45,8 @@ public static class ProductionConfiguration
                 throw new InvalidOperationException($"Production requires configuration '{name}'.");
             }
         }
+
+        if (string.IsNullOrWhiteSpace(configuration["Redis:ConnectionString"]))
+            throw new InvalidOperationException("Production requires Redis:ConnectionString for distributed rate limits.");
     }
 }

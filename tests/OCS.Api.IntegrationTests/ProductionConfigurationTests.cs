@@ -16,6 +16,7 @@ public sealed class ProductionConfigurationTests
             ["Jwt:Issuer"] = "ocs-api",
             ["Jwt:Audience"] = "ocs-clients",
             ["Jwt:Key"] = "at-least-32-bytes-long-super-secret-key-12345",
+            ["Redis:ConnectionString"] = "localhost:6379",
             ["Email:Provider"] = "GmailSmtp",
             ["Email:SmtpHost"] = "smtp.gmail.com",
             ["Email:Username"] = "user@example.com",

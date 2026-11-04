@@ -15,6 +15,10 @@ public interface IAuthRepository
 
     Task<OtpChallenge?> GetOtpChallengeByIdAsync(Guid challengeId, CancellationToken cancellationToken = default);
     Task<int> CountOtpChallengesInWindowAsync(string normalizedEmail, DateTimeOffset windowStart, CancellationToken cancellationToken = default);
+    Task<OtpChallenge?> GetLatestOtpChallengeAsync(Guid accountId, CancellationToken cancellationToken = default);
+    Task<List<OtpChallenge>> GetActiveOtpChallengesAsync(Guid accountId, CancellationToken cancellationToken = default);
+    Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default);
+    Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default);
     void AddOtpChallenge(OtpChallenge challenge);
 
     Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default);

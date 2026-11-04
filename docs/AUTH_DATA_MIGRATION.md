@@ -1,6 +1,6 @@
 # CP1: chuyển dữ liệu email đăng nhập
 
-CP1 chỉ bổ sung persistence. Login/register HTTP vẫn dùng contract cũ cho đến CP3–CP5; chưa có gửi OTP, xác thực mã hay cookie session runtime. Không triển khai code đang chuyển tiếp này riêng lên Production như thể luồng auth mới đã hoàn tất.
+Runbook này mô tả migration dữ liệu danh tính và các bước triển khai an toàn cho luồng đăng nhập email, OTP và cookie session hiện tại.
 
 ## Schema và thứ tự triển khai
 
@@ -36,6 +36,8 @@ Không lưu mapping email/tài khoản vào repo. Preflight không sửa dữ li
 ## OTP/session và concurrency
 
 - OTP chỉ lưu CodeHash và ContinuationTokenHash, email đã chuẩn hóa, purpose, số lần sai, TTL, thời điểm resend, consumed/invalidated và trạng thái gửi Pending/Sent/Failed. Không có cột mã OTP hay continuation token plaintext.
+- Verify và resend đều yêu cầu continuation token hiện hành. Sau 5 lần nhập sai, token vẫn cho phép xin mã mới sau cooldown; mã cũ không còn dùng được. Credential hết hạn sau 15 phút cần đăng nhập lại để bắt đầu challenge mới.
+- Mật khẩu BCrypt trên 72 byte UTF-8 bị từ chối, kể cả ở login. Người dùng cũ đã dùng mật khẩu dài hơn cần được hỗ trợ đặt lại qua quy trình quản trị xác minh danh tính; hiện chưa có public password reset.
 - Session lưu Id làm claim `sid`, AccountId, thời hạn tuyệt đối và RevokedAt; không lưu JWT/refresh token plaintext. Cookie/JWT, gửi SMTP và thuật toán HMAC triển khai ở CP2–CP5.
 - Account, OtpChallenge, AuthSession dùng PostgreSQL `xmin` làm concurrency token (`uint` + `IsRowVersion`). DDL Npgsql không tạo/xóa cột hệ thống xmin dù scaffold có khai báo column operation. Xem [Npgsql concurrency mapping](https://www.npgsql.org/efcore/release-notes/7.0.html).
 - CP2–CP5 phải xử lý `DbUpdateConcurrencyException` bằng retry có giới hạn/đọc lại trạng thái, và verify + consume + activate cùng transaction. Mapping concurrency ở CP1 không tự hoàn tất toàn bộ nghiệp vụ chống replay.

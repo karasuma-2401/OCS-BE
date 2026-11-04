@@ -3,54 +3,22 @@ using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Options;
 using OCS.Api.Configuration;
 using OCS.Api.Interfaces.Services;
+using StackExchange.Redis;
 
 namespace OCS.Api.Services;
 
 public sealed class OtpRateLimiter(
     IDistributedCache cache,
-    IOptions<OtpOptions> otpOptions) : IOtpRateLimiter
+    IOptions<OtpOptions> otpOptions,
+    IConnectionMultiplexer? redis = null) : IOtpRateLimiter
 {
     private static string GetCacheKey(string clientIp) => $"ocs:ratelimit:otp:ip:{clientIp}";
 
     public async Task<bool> AllowIpRequestAsync(string? clientIp, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(clientIp))
-        {
-            return true;
-        }
-
-        var key = GetCacheKey(clientIp.Trim());
-        var cached = await cache.GetStringAsync(key, cancellationToken);
-        if (cached is not null && int.TryParse(cached, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
-        {
-            return count < otpOptions.Value.MaxSendsPerIpPerHour;
-        }
-
-        return true;
+        cancellationToken.ThrowIfCancellationRequested();
+        return await AtomicRateCounter.AcquireAsync(cache, redis, GetCacheKey(clientIp?.Trim() ?? "unknown"), otpOptions.Value.MaxSendsPerIpPerHour);
     }
 
-    public async Task RecordIpRequestAsync(string? clientIp, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(clientIp))
-        {
-            return;
-        }
-
-        var key = GetCacheKey(clientIp.Trim());
-        var cached = await cache.GetStringAsync(key, cancellationToken);
-        var newCount = 1;
-        if (cached is not null && int.TryParse(cached, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count))
-        {
-            newCount = count + 1;
-        }
-
-        await cache.SetStringAsync(
-            key,
-            newCount.ToString(CultureInfo.InvariantCulture),
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
-            },
-            cancellationToken);
-    }
+    public Task RecordIpRequestAsync(string? clientIp, CancellationToken cancellationToken = default) => Task.CompletedTask;
 }

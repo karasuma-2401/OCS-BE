@@ -9,15 +9,7 @@ public static class HttpContextExtensions
             return null;
         }
 
-        if (context.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
-        {
-            var first = forwardedFor.ToString().Split(',')[0].Trim();
-            if (!string.IsNullOrWhiteSpace(first))
-            {
-                return first;
-            }
-        }
-
+        // ForwardedHeadersMiddleware may replace this address only for configured trusted proxies.
         return context.Connection.RemoteIpAddress?.ToString();
     }
 }

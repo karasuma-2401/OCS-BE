@@ -4,7 +4,7 @@ namespace OCS.Api.Models.Auth;
 
 public record LoginRequestDto(
     [Required, EmailAddress, MaxLength(254)] string Email,
-    [Required] string Password);
+    [Required, BcryptPassword(ErrorMessage = "Mật khẩu không được vượt quá 72 byte UTF-8.")] string Password);
 
 public sealed record LoginResponseDto(
     int ExpiresIn,
@@ -21,7 +21,7 @@ public record RegisterRequestDto(
     [Required, MaxLength(150)] string FullName,
     [Required, EmailAddress, MaxLength(254)] string Email,
     [Required, Phone, MaxLength(20)] string PhoneNumber,
-    [Required, RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$",
+    [Required, BcryptPassword(ErrorMessage = "Mật khẩu không được vượt quá 72 byte UTF-8."), RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$",
         ErrorMessage = "Mật khẩu phải từ 8 đến 70 ký tự và chứa ít nhất một chữ hoa, một chữ thường và một chữ số hoặc ký tự đặc biệt.")]
     string Password);
 
@@ -30,18 +30,21 @@ public sealed record OtpChallengeResponseDto(
     string Purpose,
     string MaskedDestination,
     DateTimeOffset ExpiresAt,
-    DateTimeOffset ResendAvailableAt);
+    DateTimeOffset ResendAvailableAt,
+    string ContinuationToken);
 
 public sealed record VerifyOtpRequestDto(
     [Required] Guid ChallengeId,
-    [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "Mã OTP phải gồm 6 chữ số.")] string Code);
+    [Required, RegularExpression(@"^[0-9]{6}$", ErrorMessage = "Mã OTP phải gồm 6 chữ số.")] string Code,
+    [Required] string ContinuationToken);
 
 public sealed record VerifyOtpResponseDto(
     string Message,
     DateTimeOffset VerifiedAt);
 
 public sealed record ResendOtpRequestDto(
-    [Required] Guid ChallengeId);
+    [Required] Guid ChallengeId,
+    [Required] string ContinuationToken);
 
 public record UserDto(
     Guid Id,

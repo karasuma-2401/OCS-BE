@@ -13,6 +13,7 @@ public interface IOtpService
 
     Task<Result<OtpChallengeResultDto>> ResendOtpAsync(
         Guid challengeId,
+        string continuationToken,
         string? clientIp,
         CancellationToken cancellationToken = default);
 
@@ -20,6 +21,7 @@ public interface IOtpService
         Guid challengeId,
         string code,
         string purpose,
+        string continuationToken,
         CancellationToken cancellationToken = default);
 }
 

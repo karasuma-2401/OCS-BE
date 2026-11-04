@@ -121,7 +121,7 @@ public sealed class OtpServiceTests : IDisposable
         var verifyResult = await _otpService.VerifyOtpAsync(
             issueResult.Data!.ChallengeId,
             code,
-            "RegistrationActivation");
+            "RegistrationActivation", issueResult.Data!.ContinuationToken);
 
         Assert.True(verifyResult.IsSuccess);
         Assert.Equal(account.Id, verifyResult.Data!.AccountId);
@@ -141,7 +141,7 @@ public sealed class OtpServiceTests : IDisposable
         var verifyResult = await _otpService.VerifyOtpAsync(
             issueResult.Data!.ChallengeId,
             "000000",
-            "RegistrationActivation");
+            "RegistrationActivation", issueResult.Data!.ContinuationToken);
 
         Assert.False(verifyResult.IsSuccess);
         Assert.Equal("AUTH.OTP_INVALID", verifyResult.Error!.Code);
@@ -162,12 +162,12 @@ public sealed class OtpServiceTests : IDisposable
 
         for (var i = 1; i <= 4; i++)
         {
-            var res = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, "000000", "RegistrationActivation");
+            var res = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, "000000", "RegistrationActivation", issueResult.Data!.ContinuationToken);
             Assert.False(res.IsSuccess);
             Assert.Equal("AUTH.OTP_INVALID", res.Error!.Code);
         }
 
-        var fifthRes = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, "000000", "RegistrationActivation");
+        var fifthRes = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, "000000", "RegistrationActivation", issueResult.Data!.ContinuationToken);
         Assert.False(fifthRes.IsSuccess);
         Assert.Equal("AUTH.OTP_ATTEMPTS_EXCEEDED", fifthRes.Error!.Code);
 
@@ -176,9 +176,9 @@ public sealed class OtpServiceTests : IDisposable
         Assert.NotNull(challenge.InvalidatedAt);
 
         // Subsequent verify attempts are also rejected
-        var sixthRes = await _otpService.VerifyOtpAsync(issueResult.Data.ChallengeId, "000000", "RegistrationActivation");
+        var sixthRes = await _otpService.VerifyOtpAsync(issueResult.Data.ChallengeId, "000000", "RegistrationActivation", issueResult.Data!.ContinuationToken);
         Assert.False(sixthRes.IsSuccess);
-        Assert.Equal("AUTH.OTP_EXPIRED", sixthRes.Error!.Code);
+        Assert.Equal("AUTH.CHALLENGE_NOT_FOUND", sixthRes.Error!.Code);
     }
 
     [Fact]
@@ -195,7 +195,7 @@ public sealed class OtpServiceTests : IDisposable
         var verifyResult = await _otpService.VerifyOtpAsync(
             issueResult.Data!.ChallengeId,
             code,
-            "RegistrationActivation");
+            "RegistrationActivation", issueResult.Data!.ContinuationToken);
 
         Assert.False(verifyResult.IsSuccess);
         Assert.Equal("AUTH.OTP_EXPIRED", verifyResult.Error!.Code);
@@ -211,12 +211,12 @@ public sealed class OtpServiceTests : IDisposable
         // Advance only 30 seconds
         _timeProvider.Advance(TimeSpan.FromSeconds(30));
 
-        var resendResult = await _otpService.ResendOtpAsync(issueResult.Data!.ChallengeId, "127.0.0.1");
+        var resendResult = await _otpService.ResendOtpAsync(issueResult.Data!.ChallengeId, issueResult.Data.ContinuationToken, "127.0.0.1");
 
         Assert.False(resendResult.IsSuccess);
         Assert.Equal("AUTH.RESEND_COOLDOWN", resendResult.Error!.Code);
         Assert.Equal(ErrorType.RateLimited, resendResult.Error.Type);
-        Assert.Contains("30 giây", resendResult.Error.Message, StringComparison.Ordinal);
+        Assert.Equal(30, resendResult.Error.Extensions!["retryAfterSeconds"]);
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public sealed class OtpServiceTests : IDisposable
         // Advance past 60s cooldown
         _timeProvider.Advance(TimeSpan.FromSeconds(65));
 
-        var resendResult = await _otpService.ResendOtpAsync(issueResult.Data!.ChallengeId, "127.0.0.1");
+        var resendResult = await _otpService.ResendOtpAsync(issueResult.Data!.ChallengeId, issueResult.Data.ContinuationToken, "127.0.0.1");
         Assert.True(resendResult.IsSuccess);
         Assert.NotEqual(issueResult.Data.ChallengeId, resendResult.Data!.ChallengeId);
 
@@ -246,15 +246,15 @@ public sealed class OtpServiceTests : IDisposable
         var verifyOldResult = await _otpService.VerifyOtpAsync(
             issueResult.Data.ChallengeId,
             oldCode,
-            "RegistrationActivation");
+            "RegistrationActivation", issueResult.Data!.ContinuationToken);
         Assert.False(verifyOldResult.IsSuccess);
-        Assert.Equal("AUTH.OTP_EXPIRED", verifyOldResult.Error!.Code);
+        Assert.Equal("AUTH.CHALLENGE_NOT_FOUND", verifyOldResult.Error!.Code);
 
         // Verifying new challenge with new code succeeds
         var verifyNewResult = await _otpService.VerifyOtpAsync(
             resendResult.Data.ChallengeId,
             newCode,
-            "RegistrationActivation");
+            "RegistrationActivation", resendResult.Data.ContinuationToken);
         Assert.True(verifyNewResult.IsSuccess);
     }
 
@@ -266,11 +266,11 @@ public sealed class OtpServiceTests : IDisposable
         var issueResult = await _otpService.IssueRegistrationOtpAsync(account, "127.0.0.1");
         var code = ExtractOtpCodeFromEmail();
 
-        var first = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, code, "RegistrationActivation");
+        var first = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, code, "RegistrationActivation", issueResult.Data!.ContinuationToken);
         Assert.True(first.IsSuccess);
 
         // Replay attempt
-        var second = await _otpService.VerifyOtpAsync(issueResult.Data.ChallengeId, code, "RegistrationActivation");
+        var second = await _otpService.VerifyOtpAsync(issueResult.Data.ChallengeId, code, "RegistrationActivation", issueResult.Data!.ContinuationToken);
         Assert.False(second.IsSuccess);
         Assert.Equal("AUTH.CHALLENGE_NOT_FOUND", second.Error!.Code);
     }
@@ -283,9 +283,9 @@ public sealed class OtpServiceTests : IDisposable
         var issueResult = await _otpService.IssueRegistrationOtpAsync(account, "127.0.0.1");
         var code = ExtractOtpCodeFromEmail();
 
-        var result = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, code, "PasswordReset");
+        var result = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, code, "PasswordReset", issueResult.Data!.ContinuationToken);
         Assert.False(result.IsSuccess);
-        Assert.Equal("AUTH.OTP_INVALID", result.Error!.Code);
+        Assert.Equal("AUTH.CHALLENGE_NOT_FOUND", result.Error!.Code);
     }
 
     [Fact]
@@ -357,6 +357,24 @@ public sealed class OtpServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task FailedResendRestoresPreviousCode()
+    {
+        var account = CreateTestAccount();
+        _authRepository.AddAccount(account);
+        var first = await _otpService.IssueRegistrationOtpAsync(account, "127.0.0.1");
+        var code = ExtractOtpCodeFromEmail();
+        _timeProvider.Advance(TimeSpan.FromSeconds(65));
+        var failingService = new OtpService(_unitOfWork, new FailingEmailSender(), _rateLimiter,
+            _otpOptions, _configuration, _timeProvider, NullLogger<OtpService>.Instance);
+
+        var failed = await failingService.ResendOtpAsync(first.Data!.ChallengeId, first.Data.ContinuationToken, "127.0.0.1");
+        Assert.Equal("AUTH.DELIVERY_UNAVAILABLE", failed.Error!.Code);
+        var verification = await _otpService.VerifyOtpAsync(first.Data.ChallengeId, code,
+            "RegistrationActivation", first.Data.ContinuationToken);
+        Assert.True(verification.IsSuccess);
+    }
+
+    [Fact]
     public async Task ParallelVerificationHandlesConcurrencyCleanly()
     {
         var account = CreateTestAccount();
@@ -367,7 +385,7 @@ public sealed class OtpServiceTests : IDisposable
         // Configure unit of work to simulate concurrency conflict on second call
         _unitOfWork.SimulateConcurrencyExceptionOnNextSave = true;
 
-        var result = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, code, "RegistrationActivation");
+        var result = await _otpService.VerifyOtpAsync(issueResult.Data!.ChallengeId, code, "RegistrationActivation", issueResult.Data!.ContinuationToken);
         Assert.False(result.IsSuccess);
         Assert.Equal("AUTH.OTP_CONCURRENT_CONSUMPTION", result.Error!.Code);
         Assert.Equal(ErrorType.Conflict, result.Error.Type);
@@ -400,6 +418,7 @@ public sealed class OtpServiceTests : IDisposable
         public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> ReloadAccountAsync(Account account, CancellationToken cancellationToken = default) => Task.FromResult(repository.Accounts.Contains(account));
         public void Dispose() { }
     }
 
@@ -452,6 +471,12 @@ public sealed class OtpServiceTests : IDisposable
         public Task<int> CountOtpChallengesInWindowAsync(string normalizedEmail, DateTimeOffset windowStart, CancellationToken cancellationToken = default)
             => Task.FromResult(Challenges.Count(c => c.NormalizedEmail == normalizedEmail && c.CreatedAt >= windowStart));
 
+        public Task<OtpChallenge?> GetLatestOtpChallengeAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(Challenges.Where(c => c.AccountId == id && c.DeliveryStatus != "Failed").OrderByDescending(c => c.CreatedAt).FirstOrDefault());
+        public Task<List<OtpChallenge>> GetActiveOtpChallengesAsync(Guid id, CancellationToken cancellationToken = default)
+            => Task.FromResult(Challenges.Where(c => c.AccountId == id && c.ConsumedAt == null && c.InvalidatedAt == null).ToList());
+        public Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public void AddOtpChallenge(OtpChallenge challenge) => Challenges.Add(challenge);
 
         public List<AuthSession> Sessions { get; } = [];
