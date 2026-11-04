@@ -7,7 +7,7 @@ using OCS.Api.Models.Notifications;
 
 namespace OCS.Api.Services;
 
-public sealed class AppointmentReminderJob(
+public sealed partial class AppointmentReminderJob(
     IUnitOfWork unitOfWork,
     INotificationService notificationService,
     ILogger<AppointmentReminderJob> logger) : IAppointmentReminderJob
@@ -19,7 +19,7 @@ public sealed class AppointmentReminderJob(
         var windowStart = TimeOnly.FromDateTime(now);
         var windowEnd = TimeOnly.FromDateTime(now.AddHours(2));
 
-        logger.LogInformation("AppointmentReminderJob triggered at {Now} for appointments between {Start} and {End}", now, windowStart, windowEnd);
+        LogJobTriggered(logger, now, windowStart, windowEnd);
 
         var upcomingAppointments = await unitOfWork.AppointmentRepository.GetUpcomingAppointmentsForReminderAsync(
             today,
@@ -29,7 +29,7 @@ public sealed class AppointmentReminderJob(
 
         if (upcomingAppointments.Count == 0)
         {
-            logger.LogInformation("No pending appointments need reminders at this time.");
+            LogNoPendingAppointments(logger);
             return;
         }
 
@@ -63,7 +63,16 @@ public sealed class AppointmentReminderJob(
         if (sentCount > 0)
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            logger.LogInformation("Successfully sent reminders for {SentCount} appointments.", sentCount);
+            LogRemindersSent(logger, sentCount);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "AppointmentReminderJob triggered at {Now} for appointments between {Start} and {End}")]
+    private static partial void LogJobTriggered(ILogger logger, DateTime now, TimeOnly start, TimeOnly end);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "No pending appointments need reminders at this time.")]
+    private static partial void LogNoPendingAppointments(ILogger logger);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Successfully sent reminders for {SentCount} appointments.")]
+    private static partial void LogRemindersSent(ILogger logger, int sentCount);
 }
