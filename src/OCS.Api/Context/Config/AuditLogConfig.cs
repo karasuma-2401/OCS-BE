@@ -8,16 +8,16 @@ public sealed class AuditLogConfig : IEntityTypeConfiguration<AuditLog>
 {
     public void Configure(EntityTypeBuilder<AuditLog> builder)
     {
-        builder.ToTable("NHATKYHETHONG", table =>
+        builder.ToTable("AuditLogs", table =>
         {
             table.HasCheckConstraint(
-                "CK_NHATKYHETHONG_ActorType",
+                "CK_AuditLogs_ActorType",
                 """
                 "ActorType" IN ('User', 'System', 'Anonymous')
                 """);
 
             table.HasCheckConstraint(
-                "CK_NHATKYHETHONG_UserActor",
+                "CK_AuditLogs_UserActor",
                 """
                 "ActorType" <> 'User'
                 OR "ActorAccountId" IS NOT NULL

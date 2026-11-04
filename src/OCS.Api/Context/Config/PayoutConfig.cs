@@ -8,11 +8,11 @@ public sealed class PayoutConfig : IEntityTypeConfiguration<Payout>
 {
     public void Configure(EntityTypeBuilder<Payout> builder)
     {
-        builder.ToTable("PHIEUGIAINGAN", table =>
+        builder.ToTable("Payouts", table =>
         {
-            table.HasCheckConstraint("CK_PHIEUGIAINGAN_Total", "\"TotalAmount\" >= 0");
+            table.HasCheckConstraint("CK_Payouts_Total", "\"TotalAmount\" >= 0");
             table.HasCheckConstraint(
-                "CK_PHIEUGIAINGAN_Status",
+                "CK_Payouts_Status",
                 "\"Status\" IN ('Pending', 'Transferred', 'Completed')");
         });
 

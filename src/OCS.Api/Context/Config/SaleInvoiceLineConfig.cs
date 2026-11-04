@@ -8,8 +8,8 @@ public sealed class SaleInvoiceLineConfig : IEntityTypeConfiguration<SaleInvoice
 {
     public void Configure(EntityTypeBuilder<SaleInvoiceLine> builder)
     {
-        builder.ToTable("CT_HOADON", table =>
-            table.HasCheckConstraint("CK_CT_HOADON_SalePrice", "\"SalePrice\" >= 0"));
+        builder.ToTable("SaleInvoiceLines", table =>
+            table.HasCheckConstraint("CK_SaleInvoiceLines_SalePrice", "\"SalePrice\" >= 0"));
 
         builder.HasKey(x => new { x.SaleInvoiceId, x.ProductId });
         builder.Property(x => x.SalePrice).HasPrecision(18, 2);

@@ -22,6 +22,8 @@ public static class ResultExtensions
             ErrorType.Conflict => StatusCodes.Status409Conflict,
             ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
             ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+            ErrorType.RateLimited => StatusCodes.Status429TooManyRequests,
+            ErrorType.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status500InternalServerError
         };
 
@@ -32,6 +34,13 @@ public static class ResultExtensions
         };
         problem.Extensions["code"] = error.Code;
         problem.Extensions["traceId"] = Activity.Current?.Id;
+        if (error.Extensions is not null)
+        {
+            foreach (var (key, value) in error.Extensions)
+            {
+                problem.Extensions[key] = value;
+            }
+        }
 
         return new ObjectResult(problem) { StatusCode = status };
     }
@@ -53,13 +62,29 @@ public static class ResultExtensions
             ErrorType.Conflict => StatusCodes.Status409Conflict,
             ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
             ErrorType.Forbidden => StatusCodes.Status403Forbidden,
+            ErrorType.RateLimited => StatusCodes.Status429TooManyRequests,
+            ErrorType.ServiceUnavailable => StatusCodes.Status503ServiceUnavailable,
             _ => StatusCodes.Status500InternalServerError
         };
+
+        if (error.Extensions is not null
+            && error.Extensions.TryGetValue("retryAfterSeconds", out var retryAfter)
+            && retryAfter is not null)
+        {
+            controller.Response.Headers.RetryAfter = retryAfter.ToString();
+        }
 
         var response = controller.Problem(statusCode: status, title: error.Message);
         var problem = (ProblemDetails)response.Value!;
         problem.Extensions["code"] = error.Code;
         problem.Extensions["traceId"] = Activity.Current?.Id ?? controller.HttpContext.TraceIdentifier;
+        if (error.Extensions is not null)
+        {
+            foreach (var (key, value) in error.Extensions)
+            {
+                problem.Extensions[key] = value;
+            }
+        }
         return response;
     }
 }

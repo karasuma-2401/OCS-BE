@@ -21,7 +21,7 @@ public sealed class ApiContractTests
         .WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
-            builder.ConfigureLogging(logging => logging.AddConsole());
+            builder.ConfigureLogging(logging => logging.ClearProviders().AddConsole());
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
@@ -85,6 +85,7 @@ public sealed class ApiContractTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Production");
+            builder.ConfigureLogging(logging => logging.ClearProviders().AddConsole());
             builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
                 new Dictionary<string, string?> { ["ConnectionStrings:DefaultConnection"] = "", ["Jwt:Key"] = "" }));
         });

@@ -5,10 +5,7 @@ namespace OCS.Api.Entities;
 
 public sealed class Account : BaseEntity
 {
-    // AUTH TODO: Extend this aggregate only with authentication identity state:
-    // normalized phone/email/username lookup values and EmailVerifiedAt. Keep password hashing,
-    // OTP delivery, JWT, session lookup and HTTP concerns outside Domain. Email proof must never
-    // set PhoneVerifiedAt. Preserve Id and business-history relations for every legacy account.
+    // Email verification does not prove phone ownership. Preserve legacy account IDs and history.
     public AccountType AccountType { get; set; }
 
     public string FullName { get; set; } = string.Empty;
@@ -18,6 +15,17 @@ public sealed class Account : BaseEntity
     public string? Username { get; set; }
 
     public string? Email { get; set; }
+
+    public string? NormalizedEmail { get; private set; }
+
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
+
+    public int FailedLoginAttempts { get; set; }
+
+    public DateTimeOffset? LockoutEndAt { get; set; }
+
+    // Npgsql maps this concurrency token to PostgreSQL's system xmin column.
+    public uint Version { get; private set; }
 
     public string? IdentityNumber { get; set; }
 

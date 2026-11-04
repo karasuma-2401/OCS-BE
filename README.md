@@ -15,12 +15,21 @@ Các tài liệu dưới đây được chuyển đổi và chuẩn hóa từ B�
 | [DataModel.md](docs/DataModel.md) | Mô hình dữ liệu theo báo cáo và mức độ hiện thực trong EF Core. |
 | [DatabaseScript.txt](docs/DatabaseScript.txt) | SQL PostgreSQL được sinh từ các EF Core migration hiện có. |
 | [API_CONTRACT.md](docs/API_CONTRACT.md) | Hợp đồng HTTP duy nhất: endpoint đang công bố và quy ước mở rộng API. |
+| [AUTH_DATA_MIGRATION.md](docs/AUTH_DATA_MIGRATION.md) | CP1: preflight email cũ, migration OTP/session, test PostgreSQL và xử lý xung đột. |
 
 ## Tình trạng hiện thực
 
 Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, danh mục, lịch hẹn, hợp đồng ký gửi, thu mua đứt, sản phẩm và lịch sử trạng thái. Hệ thống vận hành 100% online qua Web API và React Frontend; các cơ chế offline SQLite đã được loại bỏ hoàn toàn.
 
 ## Công nghệ
+
+Đăng nhập Email + Mật khẩu, đăng ký với OTP email, cookie HttpOnly (`ocs_session`), phiên server (`AuthSession`) và bảo vệ CSRF (`X-XSRF-TOKEN`). Đăng ký trả lỗi khi email đã tồn tại, vì vậy endpoint này vẫn có thể tiết lộ email đã đăng ký.
+
+Local: đặt cấu hình theo `.env.example` trong `.env` bị Git bỏ qua; khi chạy môi trường `Development`, API tự nạp file và ưu tiên biến môi trường đã có. Không đưa App Password vào source, log hoặc Git. Cần cấu hình đúng `Email__Username`, `Email__AppPassword` và `Email__FromAddress` để gửi Gmail thật.
+
+Production: cấu hình các GitHub Secrets `SMTP_USERNAME`, `SMTP_APP_PASSWORD`, `SMTP_FROM_ADDRESS`, cùng các secrets triển khai hiện có; `SMTP_HOST` là GitHub variable tùy chọn, mặc định `smtp.gmail.com`. `.env` trên máy phát triển không tự được đưa lên GitHub/VPS. Triển khai kiểm tra migration còn thiếu trước khi khởi động phiên bản mới, nhưng không tự áp migration: thực hiện preflight và migration theo [runbook](docs/AUTH_DATA_MIGRATION.md). Redis là bắt buộc để giới hạn tần suất thống nhất giữa các instance. Khi có reverse proxy, đặt GitHub variable `TRUSTED_PROXY_IP` bằng IP proxy tin cậy mà API nhìn thấy (hoặc cấu hình `ReverseProxy__KnownProxies__0`, `__1`, ...); không tin `X-Forwarded-For` từ nguồn bất kỳ. Thiếu cấu hình này, API giới hạn theo IP proxy nên nhiều người dùng có thể dùng chung hạn mức.
+
+Mật khẩu vượt quá 72 byte UTF-8 không được chấp nhận vì giới hạn BCrypt. Tài khoản cũ từng dùng mật khẩu dài hơn cần được hỗ trợ đặt lại qua quy trình quản trị được xác minh; chưa có chức năng tự khôi phục mật khẩu.
 
 - .NET 10 / ASP.NET Core Web API
 - Entity Framework Core + Neon PostgreSQL
@@ -83,6 +92,10 @@ Scalar API reference: `http://localhost:5204/scalar/v1` khi chạy ở Developme
 Cloudflare R2 là dịch vụ bên ngoài Docker; API local dùng bucket R2 được cấu hình trong `.env`.
 
 ## Kiểm tra chất lượng
+
+Để chạy cả test migration/concurrency auth, đặt `OCS_TEST_POSTGRES` tới PostgreSQL test riêng có quyền CREATE DATABASE. Test tạo/xóa database `ocs_auth_test_<guid>`; không dùng connection string vận hành. Nếu thiếu biến, các test PostgreSQL được báo skip. CI cung cấp service PostgreSQL riêng cho bộ test này.
+
+Để kiểm thử rate limit với Redis thật, đặt `OCS_TEST_REDIS` tới Redis test riêng (ví dụ `localhost:6379,abortConnect=true`). Test chỉ tạo và xóa các key có tên ngẫu nhiên của riêng nó; nếu thiếu biến, test Redis sẽ được báo skip. CI chạy các test này bằng Redis service riêng.
 
 ```powershell
 dotnet format OCS.sln --verify-no-changes

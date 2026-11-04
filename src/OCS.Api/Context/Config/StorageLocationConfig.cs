@@ -8,7 +8,7 @@ public sealed class StorageLocationConfig : IEntityTypeConfiguration<StorageLoca
 {
     public void Configure(EntityTypeBuilder<StorageLocation> builder)
     {
-        builder.ToTable("KHOLUU");
+        builder.ToTable("StorageLocations");
 
         builder.HasKey(x => x.Id);
 

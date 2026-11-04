@@ -8,10 +8,10 @@ public sealed class ExpiryProcessingConfig : IEntityTypeConfiguration<ExpiryProc
 {
     public void Configure(EntityTypeBuilder<ExpiryProcessing> builder)
     {
-        builder.ToTable("PHIEUXULYHETHAN", table =>
+        builder.ToTable("ExpiryProcessings", table =>
         {
             table.HasCheckConstraint(
-                "CK_PHIEUXULYHETHAN_Enums",
+                "CK_ExpiryProcessings_Enums",
                 "\"Type\" IN ('Donate', 'Return') " +
                 "AND \"Status\" IN ('Pending', 'Completed', 'OverdueDonated')");
         });

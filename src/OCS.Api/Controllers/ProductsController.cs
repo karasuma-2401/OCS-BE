@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using OCS.Api.Common;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
@@ -32,6 +33,7 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Manager,Staff")]
     public async Task<IActionResult> Create([FromBody] CreateProductDto dto, CancellationToken cancellationToken)
     {
         var result = await productService.CreateAsync(dto, cancellationToken);

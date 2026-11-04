@@ -12,21 +12,21 @@ public sealed class ProductStatusHistoryConfig : IEntityTypeConfiguration<Produc
         // Values come only from the application enum, never from user-supplied SQL.
         var allowedStatuses = string.Join(", ", Enum.GetNames<ProductStatus>().Select(status => $"'{status}'"));
 
-        builder.ToTable("LICHSUTRANGTHAISP", table =>
+        builder.ToTable("ProductStatusHistories", table =>
         {
             table.HasCheckConstraint(
-                "CK_LICHSUTRANGTHAISP_DifferentStatus",
+                "CK_ProductStatusHistories_DifferentStatus",
                 """
                 "PreviousStatus" IS NULL
                 OR "PreviousStatus" <> "NewStatus"
                 """);
 
             table.HasCheckConstraint(
-                "CK_LICHSUTRANGTHAISP_NewStatus",
+                "CK_ProductStatusHistories_NewStatus",
                 $"\"NewStatus\" IN ({allowedStatuses})");
 
             table.HasCheckConstraint(
-                "CK_LICHSUTRANGTHAISP_PreviousStatus",
+                "CK_ProductStatusHistories_PreviousStatus",
                 $"\"PreviousStatus\" IS NULL OR \"PreviousStatus\" IN ({allowedStatuses})");
         });
 

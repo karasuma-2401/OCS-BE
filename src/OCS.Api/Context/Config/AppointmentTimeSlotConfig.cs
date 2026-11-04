@@ -9,16 +9,16 @@ public sealed class AppointmentTimeSlotConfig : IEntityTypeConfiguration<Appoint
     public void Configure(
         EntityTypeBuilder<AppointmentTimeSlot> builder)
     {
-        builder.ToTable("KHUNGGIOHEN", table =>
+        builder.ToTable("AppointmentTimeSlots", table =>
         {
             table.HasCheckConstraint(
-                "CK_KHUNGGIOHEN_TimeRange",
+                "CK_AppointmentTimeSlots_TimeRange",
                 """
                 "EndTime" > "StartTime"
                 """);
 
             table.HasCheckConstraint(
-                "CK_KHUNGGIOHEN_MaxCustomers",
+                "CK_AppointmentTimeSlots_MaxCustomers",
                 """
                 "MaxCustomers" > 0
                 """);

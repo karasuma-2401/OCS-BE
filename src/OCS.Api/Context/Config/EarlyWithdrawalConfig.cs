@@ -8,11 +8,11 @@ public sealed class EarlyWithdrawalConfig : IEntityTypeConfiguration<EarlyWithdr
 {
     public void Configure(EntityTypeBuilder<EarlyWithdrawal> builder)
     {
-        builder.ToTable("PHIEURUTHANGSOM", table =>
+        builder.ToTable("EarlyWithdrawals", table =>
         {
-            table.HasCheckConstraint("CK_PHIEURUTHANGSOM_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
+            table.HasCheckConstraint("CK_EarlyWithdrawals_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
             table.HasCheckConstraint(
-                "CK_PHIEURUTHANGSOM_PaymentStatus",
+                "CK_EarlyWithdrawals_PaymentStatus",
                 "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
         });
 

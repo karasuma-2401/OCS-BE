@@ -1408,3 +1408,1868 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "EmailVerifiedAt" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "FailedLoginAttempts" integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "LockoutEndAt" timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD "NormalizedEmail" character varying(254) COLLATE "C";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE TABLE "AUTH_SESSION" (
+        "Id" uuid NOT NULL,
+        "AccountId" uuid NOT NULL,
+        "ExpiresAt" timestamp with time zone NOT NULL,
+        "RevokedAt" timestamp with time zone,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_AUTH_SESSION" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_AUTH_SESSION_Lifetime" CHECK ("ExpiresAt" > "CreatedAt" AND ("RevokedAt" IS NULL OR "RevokedAt" >= "CreatedAt")),
+        CONSTRAINT "FK_AUTH_SESSION_TAIKHOAN_AccountId" FOREIGN KEY ("AccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE TABLE "OTP_CHALLENGE" (
+        "Id" uuid NOT NULL,
+        "AccountId" uuid NOT NULL,
+        "NormalizedEmail" character varying(254) COLLATE "C" NOT NULL,
+        "Purpose" character varying(40) NOT NULL,
+        "CodeHash" character varying(512) NOT NULL,
+        "ContinuationTokenHash" character varying(512) NOT NULL,
+        "ContinuationExpiresAt" timestamp with time zone NOT NULL,
+        "ExpiresAt" timestamp with time zone NOT NULL,
+        "ResendAvailableAt" timestamp with time zone NOT NULL,
+        "FailedAttempts" integer NOT NULL,
+        "ConsumedAt" timestamp with time zone,
+        "InvalidatedAt" timestamp with time zone,
+        "DeliveryStatus" character varying(20) NOT NULL,
+        "SentAt" timestamp with time zone,
+        "CreatedAt" timestamp with time zone NOT NULL,
+        "UpdatedAt" timestamp with time zone,
+        CONSTRAINT "PK_OTP_CHALLENGE" PRIMARY KEY ("Id"),
+        CONSTRAINT "CK_OTP_CHALLENGE_Attempts" CHECK ("FailedAttempts" >= 0),
+        CONSTRAINT "CK_OTP_CHALLENGE_Delivery" CHECK ("DeliveryStatus" IN ('Pending', 'Sent', 'Failed') AND ("DeliveryStatus" <> 'Sent' OR "SentAt" IS NOT NULL)),
+        CONSTRAINT "CK_OTP_CHALLENGE_Hashes" CHECK (length(btrim("CodeHash")) > 0 AND length(btrim("ContinuationTokenHash")) > 0),
+        CONSTRAINT "CK_OTP_CHALLENGE_Lifetime" CHECK ("ExpiresAt" > "CreatedAt" AND "ContinuationExpiresAt" >= "ExpiresAt" AND "ResendAvailableAt" >= "CreatedAt"),
+        CONSTRAINT "CK_OTP_CHALLENGE_Purpose" CHECK ("Purpose" = 'RegistrationActivation'),
+        CONSTRAINT "FK_OTP_CHALLENGE_TAIKHOAN_AccountId" FOREIGN KEY ("AccountId") REFERENCES "TAIKHOAN" ("Id") ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    ALTER TABLE "TAIKHOAN" ADD CONSTRAINT "CK_TAIKHOAN_LoginAttempts" CHECK ("FailedLoginAttempts" >= 0);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_AUTH_SESSION_AccountId_ExpiresAt" ON "AUTH_SESSION" ("AccountId", "ExpiresAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_AUTH_SESSION_ExpiresAt" ON "AUTH_SESSION" ("ExpiresAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_OTP_CHALLENGE_AccountId_Purpose" ON "OTP_CHALLENGE" ("AccountId", "Purpose");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    CREATE INDEX "IX_OTP_CHALLENGE_ExpiresAt" ON "OTP_CHALLENGE" ("ExpiresAt");
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101428_AddAuthenticationIdentityState') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261103101428_AddAuthenticationIdentityState', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    LOCK TABLE "TAIKHOAN" IN SHARE ROW EXCLUSIVE MODE;
+    CREATE TEMP TABLE ocs_auth_email_backfill ON COMMIT DROP AS
+    SELECT "Id", CASE WHEN length(btrim("Email", E' \t\n\r\013\f')) <= 254
+        AND length(split_part(btrim("Email", E' \t\n\r\013\f'), '@', 1)) <= 64
+        AND btrim("Email", E' \t\n\r\013\f') COLLATE "C" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+    THEN upper(btrim("Email", E' \t\n\r\013\f') COLLATE "C") ELSE NULL END AS normalized
+    FROM "TAIKHOAN";
+
+    DO $preflight$
+    DECLARE conflict_groups integer;
+    BEGIN
+        SELECT count(*) INTO conflict_groups FROM (
+            SELECT normalized FROM ocs_auth_email_backfill
+            WHERE normalized IS NOT NULL
+            GROUP BY normalized HAVING count(*) > 1
+        ) conflicts;
+        IF conflict_groups > 0 THEN
+            RAISE EXCEPTION 'Email normalization blocked: % conflict group(s). Review docs/AUTH_DATA_MIGRATION.md; no accounts were merged or deleted.', conflict_groups;
+        END IF;
+    END $preflight$;
+
+    UPDATE "TAIKHOAN" account SET "NormalizedEmail" = candidate.normalized
+    FROM ocs_auth_email_backfill candidate
+    WHERE account."Id" = candidate."Id"
+        AND account."NormalizedEmail" IS DISTINCT FROM candidate.normalized;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    DROP INDEX "IX_TAIKHOAN_AccountType_Email";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    CREATE UNIQUE INDEX "IX_TAIKHOAN_NormalizedEmail" ON "TAIKHOAN" ("NormalizedEmail") WHERE "NormalizedEmail" IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    ALTER TABLE "TAIKHOAN" ADD CONSTRAINT "CK_TAIKHOAN_NormalizedEmail" CHECK ("NormalizedEmail" IS NOT DISTINCT FROM (CASE WHEN length(btrim("Email", E' \t\n\r\013\f')) <= 254
+        AND length(split_part(btrim("Email", E' \t\n\r\013\f'), '@', 1)) <= 64
+        AND btrim("Email", E' \t\n\r\013\f') COLLATE "C" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+    THEN upper(btrim("Email", E' \t\n\r\013\f') COLLATE "C") ELSE NULL END));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261103101757_NormalizeAccountEmail') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261103101757_NormalizeAccountEmail', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "VAITRO" RENAME TO "Roles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "THUONGHIEU" RENAME TO "Brands";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "THUMUA" RENAME TO "Buyouts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "THONGBAO" RENAME TO "Notifications";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "THAMSO" RENAME TO "SystemParameters";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "TAIKHOAN_VAITRO" RENAME TO "AccountRoles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "TAIKHOAN" RENAME TO "Accounts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SANPHAM" RENAME TO "Products";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "QUYEN" RENAME TO "Permissions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PHIEUXULYHETHAN" RENAME TO "ExpiryProcessings";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PHIEURUTHANGSOM" RENAME TO "EarlyWithdrawals";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PHIEUGIAINGAN" RENAME TO "Payouts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PHANQUYEN" RENAME TO "RolePermissions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OTP_CHALLENGE" RENAME TO "OtpChallenges";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "NHATKYHETHONG" RENAME TO "AuditLogs";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "NHANVIEN" RENAME TO "EmployeeProfiles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "LICHSUTRANGTHAISP" RENAME TO "ProductStatusHistories";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "KHUNGGIOHEN" RENAME TO "AppointmentTimeSlots";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "KHOLUU" RENAME TO "StorageLocations";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "KHACHHANG" RENAME TO "CustomerProfiles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "HOPDONGKYGUI" RENAME TO "ConsignmentContracts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "HOADONBAN" RENAME TO "SaleInvoices";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "GIAODICHTAICHINH" RENAME TO "FinancialTransactions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "DATLICH" RENAME TO "Appointments";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "DANHMUC" RENAME TO "Categories";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "CT_XULY" RENAME TO "ExpiryProcessingItems";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "CT_RUTSOM" RENAME TO "EarlyWithdrawalItems";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "CT_HOADON" RENAME TO "SaleInvoiceLines";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "CT_GIAINGAN" RENAME TO "PayoutDetails";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "BIENBANSUCO" RENAME TO "IncidentReports";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AUTH_SESSION" RENAME TO "AuthSessions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ANH_SANPHAM" RENAME TO "ProductImages";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AccountRoles" RENAME CONSTRAINT "FK_TAIKHOAN_VAITRO_TAIKHOAN_AccountId" TO "FK_AccountRoles_Accounts_AccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AccountRoles" RENAME CONSTRAINT "FK_TAIKHOAN_VAITRO_VAITRO_RoleId" TO "FK_AccountRoles_Roles_RoleId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "FK_TAIKHOAN_TAIKHOAN_CreatedByAccountId" TO "FK_Accounts_Accounts_CreatedByAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Appointments" RENAME CONSTRAINT "FK_DATLICH_KHUNGGIOHEN_TimeSlotId" TO "FK_Appointments_AppointmentTimeSlots_TimeSlotId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Appointments" RENAME CONSTRAINT "FK_DATLICH_KHACHHANG_CustomerId" TO "FK_Appointments_CustomerProfiles_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuditLogs" RENAME CONSTRAINT "FK_NHATKYHETHONG_TAIKHOAN_ActorAccountId" TO "FK_AuditLogs_Accounts_ActorAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuthSessions" RENAME CONSTRAINT "FK_AUTH_SESSION_TAIKHOAN_AccountId" TO "FK_AuthSessions_Accounts_AccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "FK_THUMUA_KHACHHANG_CustomerId" TO "FK_Buyouts_CustomerProfiles_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "FK_THUMUA_NHANVIEN_ApprovedByEmployeeId" TO "FK_Buyouts_EmployeeProfiles_ApprovedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "FK_THUMUA_NHANVIEN_CreatedByEmployeeId" TO "FK_Buyouts_EmployeeProfiles_CreatedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ConsignmentContracts" RENAME CONSTRAINT "FK_HOPDONGKYGUI_DATLICH_AppointmentId" TO "FK_ConsignmentContracts_Appointments_AppointmentId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ConsignmentContracts" RENAME CONSTRAINT "FK_HOPDONGKYGUI_KHACHHANG_CustomerId" TO "FK_ConsignmentContracts_CustomerProfiles_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ConsignmentContracts" RENAME CONSTRAINT "FK_HOPDONGKYGUI_NHANVIEN_CreatedByEmployeeId" TO "FK_ConsignmentContracts_EmployeeProfiles_CreatedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "CustomerProfiles" RENAME CONSTRAINT "FK_KHACHHANG_TAIKHOAN_Id" TO "FK_CustomerProfiles_Accounts_Id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawalItems" RENAME CONSTRAINT "FK_CT_RUTSOM_PHIEURUTHANGSOM_EarlyWithdrawalId" TO "FK_EarlyWithdrawalItems_EarlyWithdrawals_EarlyWithdrawalId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawalItems" RENAME CONSTRAINT "FK_CT_RUTSOM_SANPHAM_ProductId" TO "FK_EarlyWithdrawalItems_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawals" RENAME CONSTRAINT "FK_PHIEURUTHANGSOM_KHACHHANG_CustomerId" TO "FK_EarlyWithdrawals_CustomerProfiles_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawals" RENAME CONSTRAINT "FK_PHIEURUTHANGSOM_NHANVIEN_ProcessedByEmployeeId" TO "FK_EarlyWithdrawals_EmployeeProfiles_ProcessedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EmployeeProfiles" RENAME CONSTRAINT "FK_NHANVIEN_TAIKHOAN_Id" TO "FK_EmployeeProfiles_Accounts_Id";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ExpiryProcessingItems" RENAME CONSTRAINT "FK_CT_XULY_PHIEUXULYHETHAN_ExpiryProcessingId" TO "FK_ExpiryProcessingItems_ExpiryProcessings_ExpiryProcessingId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ExpiryProcessingItems" RENAME CONSTRAINT "FK_CT_XULY_SANPHAM_ProductId" TO "FK_ExpiryProcessingItems_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ExpiryProcessings" RENAME CONSTRAINT "FK_PHIEUXULYHETHAN_NHANVIEN_ProcessedByEmployeeId" TO "FK_ExpiryProcessings_EmployeeProfiles_ProcessedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "FK_GIAODICHTAICHINH_THUMUA_BuyoutId" TO "FK_FinancialTransactions_Buyouts_BuyoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "FK_GIAODICHTAICHINH_KHACHHANG_CustomerId" TO "FK_FinancialTransactions_CustomerProfiles_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "FK_GIAODICHTAICHINH_PHIEURUTHANGSOM_EarlyWithdrawalId" TO "FK_FinancialTransactions_EarlyWithdrawals_EarlyWithdrawalId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "FK_GIAODICHTAICHINH_NHANVIEN_PerformedByEmployeeId" TO "FK_FinancialTransactions_EmployeeProfiles_PerformedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "FK_GIAODICHTAICHINH_PHIEUGIAINGAN_PayoutId" TO "FK_FinancialTransactions_Payouts_PayoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "FK_GIAODICHTAICHINH_HOADONBAN_SaleInvoiceId" TO "FK_FinancialTransactions_SaleInvoices_SaleInvoiceId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "IncidentReports" RENAME CONSTRAINT "FK_BIENBANSUCO_NHANVIEN_ApprovedByEmployeeId" TO "FK_IncidentReports_EmployeeProfiles_ApprovedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "IncidentReports" RENAME CONSTRAINT "FK_BIENBANSUCO_NHANVIEN_CreatedByEmployeeId" TO "FK_IncidentReports_EmployeeProfiles_CreatedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "IncidentReports" RENAME CONSTRAINT "FK_BIENBANSUCO_SANPHAM_ProductId" TO "FK_IncidentReports_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Notifications" RENAME CONSTRAINT "FK_THONGBAO_TAIKHOAN_RecipientAccountId" TO "FK_Notifications_Accounts_RecipientAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Notifications" RENAME CONSTRAINT "FK_THONGBAO_TAIKHOAN_SenderAccountId" TO "FK_Notifications_Accounts_SenderAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "FK_OTP_CHALLENGE_TAIKHOAN_AccountId" TO "FK_OtpChallenges_Accounts_AccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PayoutDetails" RENAME CONSTRAINT "FK_CT_GIAINGAN_BIENBANSUCO_IncidentReportId" TO "FK_PayoutDetails_IncidentReports_IncidentReportId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PayoutDetails" RENAME CONSTRAINT "FK_CT_GIAINGAN_PHIEUGIAINGAN_PayoutId" TO "FK_PayoutDetails_Payouts_PayoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PayoutDetails" RENAME CONSTRAINT "FK_CT_GIAINGAN_SANPHAM_ProductId" TO "FK_PayoutDetails_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Payouts" RENAME CONSTRAINT "FK_PHIEUGIAINGAN_HOPDONGKYGUI_ConsignmentContractId" TO "FK_Payouts_ConsignmentContracts_ConsignmentContractId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Payouts" RENAME CONSTRAINT "FK_PHIEUGIAINGAN_NHANVIEN_ApprovedByEmployeeId" TO "FK_Payouts_EmployeeProfiles_ApprovedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductImages" RENAME CONSTRAINT "FK_ANH_SANPHAM_SANPHAM_ProductId" TO "FK_ProductImages_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "FK_SANPHAM_THUONGHIEU_BrandId" TO "FK_Products_Brands_BrandId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "FK_SANPHAM_THUMUA_BuyoutId" TO "FK_Products_Buyouts_BuyoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "FK_SANPHAM_DANHMUC_CategoryId" TO "FK_Products_Categories_CategoryId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "FK_SANPHAM_HOPDONGKYGUI_ConsignmentContractId" TO "FK_Products_ConsignmentContracts_ConsignmentContractId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "FK_SANPHAM_KHOLUU_StorageLocationId" TO "FK_Products_StorageLocations_StorageLocationId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductStatusHistories" RENAME CONSTRAINT "FK_LICHSUTRANGTHAISP_TAIKHOAN_ChangedByAccountId" TO "FK_ProductStatusHistories_Accounts_ChangedByAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductStatusHistories" RENAME CONSTRAINT "FK_LICHSUTRANGTHAISP_SANPHAM_ProductId" TO "FK_ProductStatusHistories_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "RolePermissions" RENAME CONSTRAINT "FK_PHANQUYEN_QUYEN_PermissionId" TO "FK_RolePermissions_Permissions_PermissionId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "RolePermissions" RENAME CONSTRAINT "FK_PHANQUYEN_VAITRO_RoleId" TO "FK_RolePermissions_Roles_RoleId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoiceLines" RENAME CONSTRAINT "FK_CT_HOADON_SANPHAM_ProductId" TO "FK_SaleInvoiceLines_Products_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoiceLines" RENAME CONSTRAINT "FK_CT_HOADON_HOADONBAN_SaleInvoiceId" TO "FK_SaleInvoiceLines_SaleInvoices_SaleInvoiceId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoices" RENAME CONSTRAINT "FK_HOADONBAN_NHANVIEN_SoldByEmployeeId" TO "FK_SaleInvoices_EmployeeProfiles_SoldByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Roles" RENAME CONSTRAINT "PK_VAITRO" TO "PK_Roles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Brands" RENAME CONSTRAINT "PK_THUONGHIEU" TO "PK_Brands";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "PK_THUMUA" TO "PK_Buyouts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Notifications" RENAME CONSTRAINT "PK_THONGBAO" TO "PK_Notifications";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SystemParameters" RENAME CONSTRAINT "PK_THAMSO" TO "PK_SystemParameters";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AccountRoles" RENAME CONSTRAINT "PK_TAIKHOAN_VAITRO" TO "PK_AccountRoles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "PK_TAIKHOAN" TO "PK_Accounts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "PK_SANPHAM" TO "PK_Products";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Permissions" RENAME CONSTRAINT "PK_QUYEN" TO "PK_Permissions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ExpiryProcessings" RENAME CONSTRAINT "PK_PHIEUXULYHETHAN" TO "PK_ExpiryProcessings";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawals" RENAME CONSTRAINT "PK_PHIEURUTHANGSOM" TO "PK_EarlyWithdrawals";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Payouts" RENAME CONSTRAINT "PK_PHIEUGIAINGAN" TO "PK_Payouts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "RolePermissions" RENAME CONSTRAINT "PK_PHANQUYEN" TO "PK_RolePermissions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "PK_OTP_CHALLENGE" TO "PK_OtpChallenges";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuditLogs" RENAME CONSTRAINT "PK_NHATKYHETHONG" TO "PK_AuditLogs";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EmployeeProfiles" RENAME CONSTRAINT "PK_NHANVIEN" TO "PK_EmployeeProfiles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductStatusHistories" RENAME CONSTRAINT "PK_LICHSUTRANGTHAISP" TO "PK_ProductStatusHistories";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AppointmentTimeSlots" RENAME CONSTRAINT "PK_KHUNGGIOHEN" TO "PK_AppointmentTimeSlots";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "StorageLocations" RENAME CONSTRAINT "PK_KHOLUU" TO "PK_StorageLocations";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "CustomerProfiles" RENAME CONSTRAINT "PK_KHACHHANG" TO "PK_CustomerProfiles";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ConsignmentContracts" RENAME CONSTRAINT "PK_HOPDONGKYGUI" TO "PK_ConsignmentContracts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoices" RENAME CONSTRAINT "PK_HOADONBAN" TO "PK_SaleInvoices";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "PK_GIAODICHTAICHINH" TO "PK_FinancialTransactions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Appointments" RENAME CONSTRAINT "PK_DATLICH" TO "PK_Appointments";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Categories" RENAME CONSTRAINT "PK_DANHMUC" TO "PK_Categories";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ExpiryProcessingItems" RENAME CONSTRAINT "PK_CT_XULY" TO "PK_ExpiryProcessingItems";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawalItems" RENAME CONSTRAINT "PK_CT_RUTSOM" TO "PK_EarlyWithdrawalItems";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoiceLines" RENAME CONSTRAINT "PK_CT_HOADON" TO "PK_SaleInvoiceLines";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PayoutDetails" RENAME CONSTRAINT "PK_CT_GIAINGAN" TO "PK_PayoutDetails";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "IncidentReports" RENAME CONSTRAINT "PK_BIENBANSUCO" TO "PK_IncidentReports";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuthSessions" RENAME CONSTRAINT "PK_AUTH_SESSION" TO "PK_AuthSessions";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductImages" RENAME CONSTRAINT "PK_ANH_SANPHAM" TO "PK_ProductImages";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Brands" RENAME CONSTRAINT "CK_THUONGHIEU_CommissionRate" TO "CK_Brands_CommissionRate";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Brands" RENAME CONSTRAINT "CK_THUONGHIEU_Tier" TO "CK_Brands_Tier";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "CK_THUMUA_Approver" TO "CK_Buyouts_Approver";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "CK_THUMUA_Status" TO "CK_Buyouts_Status";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Buyouts" RENAME CONSTRAINT "CK_THUMUA_Total" TO "CK_Buyouts_Total";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Notifications" RENAME CONSTRAINT "CK_THONGBAO_Type" TO "CK_Notifications_Type";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "CK_TAIKHOAN_AccountType" TO "CK_Accounts_AccountType";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "CK_TAIKHOAN_ActiveInternalPassword" TO "CK_Accounts_ActiveInternalPassword";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "CK_TAIKHOAN_InternalUsername" TO "CK_Accounts_InternalUsername";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "CK_TAIKHOAN_LoginAttempts" TO "CK_Accounts_LoginAttempts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "CK_TAIKHOAN_NormalizedEmail" TO "CK_Accounts_NormalizedEmail";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Accounts" RENAME CONSTRAINT "CK_TAIKHOAN_Status" TO "CK_Accounts_Status";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "CK_SANPHAM_Commission" TO "CK_Products_Commission";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "CK_SANPHAM_Condition" TO "CK_Products_Condition";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "CK_SANPHAM_Enums" TO "CK_Products_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "CK_SANPHAM_Prices" TO "CK_Products_Prices";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Products" RENAME CONSTRAINT "CK_SANPHAM_Source" TO "CK_Products_Source";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ExpiryProcessings" RENAME CONSTRAINT "CK_PHIEUXULYHETHAN_Enums" TO "CK_ExpiryProcessings_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawals" RENAME CONSTRAINT "CK_PHIEURUTHANGSOM_PaymentStatus" TO "CK_EarlyWithdrawals_PaymentStatus";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawals" RENAME CONSTRAINT "CK_PHIEURUTHANGSOM_TotalPenalty" TO "CK_EarlyWithdrawals_TotalPenalty";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Payouts" RENAME CONSTRAINT "CK_PHIEUGIAINGAN_Status" TO "CK_Payouts_Status";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Payouts" RENAME CONSTRAINT "CK_PHIEUGIAINGAN_Total" TO "CK_Payouts_Total";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "CK_OTP_CHALLENGE_Attempts" TO "CK_OtpChallenges_Attempts";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "CK_OTP_CHALLENGE_Delivery" TO "CK_OtpChallenges_Delivery";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "CK_OTP_CHALLENGE_Hashes" TO "CK_OtpChallenges_Hashes";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "CK_OTP_CHALLENGE_Lifetime" TO "CK_OtpChallenges_Lifetime";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "OtpChallenges" RENAME CONSTRAINT "CK_OTP_CHALLENGE_Purpose" TO "CK_OtpChallenges_Purpose";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuditLogs" RENAME CONSTRAINT "CK_NHATKYHETHONG_ActorType" TO "CK_AuditLogs_ActorType";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuditLogs" RENAME CONSTRAINT "CK_NHATKYHETHONG_UserActor" TO "CK_AuditLogs_UserActor";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductStatusHistories" RENAME CONSTRAINT "CK_LICHSUTRANGTHAISP_DifferentStatus" TO "CK_ProductStatusHistories_DifferentStatus";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductStatusHistories" RENAME CONSTRAINT "CK_LICHSUTRANGTHAISP_NewStatus" TO "CK_ProductStatusHistories_NewStatus";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductStatusHistories" RENAME CONSTRAINT "CK_LICHSUTRANGTHAISP_PreviousStatus" TO "CK_ProductStatusHistories_PreviousStatus";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AppointmentTimeSlots" RENAME CONSTRAINT "CK_KHUNGGIOHEN_MaxCustomers" TO "CK_AppointmentTimeSlots_MaxCustomers";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AppointmentTimeSlots" RENAME CONSTRAINT "CK_KHUNGGIOHEN_TimeRange" TO "CK_AppointmentTimeSlots_TimeRange";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ConsignmentContracts" RENAME CONSTRAINT "CK_HOPDONGKYGUI_Dates" TO "CK_ConsignmentContracts_Dates";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ConsignmentContracts" RENAME CONSTRAINT "CK_HOPDONGKYGUI_Enums" TO "CK_ConsignmentContracts_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoices" RENAME CONSTRAINT "CK_HOADONBAN_PaymentStatus" TO "CK_SaleInvoices_PaymentStatus";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoices" RENAME CONSTRAINT "CK_HOADONBAN_Total" TO "CK_SaleInvoices_Total";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "CK_GIAODICHTAICHINH_Amount" TO "CK_FinancialTransactions_Amount";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "FinancialTransactions" RENAME CONSTRAINT "CK_GIAODICHTAICHINH_Enums" TO "CK_FinancialTransactions_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Appointments" RENAME CONSTRAINT "CK_DATLICH_Enums" TO "CK_Appointments_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "Appointments" RENAME CONSTRAINT "CK_DATLICH_ItemCount" TO "CK_Appointments_ItemCount";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawalItems" RENAME CONSTRAINT "CK_CT_RUTSOM_ListedPrice" TO "CK_EarlyWithdrawalItems_ListedPrice";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "EarlyWithdrawalItems" RENAME CONSTRAINT "CK_CT_RUTSOM_Penalty" TO "CK_EarlyWithdrawalItems_Penalty";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "SaleInvoiceLines" RENAME CONSTRAINT "CK_CT_HOADON_SalePrice" TO "CK_SaleInvoiceLines_SalePrice";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PayoutDetails" RENAME CONSTRAINT "CK_CT_GIAINGAN_Source" TO "CK_PayoutDetails_Source";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "PayoutDetails" RENAME CONSTRAINT "CK_CT_GIAINGAN_Type" TO "CK_PayoutDetails_Type";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "IncidentReports" RENAME CONSTRAINT "CK_BIENBANSUCO_Compensation" TO "CK_IncidentReports_Compensation";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "IncidentReports" RENAME CONSTRAINT "CK_BIENBANSUCO_Enums" TO "CK_IncidentReports_Enums";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "AuthSessions" RENAME CONSTRAINT "CK_AUTH_SESSION_Lifetime" TO "CK_AuthSessions_Lifetime";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductImages" RENAME CONSTRAINT "CK_ANH_SANPHAM_ImageType" TO "CK_ProductImages_ImageType";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductImages" RENAME CONSTRAINT "CK_ANH_SANPHAM_SortOrder" TO "CK_ProductImages_SortOrder";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER TABLE "ProductImages" RENAME CONSTRAINT "CK_ANH_SANPHAM_Url" TO "CK_ProductImages_Url";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_VAITRO_Code" RENAME TO "IX_Roles_Code";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THUONGHIEU_Name" RENAME TO "IX_Brands_Name";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THUMUA_CustomerId" RENAME TO "IX_Buyouts_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THUMUA_CreatedByEmployeeId" RENAME TO "IX_Buyouts_CreatedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THUMUA_BuyoutNumber" RENAME TO "IX_Buyouts_BuyoutNumber";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THUMUA_ApprovedByEmployeeId" RENAME TO "IX_Buyouts_ApprovedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THONGBAO_SenderAccountId" RENAME TO "IX_Notifications_SenderAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_THONGBAO_RecipientAccountId_IsRead_SentAt" RENAME TO "IX_Notifications_RecipientAccountId_IsRead_SentAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_TAIKHOAN_VAITRO_RoleId" RENAME TO "IX_AccountRoles_RoleId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_TAIKHOAN_Username" RENAME TO "IX_Accounts_Username";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_TAIKHOAN_NormalizedEmail" RENAME TO "IX_Accounts_NormalizedEmail";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_TAIKHOAN_CreatedByAccountId" RENAME TO "IX_Accounts_CreatedByAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_TAIKHOAN_AccountType_PhoneNumber" RENAME TO "IX_Accounts_AccountType_PhoneNumber";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_TAIKHOAN_AccountType_IdentityNumber" RENAME TO "IX_Accounts_AccountType_IdentityNumber";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_StorageLocationId" RENAME TO "IX_Products_StorageLocationId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_Status_CategoryId" RENAME TO "IX_Products_Status_CategoryId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_ConsignmentContractId_Status" RENAME TO "IX_Products_ConsignmentContractId_Status";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_CategoryId" RENAME TO "IX_Products_CategoryId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_BuyoutId" RENAME TO "IX_Products_BuyoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_BrandId" RENAME TO "IX_Products_BrandId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_SANPHAM_Barcode" RENAME TO "IX_Products_Barcode";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_QUYEN_Code" RENAME TO "IX_Permissions_Code";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHIEUXULYHETHAN_ProcessedByEmployeeId" RENAME TO "IX_ExpiryProcessings_ProcessedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHIEURUTHANGSOM_ProcessedByEmployeeId" RENAME TO "IX_EarlyWithdrawals_ProcessedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHIEURUTHANGSOM_CustomerId" RENAME TO "IX_EarlyWithdrawals_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHIEUGIAINGAN_PayoutNumber" RENAME TO "IX_Payouts_PayoutNumber";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHIEUGIAINGAN_ConsignmentContractId" RENAME TO "IX_Payouts_ConsignmentContractId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHIEUGIAINGAN_ApprovedByEmployeeId" RENAME TO "IX_Payouts_ApprovedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_PHANQUYEN_PermissionId" RENAME TO "IX_RolePermissions_PermissionId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_OTP_CHALLENGE_ExpiresAt" RENAME TO "IX_OtpChallenges_ExpiresAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_OTP_CHALLENGE_AccountId_Purpose" RENAME TO "IX_OtpChallenges_AccountId_Purpose";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_NHATKYHETHONG_RecordedAt" RENAME TO "IX_AuditLogs_RecordedAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_NHATKYHETHONG_EntityType_EntityId_OccurredAt" RENAME TO "IX_AuditLogs_EntityType_EntityId_OccurredAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_NHATKYHETHONG_ActorAccountId_OccurredAt" RENAME TO "IX_AuditLogs_ActorAccountId_OccurredAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_LICHSUTRANGTHAISP_ProductId_OccurredAt" RENAME TO "IX_ProductStatusHistories_ProductId_OccurredAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_LICHSUTRANGTHAISP_ChangedByAccountId" RENAME TO "IX_ProductStatusHistories_ChangedByAccountId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_KHUNGGIOHEN_StartTime_EndTime" RENAME TO "IX_AppointmentTimeSlots_StartTime_EndTime";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_KHOLUU_Code" RENAME TO "IX_StorageLocations_Code";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOPDONGKYGUI_Status_EndsAt" RENAME TO "IX_ConsignmentContracts_Status_EndsAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOPDONGKYGUI_CustomerId" RENAME TO "IX_ConsignmentContracts_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOPDONGKYGUI_CreatedByEmployeeId" RENAME TO "IX_ConsignmentContracts_CreatedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOPDONGKYGUI_ContractNumber" RENAME TO "IX_ConsignmentContracts_ContractNumber";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOPDONGKYGUI_AppointmentId" RENAME TO "IX_ConsignmentContracts_AppointmentId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOADONBAN_SoldByEmployeeId" RENAME TO "IX_SaleInvoices_SoldByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_HOADONBAN_InvoiceNumber" RENAME TO "IX_SaleInvoices_InvoiceNumber";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_Status_OccurredAt" RENAME TO "IX_FinancialTransactions_Status_OccurredAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_SaleInvoiceId" RENAME TO "IX_FinancialTransactions_SaleInvoiceId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_PerformedByEmployeeId" RENAME TO "IX_FinancialTransactions_PerformedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_PayoutId" RENAME TO "IX_FinancialTransactions_PayoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_EarlyWithdrawalId" RENAME TO "IX_FinancialTransactions_EarlyWithdrawalId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_CustomerId" RENAME TO "IX_FinancialTransactions_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_GIAODICHTAICHINH_BuyoutId" RENAME TO "IX_FinancialTransactions_BuyoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_DATLICH_TimeSlotId" RENAME TO "IX_Appointments_TimeSlotId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_DATLICH_CustomerId" RENAME TO "IX_Appointments_CustomerId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_DATLICH_AppointmentDate_TimeSlotId_Status" RENAME TO "IX_Appointments_AppointmentDate_TimeSlotId_Status";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_DANHMUC_Name" RENAME TO "IX_Categories_Name";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_CT_XULY_ProductId" RENAME TO "IX_ExpiryProcessingItems_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_CT_RUTSOM_ProductId" RENAME TO "IX_EarlyWithdrawalItems_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_CT_HOADON_ProductId" RENAME TO "IX_SaleInvoiceLines_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_CT_GIAINGAN_ProductId" RENAME TO "IX_PayoutDetails_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_CT_GIAINGAN_PayoutId" RENAME TO "IX_PayoutDetails_PayoutId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_CT_GIAINGAN_IncidentReportId" RENAME TO "IX_PayoutDetails_IncidentReportId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_BIENBANSUCO_ProductId" RENAME TO "IX_IncidentReports_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_BIENBANSUCO_CreatedByEmployeeId" RENAME TO "IX_IncidentReports_CreatedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_BIENBANSUCO_ApprovedByEmployeeId" RENAME TO "IX_IncidentReports_ApprovedByEmployeeId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_AUTH_SESSION_ExpiresAt" RENAME TO "IX_AuthSessions_ExpiresAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_AUTH_SESSION_AccountId_ExpiresAt" RENAME TO "IX_AuthSessions_AccountId_ExpiresAt";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_ANH_SANPHAM_ProductId_SortOrder" RENAME TO "IX_ProductImages_ProductId_SortOrder";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    ALTER INDEX "IX_ANH_SANPHAM_ProductId" RENAME TO "IX_ProductImages_ProductId";
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM "__EFMigrationsHistory" WHERE "MigrationId" = '20261104150256_UseEnglishDatabaseNames') THEN
+    INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+    VALUES ('20261104150256_UseEnglishDatabaseNames', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

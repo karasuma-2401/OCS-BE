@@ -8,7 +8,7 @@ public sealed class SystemParameterConfig : IEntityTypeConfiguration<SystemParam
 {
     public void Configure(EntityTypeBuilder<SystemParameter> builder)
     {
-        builder.ToTable("THAMSO");
+        builder.ToTable("SystemParameters");
         builder.HasKey(x => x.Key);
         builder.Property(x => x.Key).HasMaxLength(100).ValueGeneratedNever();
         builder.Property(x => x.Value).HasMaxLength(2000).IsRequired();

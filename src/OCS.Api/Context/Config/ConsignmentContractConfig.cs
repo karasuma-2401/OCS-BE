@@ -9,16 +9,16 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
     public void Configure(
         EntityTypeBuilder<ConsignmentContract> builder)
     {
-        builder.ToTable("HOPDONGKYGUI", table =>
+        builder.ToTable("ConsignmentContracts", table =>
         {
             table.HasCheckConstraint(
-                "CK_HOPDONGKYGUI_Dates",
+                "CK_ConsignmentContracts_Dates",
                 """
                 "EndsAt" > "SignedAt"
                 """);
 
             table.HasCheckConstraint(
-                "CK_HOPDONGKYGUI_Enums",
+                "CK_ConsignmentContracts_Enums",
                 """
                 "Status" IN ('Active', 'Completed', 'Cancelled')
                 AND "ExpiryHandling" IN ('Return', 'Donate')

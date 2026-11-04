@@ -3,26 +3,61 @@ using System.ComponentModel.DataAnnotations;
 namespace OCS.Api.Models.Auth;
 
 public record LoginRequestDto(
-    [Required] string Username,
-    [Required] string Password);
+    [Required, EmailAddress, MaxLength(254)] string Email,
+    [Required, BcryptPassword(ErrorMessage = "Mật khẩu không được vượt quá 72 byte UTF-8.")] string Password);
+
+public sealed record LoginResponseDto(
+    int ExpiresIn,
+    DateTimeOffset ExpiresAt,
+    UserDto User);
+
+public sealed record LoginResultDto(
+    string AccessToken,
+    int ExpiresIn,
+    DateTimeOffset ExpiresAt,
+    UserDto User);
 
 public record RegisterRequestDto(
-    [Required] string FullName,
-    [Required] string Username,
-    [Required, EmailAddress] string Email,
-    [Required, Phone] string PhoneNumber,
-    [Required, MinLength(6)] string Password);
+    [Required, MaxLength(150)] string FullName,
+    [Required, EmailAddress, MaxLength(254)] string Email,
+    [Required, Phone, MaxLength(20)] string PhoneNumber,
+    [Required, BcryptPassword(ErrorMessage = "Mật khẩu không được vượt quá 72 byte UTF-8."), RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$",
+        ErrorMessage = "Mật khẩu phải từ 8 đến 70 ký tự và chứa ít nhất một chữ hoa, một chữ thường và một chữ số hoặc ký tự đặc biệt.")]
+    string Password);
+
+public sealed record OtpChallengeResponseDto(
+    Guid ChallengeId,
+    string Purpose,
+    string MaskedDestination,
+    DateTimeOffset ExpiresAt,
+    DateTimeOffset ResendAvailableAt,
+    string ContinuationToken);
+
+public sealed record VerifyOtpRequestDto(
+    [Required] Guid ChallengeId,
+    [Required, RegularExpression(@"^[0-9]{6}$", ErrorMessage = "Mã OTP phải gồm 6 chữ số.")] string Code,
+    [Required] string ContinuationToken);
+
+public sealed record VerifyOtpResponseDto(
+    string Message,
+    DateTimeOffset VerifiedAt);
+
+public sealed record ResendOtpRequestDto(
+    [Required] Guid ChallengeId,
+    [Required] string ContinuationToken);
 
 public record UserDto(
     Guid Id,
-    string? Username,
     string? FullName,
     string? Email,
     string? PhoneNumber,
-    List<string> Roles);
+    List<string> Roles,
+    string? Username = null);
 
-public record AuthResponseDto(
-    string AccessToken,
+public sealed record CurrentUserResponseDto(
     int ExpiresIn,
+    DateTimeOffset ExpiresAt,
     UserDto User);
 
+public sealed record CsrfTokenResponseDto(
+    string Token);

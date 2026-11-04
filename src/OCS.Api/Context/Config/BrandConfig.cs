@@ -8,16 +8,16 @@ public sealed class BrandConfig : IEntityTypeConfiguration<Brand>
 {
     public void Configure(EntityTypeBuilder<Brand> builder)
     {
-        builder.ToTable("THUONGHIEU", table =>
+        builder.ToTable("Brands", table =>
         {
             table.HasCheckConstraint(
-                "CK_THUONGHIEU_CommissionRate",
+                "CK_Brands_CommissionRate",
                 """
                 "DefaultCommissionRate" BETWEEN 0 AND 100
                 """);
 
             table.HasCheckConstraint(
-                "CK_THUONGHIEU_Tier",
+                "CK_Brands_Tier",
                 """
                 "Tier" IN (
                     'NoBrand',
