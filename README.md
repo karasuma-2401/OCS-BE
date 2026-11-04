@@ -23,7 +23,7 @@ Mã nguồn hiện có đã có nền tảng cho tài khoản/RBAC, audit log, d
 
 ## Công nghệ
 
-CP1 auth đã bổ sung persistence cho email chuẩn hóa/xác thực, khóa tạm, OTP challenge và session. Runtime login/register vẫn dùng luồng cũ; email OTP/cookie/CSRF triển khai ở CP2–CP5. Chưa chạy migration vào database vận hành; xem runbook trước khi triển khai.
+Hệ thống xác thực & quản lý phiên đã hoàn thiện đầy đủ từ CP1 đến CP8 và nghiệm thu tại CP9: Đăng nhập Email + Mật khẩu, Đăng ký + Email OTP kích hoạt, HttpOnly Cookie (`ocs_session`), Hồ sơ phiên server (`AuthSession`), Bảo vệ CSRF (`X-XSRF-TOKEN`), Strict ClockSkew UTC, và chống dò quét tài khoản (Anti-enumeration).
 
 - .NET 10 / ASP.NET Core Web API
 - Entity Framework Core + Neon PostgreSQL

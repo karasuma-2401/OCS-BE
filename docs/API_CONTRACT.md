@@ -1,16 +1,23 @@
 # OCS API Contract
 
-Tài liệu này là đặc tả HTTP contract cho Web frontend OCS và backend API. Phần 3–6 mô tả contract mục tiêu đã chốt ở CP0; không phải xác nhận các chức năng đó đã được triển khai.
+Tài liệu này là đặc tả HTTP contract chuẩn giữa Web frontend OCS và backend API (`OCS.Api`). Hệ thống xác thực và quản lý phiên đã được hoàn thiện đầy đủ qua các Checkpoint CP1–CP8 và nghiệm thu tại CP9.
 
-### Trạng thái triển khai tại CP0
+### Trạng thái triển khai thực tế
 
-| Nhóm | Hiện có trong source | Contract mục tiêu |
+| Nhóm | Hiện trạng triển khai | Ghi chú & Ràng buộc |
 | --- | --- | --- |
-| Auth | `/api/Auth/login` nhận username/SĐT, trả bearer JWT; register tạo Active; `/me` đọc claims | Email + password, pending + email OTP, cookie/session, CSRF; triển khai CP1–CP5 |
-| Products | Controller đã map `/api/Products` và các action con | `/api/v1/*` chỉ là hướng versioning tương lai, chưa đổi route trong task auth |
+| Auth | Hoàn thành đầy đủ: Đăng nhập Email + Mật khẩu, Đăng ký + Email OTP kích hoạt, HttpOnly Cookie (`ocs_session`), Hồ sơ phiên server (`AuthSession`), Bảo vệ CSRF (`X-XSRF-TOKEN`), Strict ClockSkew UTC, Anti-enumeration | Tuyệt đối không dùng login username/SĐT hay SMS OTP; token không lưu tại client storage |
+| Products | `/api/Products` và các action con | Giữ nguyên tiền tố hiện hành |
 | Health | `/api/health`, `/api/health/live` | Giữ nguyên |
 
-ASP.NET Core khớp route không phân biệt hoa/thường. Client dùng `/api/auth` khi chuyển sang contract mới. Không gọi OTP/logout/CSRF hoặc dựa vào cookie trước khi checkpoint tương ứng hoàn tất. CP0 chỉ sửa tài liệu, không thay đổi DTO/controller runtime.
+---
+
+### Các giới hạn nghiệp vụ được ghi nhận và chấp nhận
+
+1. **Số điện thoại & Hồ sơ:** Số điện thoại lưu tại `Account.PhoneNumber` đóng vai trò thông tin liên hệ ký gửi, chưa được xác minh quyền sở hữu qua SMS OTP. Khi xác thực OTP email thành công, chỉ đặt `EmailVerifiedAt` và `ActivatedAt`, tuyệt đối giữ nguyên `PhoneVerifiedAt`.
+2. **Không tự cấp quyền từ số điện thoại:** Tài khoản đăng ký mới trùng số điện thoại với hồ sơ cũ nhưng khác email không được tự động gộp hoặc chuyển quyền sở hữu mà chưa có chứng thực.
+3. **Phạm vi tính năng Auth:** Bản phát hành hiện tại chưa bao gồm Forgot password (quên mật khẩu), Đổi email/SĐT, Multi-Factor Authentication (MFA / Passkey), Refresh Token xoay vòng (rotating refresh token), hay giao diện quản trị thu hồi đa phiên từ xa.
+4. **Thu hồi phiên hiện tại:** Được đảm bảo an toàn tuyệt đối qua `POST /api/auth/logout`: đánh dấu `RevokedAt` trên bản ghi `AuthSession` của database và xóa cookie `ocs_session` (`Path=/api; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT`). Token hoặc session đã thu hồi bị từ chối `401 UNAUTHORIZED` ngay lập tức.
 
 ---
 

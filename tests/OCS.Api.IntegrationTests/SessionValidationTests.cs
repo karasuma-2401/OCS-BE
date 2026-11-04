@@ -442,7 +442,14 @@ public sealed class SessionValidationTests : IDisposable
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("test-jwt-secret-key-that-is-at-least-32-bytes")),
-            ClockSkew = TimeSpan.Zero
+            ClockSkew = TimeSpan.Zero,
+            LifetimeValidator = (notBefore, expires, _, _) =>
+            {
+                var currentTime = _timeProvider.GetUtcNow().UtcDateTime;
+                if (notBefore.HasValue && notBefore.Value > currentTime) return false;
+                if (expires.HasValue && expires.Value <= currentTime) return false;
+                return true;
+            }
         };
 
         var handler = new JwtSecurityTokenHandler();
@@ -458,10 +465,7 @@ public sealed class SessionValidationTests : IDisposable
         // Re-validating token with expired time and ClockSkew=0 throws SecurityTokenInvalidLifetimeException
         Assert.Throws<SecurityTokenInvalidLifetimeException>(() =>
         {
-            var now = _timeProvider.GetUtcNow().UtcDateTime;
-            var expiredValidationParameters = tokenValidationParameters.Clone();
-            expiredValidationParameters.LifetimeValidator = (_, expires, _, _) => expires != null && expires > now;
-            handler.ValidateToken(token, expiredValidationParameters, out _);
+            handler.ValidateToken(token, tokenValidationParameters, out _);
         });
     }
 
