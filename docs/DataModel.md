@@ -111,7 +111,7 @@ CP2–CP5 triển khai dịch vụ và transaction verify/consume/activate; riê
 | `DANHMUC` | `Id`, `Name`, `IsActive`, thời điểm tạo/cập nhật | `Name` duy nhất. |
 | `KHOLUU` | `Id`, `Code`, `Name`, `IsActive`, thời điểm tạo/cập nhật | `Code` duy nhất. |
 | `KHUNGGIOHEN` | `Id`, `StartTime`, `EndTime`, `MaxCustomers`, `IsActive`, thời điểm tạo/cập nhật | Cặp giờ bắt đầu/kết thúc duy nhất; `EndTime > StartTime`; `MaxCustomers > 0`. |
-| `DATLICH` | `Id`, `CustomerId`, `TimeSlotId`, `AppointmentDate`, `EstimatedItemCount`, `SubmissionMethod`, `TrackingNumber`, `Status`, thời điểm tạo/cập nhật | FK tới `KHACHHANG` và `KHUNGGIOHEN`; số lượng không âm; `SubmissionMethod`: `InPerson`/`Shipping`; `Status`: `Scheduled`/`Cancelled`/`Completed`. |
+| `DATLICH` | `Id`, `CustomerId`, `TimeSlotId`, `AppointmentDate`, `EstimatedItemCount`, `SubmissionMethod`, `TrackingNumber`, `Note`, `CancellationReason`, `ReminderSentAt`, `Status`, thời điểm tạo/cập nhật | FK tới `KHACHHANG` và `KHUNGGIOHEN`; số lượng không âm; `SubmissionMethod`: `InPerson`/`Shipping`; `Status`: `Scheduled`/`CheckedIn`/`Completed`/`Cancelled`/`NoShow`. |
 
 ### Hợp đồng, thu mua và sản phẩm
 

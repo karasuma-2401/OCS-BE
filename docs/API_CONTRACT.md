@@ -405,3 +405,21 @@ Cấp Anti-Forgery Request Token cho Web client để sử dụng trong header `
 - Credential tiếp tục OTP có TTL tối đa 15 phút, ngẫu nhiên khó đoán, lưu hash và bind account/email/purpose; không nhận địa chỉ email thay thế từ client. Resend thay challenge nhưng không reset limiter theo subject/IP. SMTP lỗi trả `503`, account vẫn pending; người dùng tiếp tục bằng login đúng password. Không gửi email trước khi DB ghi được trạng thái challenge bền vững.
 - Cấu hình SMTP dự kiến dùng các khóa `Email__Provider`, `Email__SmtpHost`, `Email__SmtpPort`, `Email__Security`, `Email__Username`, `Email__AppPassword`, `Email__FromAddress`, `Email__FromName` trong `.env.example`; secret chỉ qua môi trường/local secrets. CP2 thêm timeout và OTP/limiter options cùng runtime validation.
 - Các thay đổi này bổ sung cho project `OCS.Api`: DTO tại `Models/Auth`, service tại `Services`, repository tại `Repositories`, entity/config/migration tại `Entities` và `Context`. Không tạo lại các project Application/Domain không tồn tại.
+
+## Lịch hẹn ký gửi và thông báo
+
+Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CSRF token như mục 3.7.
+
+| Phương thức | Đường dẫn | Quyền | Mục đích |
+| --- | --- | --- | --- |
+| GET | `/api/appointments/available-slots?date=YYYY-MM-DD` | Công khai | Xem khung giờ còn chỗ. |
+| POST | `/api/appointments` | Đăng nhập | Đặt lịch ký gửi. |
+| GET | `/api/appointments/my-history` | Đăng nhập | Xem lịch hẹn của tài khoản hiện tại. |
+| GET | `/api/appointments/{id}` | Chủ lịch hẹn hoặc nhân viên | Xem chi tiết lịch hẹn. |
+| PUT | `/api/appointments/{id}/cancel` | Chủ lịch hẹn | Hủy lịch theo quy định. |
+| GET | `/api/appointments` | Admin, Manager, Staff | Tra cứu danh sách lịch hẹn. |
+| PATCH | `/api/appointments/{id}/status` | Admin, Manager, Staff | Cập nhật trạng thái lịch hẹn. |
+| POST | `/api/appointments/{id}/start-reception` | Admin, Manager, Staff | Kiểm tra điều kiện bắt đầu tiếp nhận. |
+| GET | `/api/notifications` | Đăng nhập | Xem thông báo của tài khoản. |
+| PATCH | `/api/notifications/{id}/read` | Đăng nhập | Đánh dấu một thông báo đã đọc. |
+| PATCH | `/api/notifications/read-all` | Đăng nhập | Đánh dấu tất cả thông báo đã đọc. |

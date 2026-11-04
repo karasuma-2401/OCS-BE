@@ -6,7 +6,7 @@ namespace OCS.Api.IntegrationTests;
 
 public sealed class EnglishDatabaseNamesTests
 {
-    private const string BeforeRename = "20261103101757_NormalizeAccountEmail";
+    private const string BeforeRename = "20261104100000_UpdateAppointmentStatusAndFields";
     private static readonly Dictionary<string, string> TableNames = new()
     {
         ["TAIKHOAN"] = "Accounts",
@@ -59,6 +59,46 @@ public sealed class EnglishDatabaseNamesTests
             result.Add(table + "." + reader.GetString(1));
         }
         return result;
+    }
+
+    [PostgresFact]
+    public async Task AppointmentMigrationCanRunAfterEnglishRename()
+    {
+        const string beforeFeature = "20261103101757_NormalizeAccountEmail";
+        const string feature = "20261104100000_UpdateAppointmentStatusAndFields";
+        await using var database = await TestDatabase.CreateAsync(beforeFeature);
+
+        // Simulate a database renamed before the feature migration was introduced.
+        await using (var connection = await database.OpenAsync())
+        {
+            await using var command = new NpgsqlCommand("""
+                INSERT INTO "__EFMigrationsHistory" ("MigrationId", "ProductVersion")
+                VALUES ('20261104100000_UpdateAppointmentStatusAndFields', '10.0.12');
+                """, connection);
+            await command.ExecuteNonQueryAsync();
+        }
+        await database.MigrateAsync();
+        await using (var connection = await database.OpenAsync())
+        {
+            await using var command = new NpgsqlCommand("DELETE FROM \"__EFMigrationsHistory\" WHERE \"MigrationId\" = $1", connection);
+            command.Parameters.AddWithValue(feature);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await database.MigrateAsync();
+        await using var verify = await database.OpenAsync();
+        await using var columns = new NpgsqlCommand("""
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'Appointments'
+              AND column_name IN ('Note', 'CancellationReason', 'ReminderSentAt');
+            """, verify);
+        Assert.Equal(3L, await columns.ExecuteScalarAsync());
+        columns.CommandText = """
+            SELECT count(*) FROM pg_constraint
+            WHERE conrelid = '"Appointments"'::regclass AND conname = 'CK_Appointments_Enums'
+              AND pg_get_constraintdef(oid) LIKE '%CheckedIn%';
+            """;
+        Assert.Equal(1L, await columns.ExecuteScalarAsync());
     }
 
     [PostgresFact]

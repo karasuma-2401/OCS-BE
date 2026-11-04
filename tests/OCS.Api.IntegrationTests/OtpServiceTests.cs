@@ -402,6 +402,8 @@ public sealed class OtpServiceTests : IDisposable
     private sealed class TestUnitOfWork(TestAuthRepository repository) : IUnitOfWork
     {
         public IProductRepository ProductRepository => null!;
+        public IAppointmentRepository AppointmentRepository => throw new NotSupportedException();
+        public INotificationRepository NotificationRepository => throw new NotSupportedException();
         public IAuthRepository AuthRepository => repository;
         public bool SimulateConcurrencyExceptionOnNextSave { get; set; }
 
