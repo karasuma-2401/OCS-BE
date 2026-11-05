@@ -22,6 +22,12 @@ public sealed class GetPublicProductsRequest : PagedRequest
     [Range(0, (double)decimal.MaxValue, ErrorMessage = "The field MaxPrice must be greater than or equal to 0.")]
     public decimal? MaxPrice { get; init; }
 
+    [Range(0, 100, ErrorMessage = "The field MinCondition must be between 0 and 100.")]
+    public int? MinCondition { get; init; }
+
+    [StringLength(30, ErrorMessage = "The field Sort must be a string with a maximum length of 30.")]
+    public string? Sort { get; init; }
+
     public override IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         foreach (var result in base.Validate(validationContext))
@@ -48,6 +54,24 @@ public sealed class GetPublicProductsRequest : PagedRequest
             yield return new ValidationResult(
                 "The minPrice cannot be greater than maxPrice.",
                 [nameof(MinPrice), nameof(MaxPrice)]);
+        }
+
+        if (MinCondition.HasValue && MinCondition.Value is < 0 or > 100)
+        {
+            yield return new ValidationResult(
+                "The field MinCondition must be between 0 and 100.",
+                [nameof(MinCondition)]);
+        }
+
+        if (!string.IsNullOrWhiteSpace(Sort))
+        {
+            var normalizedSort = Sort.Trim().ToLowerInvariant();
+            if (normalizedSort is not ("newest" or "priceasc" or "pricedesc"))
+            {
+                yield return new ValidationResult(
+                    "The field Sort must be one of: newest, priceAsc, priceDesc.",
+                    [nameof(Sort)]);
+            }
         }
     }
 }

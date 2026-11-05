@@ -41,6 +41,19 @@ public sealed class ProductService(IUnitOfWork unitOfWork) : IProductService
         CancellationToken cancellationToken = default) =>
         unitOfWork.ProductRepository.GetPublicProductsAsync(request, cancellationToken);
 
+    public async Task<Result<PublicProductDetailResponse>> GetPublicProductDetailAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await unitOfWork.ProductRepository.GetPublicProductDetailAsync(id, cancellationToken);
+        if (product is null)
+        {
+            return Result.Failure<PublicProductDetailResponse>(
+                ApplicationError.NotFound("PRODUCT.NOT_FOUND", "Không tìm thấy sản phẩm hoặc sản phẩm không còn mở bán công khai."));
+        }
+        return Result.Success(product);
+    }
+
     public async Task<Result<ProductDto>> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
     {
         var product = new Product

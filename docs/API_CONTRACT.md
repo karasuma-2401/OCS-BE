@@ -524,9 +524,14 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
   - `size` *(string, tùy chọn, tối đa 30 ký tự)*: Lọc theo kích cỡ sản phẩm (không phân biệt hoa thường, tự động loại bỏ khoảng trắng thừa).
   - `minPrice` *(decimal, tùy chọn, tối thiểu 0)*: Lọc theo giá niêm yết tối thiểu.
   - `maxPrice` *(decimal, tùy chọn, tối thiểu 0)*: Lọc theo giá niêm yết tối đa.
+  - `minCondition` *(int, tùy chọn, từ 0–100)*: Lọc sản phẩm có độ mới (`conditionPercentage`) lớn hơn hoặc bằng giá trị này.
+  - `sort` *(string, tùy chọn, mặc định: "newest")*: Thứ tự sắp xếp kết quả:
+    - `newest`: Sản phẩm mới nhất (`CreatedAt DESC, Id DESC`).
+    - `priceAsc`: Giá tăng dần (`ListedPrice ASC, Id ASC`).
+    - `priceDesc`: Giá giảm dần (`ListedPrice DESC, Id DESC`).
 - **Quy tắc hiển thị sản phẩm công khai:**
   - Chỉ hiển thị sản phẩm có `Product.Status == OnSale`.
-  - Thứ tự sắp xếp ổn định: `CreatedAt` giảm dần, sau đó `Id` giảm dần.
+  - Thứ tự sắp xếp theo tham số `sort` ổn định với tie-break bằng `Id`.
 - **Quy tắc bảo mật và riêng tư (Public Privacy Guarantee):**
   - Tuyệt đối **KHÔNG** trả về: `barcode`, `status` nội bộ, `sourceType`, `purchasePrice`, `agreedCommissionRate`, `agreedBrandTier`, `consignmentContractId`, `buyoutId`, `storageLocationId`.
   - Tuyệt đối **KHÔNG** trả về hoặc điều hướng tới bất kỳ thông tin nào của người ký gửi (`customerId`, `customerProfile`, `account`, số điện thoại, email, thông tin tài khoản ngân hàng).
@@ -571,7 +576,65 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
     - `q` dài hơn 100 ký tự hoặc `size` dài hơn 30 ký tự
   - `500 INTERNAL_ERROR`: Lỗi hệ thống nội bộ.
 
-### 9.2. Bảo vệ các endpoint nội bộ cùng resource
+### 9.2. Xem chi tiết sản phẩm công khai: `GET /api/products/{id}/public`
+- **Xác thực:** `[AllowAnonymous]`. Endpoint hoàn toàn công khai cho khách xem chi tiết sản phẩm và gallery ảnh.
+- **Quy tắc hiển thị & Trạng thái:**
+  - Chỉ trả về dữ liệu khi `Product.Status == OnSale`.
+  - Nếu sản phẩm không tồn tại HOẶC có tồn tại nhưng `Status != OnSale` ➔ Trả về `404 NOT_FOUND` (tránh rò rỉ sự hiện diện của sản phẩm nội bộ).
+- **Quy tắc danh sách ảnh (`images`):**
+  - Chỉ bao gồm ảnh có `ImageType IN ('Cover', 'Detail')`.
+  - Tuyệt đối loại trừ ảnh sự cố (`ImageType != 'Incident'`).
+  - Thứ tự ảnh: Sắp xếp tăng dần theo `SortOrder ASC, Id ASC`. Ảnh `Cover` có `SortOrder = 0` đứng đầu mảng.
+- **Bảo vệ quyền riêng tư:**
+  - Tuyệt đối **KHÔNG** trả về: `barcode`, `purchasePrice`, `agreedCommissionRate`, `consignmentContractId`, `buyoutId`, `storageLocationId`, hay thông tin người ký gửi.
+- **Response 200 OK:**
+```json
+{
+  "id": "70000000-0000-0000-0000-000000000001",
+  "name": "Áo Blazer Zara Dạ Nâu",
+  "description": "Mô tả chi tiết sản phẩm Áo Blazer Zara Dạ Nâu, chất lượng đảm bảo.",
+  "listedPrice": "650000.00",
+  "size": "M",
+  "conditionPercentage": 95,
+  "category": {
+    "id": "30000000-0000-0000-0000-000000000001",
+    "name": "Áo khoác"
+  },
+  "brand": {
+    "id": "40000000-0000-0000-0000-000000000001",
+    "name": "Zara"
+  },
+  "images": [
+    {
+      "id": "71000000-0000-0000-0000-000000000001",
+      "url": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80",
+      "imageType": "Cover",
+      "sortOrder": 0
+    },
+    {
+      "id": "72000000-0000-0000-0000-000000000001",
+      "url": "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80",
+      "imageType": "Detail",
+      "sortOrder": 1
+    }
+  ]
+}
+```
+- **Mã lỗi:**
+  - `400 VALIDATION_FAILED`: Định dạng GUID của tham số `id` không hợp lệ (`application/problem+json`).
+  - `404 NOT_FOUND`: Không tìm thấy sản phẩm hoặc sản phẩm không còn mở bán công khai:
+```json
+{
+  "type": "https://httpstatuses.com/404",
+  "title": "Not Found",
+  "status": 404,
+  "code": "PRODUCT.NOT_FOUND",
+  "detail": "Không tìm thấy sản phẩm hoặc sản phẩm không còn mở bán công khai.",
+  "traceId": "00-..."
+}
+```
+
+### 9.3. Bảo vệ các endpoint nội bộ cùng resource
 - Các endpoint quản lý sản phẩm nội bộ:
   - `GET /api/products/{id}`
   - `GET /api/products/barcode/{barcode}`

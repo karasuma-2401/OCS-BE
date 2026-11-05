@@ -24,6 +24,17 @@ public class ProductsController(IProductService productService) : ControllerBase
         return Ok(products);
     }
 
+    [HttpGet("{id:guid}/public")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PublicProductDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    public async Task<IActionResult> GetPublicDetail(Guid id, CancellationToken cancellationToken)
+    {
+        var result = await productService.GetPublicProductDetailAsync(id, cancellationToken);
+        return result.ToActionResult();
+    }
+
     [HttpGet("{id:guid}")]
     [Authorize(Roles = "Admin,Manager,Staff")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)

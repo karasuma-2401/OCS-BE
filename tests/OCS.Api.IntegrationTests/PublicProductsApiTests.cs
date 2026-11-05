@@ -16,6 +16,7 @@ using OCS.Api.Context.Seeds;
 using OCS.Api.Auditing;
 using OCS.Api.Services;
 using OCS.Api.Entities;
+using OCS.Api.Interfaces.Repositories;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Products;
 using OCS.Api.Repositories;
@@ -81,6 +82,31 @@ public sealed class PublicProductsApiTests
         Assert.Equal(20, payload.PageSize);
     }
 
+    [Fact]
+    public async Task AnonymousCaller_CanAccessPublicProductDetail_WithoutTokensOrCookies()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+
+        var sampleId = Guid.NewGuid();
+        using var response = await client.GetAsync($"/api/products/{sampleId}/public");
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"Expected 200 OK but got {response.StatusCode}: {content}");
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+
+        var payload = await response.Content.ReadFromJsonAsync<PublicProductDetailResponse>();
+        Assert.NotNull(payload);
+        Assert.Equal(sampleId, payload.Id);
+        Assert.Equal("Sample Item", payload.Name);
+        Assert.Equal("150000.00", payload.ListedPrice);
+        Assert.Equal(2, payload.Images.Count);
+        Assert.Equal("Cover", payload.Images[0].ImageType);
+        Assert.Equal("Detail", payload.Images[1].ImageType);
+    }
+
     [Theory]
     [InlineData("/api/products/00000000-0000-0000-0000-000000000001")]
     [InlineData("/api/products/barcode/BC-TEST")]
@@ -133,6 +159,9 @@ public sealed class PublicProductsApiTests
     [InlineData("/api/products?minPrice=-10")]
     [InlineData("/api/products?maxPrice=-5")]
     [InlineData("/api/products?minPrice=500000&maxPrice=100000")]
+    [InlineData("/api/products?minCondition=-1")]
+    [InlineData("/api/products?minCondition=101")]
+    [InlineData("/api/products?sort=invalid_sort_type")]
     public async Task Validation_RejectsInvalidQueryParameters_With400ValidationFailed(string route)
     {
         await using var factory = CreateFactory();
@@ -251,11 +280,11 @@ public sealed class PublicProductsApiTests
 
         var result = await repo.GetPublicProductsAsync(new GetPublicProductsRequest());
 
-        Assert.Equal(3, result.TotalCount);
-        Assert.Equal(3, result.Items.Count);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Single(result.Items);
         Assert.Contains(result.Items, item => item.Id == validOnSale.Id);
-        Assert.Contains(result.Items, item => item.Id == prodWithInactiveBrand.Id);
-        Assert.Contains(result.Items, item => item.Id == prodWithInactiveCat.Id);
+        Assert.DoesNotContain(result.Items, item => item.Id == prodWithInactiveBrand.Id);
+        Assert.DoesNotContain(result.Items, item => item.Id == prodWithInactiveCat.Id);
         Assert.DoesNotContain(result.Items, item => item.Id == pendingProd.Id);
         Assert.DoesNotContain(result.Items, item => item.Id == soldProd.Id);
     }
@@ -686,6 +715,280 @@ public sealed class PublicProductsApiTests
         Assert.Null(noCoverItem.CoverImageUrl);
     }
 
+    [Fact]
+    public async Task RepositoryQuery_SortOptions_Newest_PriceAsc_PriceDesc_AreStable()
+    {
+        await using var db = CreateInMemoryDbContext();
+        var repo = new ProductRepository(db);
+
+        var cat = new Category { Id = Guid.NewGuid(), Name = "Cat Sort", IsActive = true };
+        var brand = new Brand { Id = Guid.NewGuid(), Name = "Brand Sort", Tier = BrandTier.Commercial, DefaultCommissionRate = 15m, IsActive = true };
+        db.Categories.Add(cat);
+        db.Brands.Add(brand);
+
+        var now = DateTimeOffset.UtcNow;
+        var pCheap = new Product { Id = Guid.NewGuid(), Barcode = "BC-CHEAP", Name = "Cheap", Size = "M", ListedPrice = 100000m, Status = ProductStatus.OnSale, CategoryId = cat.Id, BrandId = brand.Id, CreatedAt = now.AddMinutes(-10) };
+        var pMid = new Product { Id = Guid.NewGuid(), Barcode = "BC-MID", Name = "Mid", Size = "M", ListedPrice = 300000m, Status = ProductStatus.OnSale, CategoryId = cat.Id, BrandId = brand.Id, CreatedAt = now.AddMinutes(-5) };
+        var pExpensive = new Product { Id = Guid.NewGuid(), Barcode = "BC-EXP", Name = "Expensive", Size = "M", ListedPrice = 800000m, Status = ProductStatus.OnSale, CategoryId = cat.Id, BrandId = brand.Id, CreatedAt = now };
+
+        db.Products.AddRange(pCheap, pMid, pExpensive);
+        await db.SaveChangesAsync();
+
+        // 1. Sort newest (default)
+        var resNewest = await repo.GetPublicProductsAsync(new GetPublicProductsRequest { Sort = "newest" });
+        Assert.Equal(pExpensive.Id, resNewest.Items[0].Id);
+        Assert.Equal(pMid.Id, resNewest.Items[1].Id);
+        Assert.Equal(pCheap.Id, resNewest.Items[2].Id);
+
+        // 2. Sort priceAsc
+        var resAsc = await repo.GetPublicProductsAsync(new GetPublicProductsRequest { Sort = "priceAsc" });
+        Assert.Equal(pCheap.Id, resAsc.Items[0].Id);
+        Assert.Equal(pMid.Id, resAsc.Items[1].Id);
+        Assert.Equal(pExpensive.Id, resAsc.Items[2].Id);
+
+        // 3. Sort priceDesc
+        var resDesc = await repo.GetPublicProductsAsync(new GetPublicProductsRequest { Sort = "priceDesc" });
+        Assert.Equal(pExpensive.Id, resDesc.Items[0].Id);
+        Assert.Equal(pMid.Id, resDesc.Items[1].Id);
+        Assert.Equal(pCheap.Id, resDesc.Items[2].Id);
+    }
+
+    [Fact]
+    public async Task RepositoryQuery_FilterByMinCondition_WorksCorrectly()
+    {
+        await using var db = CreateInMemoryDbContext();
+        var repo = new ProductRepository(db);
+
+        var cat = new Category { Id = Guid.NewGuid(), Name = "Cat Cond", IsActive = true };
+        var brand = new Brand { Id = Guid.NewGuid(), Name = "Brand Cond", Tier = BrandTier.Commercial, DefaultCommissionRate = 15m, IsActive = true };
+        db.Categories.Add(cat);
+        db.Brands.Add(brand);
+
+        var pLow = new Product { Id = Guid.NewGuid(), Barcode = "BC-LOW", Name = "Condition 70", Size = "M", ConditionPercentage = 70, ListedPrice = 100000m, Status = ProductStatus.OnSale, CategoryId = cat.Id, BrandId = brand.Id, CreatedAt = DateTimeOffset.UtcNow };
+        var pMid = new Product { Id = Guid.NewGuid(), Barcode = "BC-MED", Name = "Condition 85", Size = "M", ConditionPercentage = 85, ListedPrice = 100000m, Status = ProductStatus.OnSale, CategoryId = cat.Id, BrandId = brand.Id, CreatedAt = DateTimeOffset.UtcNow };
+        var pHigh = new Product { Id = Guid.NewGuid(), Barcode = "BC-HIGH", Name = "Condition 95", Size = "M", ConditionPercentage = 95, ListedPrice = 100000m, Status = ProductStatus.OnSale, CategoryId = cat.Id, BrandId = brand.Id, CreatedAt = DateTimeOffset.UtcNow };
+
+        db.Products.AddRange(pLow, pMid, pHigh);
+        await db.SaveChangesAsync();
+
+        var res = await repo.GetPublicProductsAsync(new GetPublicProductsRequest { MinCondition = 85 });
+        Assert.Equal(2, res.TotalCount);
+        Assert.Contains(res.Items, item => item.Id == pMid.Id);
+        Assert.Contains(res.Items, item => item.Id == pHigh.Id);
+        Assert.DoesNotContain(res.Items, item => item.Id == pLow.Id);
+    }
+
+    [Fact]
+    public async Task RepositoryQuery_GetPublicProductDetailAsync_FiltersOnlyOnSale_AndSortsImages_ExcludesIncident()
+    {
+        await using var db = CreateInMemoryDbContext();
+        var repo = new ProductRepository(db);
+
+        var cat = new Category { Id = Guid.NewGuid(), Name = "Cat Detail", IsActive = true };
+        var brand = new Brand { Id = Guid.NewGuid(), Name = "Brand Detail", Tier = BrandTier.Commercial, DefaultCommissionRate = 15m, IsActive = true };
+        db.Categories.Add(cat);
+        db.Brands.Add(brand);
+
+        var onSaleProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "BC-ONSALE-DETAIL",
+            Name = "OnSale Detail Product",
+            Size = "L",
+            ListedPrice = 450000m,
+            ConditionPercentage = 92,
+            Description = "Detail description",
+            Status = ProductStatus.OnSale,
+            CategoryId = cat.Id,
+            BrandId = brand.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        var pendingProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "BC-PENDING-DETAIL",
+            Name = "Pending Detail Product",
+            Size = "M",
+            ListedPrice = 300000m,
+            ConditionPercentage = 80,
+            Status = ProductStatus.PendingProcessing,
+            CategoryId = cat.Id,
+            BrandId = brand.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.Products.AddRange(onSaleProduct, pendingProduct);
+
+        var coverImg = new ProductImage { Id = Guid.NewGuid(), ProductId = onSaleProduct.Id, Url = "https://cdn.example.com/cover.jpg", ImageType = ProductImageType.Cover, SortOrder = 0 };
+        var detailImg = new ProductImage { Id = Guid.NewGuid(), ProductId = onSaleProduct.Id, Url = "https://cdn.example.com/detail.jpg", ImageType = ProductImageType.Detail, SortOrder = 1 };
+        var incidentImg = new ProductImage { Id = Guid.NewGuid(), ProductId = onSaleProduct.Id, Url = "https://cdn.example.com/incident.jpg", ImageType = ProductImageType.Incident, SortOrder = 2 };
+
+        db.ProductImages.AddRange(coverImg, detailImg, incidentImg);
+        await db.SaveChangesAsync();
+
+        // 1. OnSale product returns details with sorted Cover + Detail images, excluding Incident
+        var detail = await repo.GetPublicProductDetailAsync(onSaleProduct.Id);
+        Assert.NotNull(detail);
+        Assert.Equal(onSaleProduct.Id, detail.Id);
+        Assert.Equal("450000.00", detail.ListedPrice);
+        Assert.Equal(2, detail.Images.Count);
+        Assert.Equal("Cover", detail.Images[0].ImageType);
+        Assert.Equal("Detail", detail.Images[1].ImageType);
+        Assert.DoesNotContain(detail.Images, img => img.ImageType == "Incident");
+
+        // 2. Non-OnSale product returns null
+        var pendingDetail = await repo.GetPublicProductDetailAsync(pendingProduct.Id);
+        Assert.Null(pendingDetail);
+
+        // 3. Non-existent product returns null
+        var nonExistentDetail = await repo.GetPublicProductDetailAsync(Guid.NewGuid());
+        Assert.Null(nonExistentDetail);
+    }
+
+    [Fact]
+    public async Task Repository_And_Service_ExcludeProducts_WithInactiveCategoryOrBrand()
+    {
+        using var db = CreateInMemoryDbContext();
+        var activeCat = new Category { Id = Guid.NewGuid(), Name = "Active Cat", IsActive = true };
+        var inactiveCat = new Category { Id = Guid.NewGuid(), Name = "Inactive Cat", IsActive = false };
+        var activeBrand = new Brand { Id = Guid.NewGuid(), Name = "Active Brand", IsActive = true, Tier = BrandTier.Commercial, DefaultCommissionRate = 10m };
+        var inactiveBrand = new Brand { Id = Guid.NewGuid(), Name = "Inactive Brand", IsActive = false, Tier = BrandTier.Commercial, DefaultCommissionRate = 10m };
+
+        db.Categories.AddRange(activeCat, inactiveCat);
+        db.Brands.AddRange(activeBrand, inactiveBrand);
+
+        var normalProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "BC-NORMAL",
+            Name = "Active Product",
+            Size = "M",
+            ListedPrice = 100000m,
+            ConditionPercentage = 90,
+            Status = ProductStatus.OnSale,
+            CategoryId = activeCat.Id,
+            BrandId = activeBrand.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        var inactiveCatProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "BC-INACT-CAT",
+            Name = "Inactive Cat Product",
+            Size = "M",
+            ListedPrice = 200000m,
+            ConditionPercentage = 90,
+            Status = ProductStatus.OnSale,
+            CategoryId = inactiveCat.Id,
+            BrandId = activeBrand.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        var inactiveBrandProduct = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "BC-INACT-BRAND",
+            Name = "Inactive Brand Product",
+            Size = "L",
+            ListedPrice = 300000m,
+            ConditionPercentage = 90,
+            Status = ProductStatus.OnSale,
+            CategoryId = activeCat.Id,
+            BrandId = inactiveBrand.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        db.Products.AddRange(normalProduct, inactiveCatProduct, inactiveBrandProduct);
+        await db.SaveChangesAsync();
+
+        var repo = new ProductRepository(db);
+        var unitOfWork = new TestUnitOfWork(repo);
+        var service = new ProductService(unitOfWork);
+
+        // 1. GetPublicProducts excludes inactive category and inactive brand
+        var pagedResponse = await service.GetPublicProductsAsync(new GetPublicProductsRequest { Page = 1, PageSize = 10 });
+        Assert.Equal(1, pagedResponse.TotalCount);
+        Assert.Single(pagedResponse.Items);
+        Assert.Equal(normalProduct.Id, pagedResponse.Items[0].Id);
+
+        // 2. GetPublicProductDetail returns 404 for products with inactive category
+        var inactiveCatDetail = await service.GetPublicProductDetailAsync(inactiveCatProduct.Id);
+        Assert.False(inactiveCatDetail.IsSuccess);
+        Assert.Equal("PRODUCT.NOT_FOUND", inactiveCatDetail.Error?.Code);
+
+        // 3. GetPublicProductDetail returns 404 for products with inactive brand
+        var inactiveBrandDetail = await service.GetPublicProductDetailAsync(inactiveBrandProduct.Id);
+        Assert.False(inactiveBrandDetail.IsSuccess);
+        Assert.Equal("PRODUCT.NOT_FOUND", inactiveBrandDetail.Error?.Code);
+
+        // 4. GetPublicProductDetail returns success for normal active product
+        var normalDetail = await service.GetPublicProductDetailAsync(normalProduct.Id);
+        Assert.True(normalDetail.IsSuccess);
+        Assert.NotNull(normalDetail.Data);
+        Assert.Equal(normalProduct.Id, normalDetail.Data.Id);
+    }
+
+    [Fact]
+    public async Task ProductService_WithRealRepository_GetPublicProductDetail_StrictlyExcludesIncidentImages()
+    {
+        using var db = CreateInMemoryDbContext();
+        var cat = new Category { Id = Guid.NewGuid(), Name = "Category A", IsActive = true };
+        var brand = new Brand { Id = Guid.NewGuid(), Name = "Brand A", IsActive = true, Tier = BrandTier.Commercial, DefaultCommissionRate = 10m };
+        db.Categories.Add(cat);
+        db.Brands.Add(brand);
+
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "BC-INCIDENT-TEST",
+            Name = "Product With Incident",
+            Size = "S",
+            ListedPrice = 500000m,
+            ConditionPercentage = 92,
+            Status = ProductStatus.OnSale,
+            CategoryId = cat.Id,
+            BrandId = brand.Id,
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.Products.Add(product);
+
+        db.ProductImages.AddRange(
+            new ProductImage { Id = Guid.NewGuid(), ProductId = product.Id, Url = "https://cdn.example.com/cover.jpg", ImageType = ProductImageType.Cover, SortOrder = 0 },
+            new ProductImage { Id = Guid.NewGuid(), ProductId = product.Id, Url = "https://cdn.example.com/detail.jpg", ImageType = ProductImageType.Detail, SortOrder = 1 },
+            new ProductImage { Id = Guid.NewGuid(), ProductId = product.Id, Url = "https://cdn.example.com/incident-secret.jpg", ImageType = ProductImageType.Incident, SortOrder = 99 }
+        );
+        await db.SaveChangesAsync();
+
+        var repo = new ProductRepository(db);
+        var unitOfWork = new TestUnitOfWork(repo);
+        var service = new ProductService(unitOfWork);
+
+        var result = await service.GetPublicProductDetailAsync(product.Id);
+        Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Data);
+        Assert.Equal(2, result.Data.Images.Count);
+        Assert.Equal("Cover", result.Data.Images[0].ImageType);
+        Assert.Equal("Detail", result.Data.Images[1].ImageType);
+        Assert.DoesNotContain(result.Data.Images, img => img.ImageType == "Incident" || img.Url.Contains("incident-secret"));
+    }
+
+    private sealed class TestUnitOfWork(IProductRepository productRepo) : IUnitOfWork
+    {
+        public IProductRepository ProductRepository => productRepo;
+        public IAuthRepository AuthRepository => null!;
+        public IAppointmentRepository AppointmentRepository => null!;
+        public INotificationRepository NotificationRepository => null!;
+        public ICustomerProfileRepository CustomerProfileRepository => null!;
+        public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+        public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CommitTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<bool> ReloadAccountAsync(Account account, CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public void Dispose() { }
+    }
+
     private sealed class FakeTestProductService : IProductService
     {
         public Task<List<ProductDto>> GetAllAsync(CancellationToken cancellationToken = default) =>
@@ -716,6 +1019,23 @@ public sealed class PublicProductsApiTests
                 request.Page,
                 request.PageSize,
                 1));
+
+        public Task<Result<PublicProductDetailResponse>> GetPublicProductDetailAsync(
+            Guid id,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(Result.Success(new PublicProductDetailResponse(
+                id,
+                "Sample Item",
+                "Description",
+                "150000.00",
+                "M",
+                90,
+                new PublicCategoryResponse(Guid.NewGuid(), "Cat"),
+                new PublicBrandResponse(Guid.NewGuid(), "Brand"),
+                [
+                    new PublicProductImageResponse(Guid.NewGuid(), "https://cdn.example.com/cover.jpg", "Cover", 0),
+                    new PublicProductImageResponse(Guid.NewGuid(), "https://cdn.example.com/detail.jpg", "Detail", 1)
+                ])));
 
         public Task<Result<ProductDto>> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default) =>
             Task.FromResult(Result.Success(new ProductDto(Guid.NewGuid(), dto.Barcode, dto.Name, dto.Description, dto.ListedPrice, "OnSale", null, null, null)));

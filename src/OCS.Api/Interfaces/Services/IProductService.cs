@@ -10,6 +10,7 @@ public interface IProductService
     Task<Result<ProductDto>> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<ProductDto>> GetByBarcodeAsync(string barcode, CancellationToken cancellationToken = default);
     Task<PagedResponse<PublicProductResponse>> GetPublicProductsAsync(GetPublicProductsRequest request, CancellationToken cancellationToken = default);
+    Task<Result<PublicProductDetailResponse>> GetPublicProductDetailAsync(Guid id, CancellationToken cancellationToken = default);
     Task<Result<ProductDto>> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default);
 }
 

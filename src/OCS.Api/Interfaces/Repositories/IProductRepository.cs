@@ -10,6 +10,7 @@ public interface IProductRepository
     Task<Product?> GetByBarcodeAsync(string barcode, CancellationToken cancellationToken = default);
     Task<List<Product>> GetAllAsync(CancellationToken cancellationToken = default);
     Task<PagedResponse<PublicProductResponse>> GetPublicProductsAsync(GetPublicProductsRequest request, CancellationToken cancellationToken = default);
+    Task<PublicProductDetailResponse?> GetPublicProductDetailAsync(Guid id, CancellationToken cancellationToken = default);
     void Add(Product product);
 }
 

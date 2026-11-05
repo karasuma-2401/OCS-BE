@@ -38,7 +38,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
 
         var query = dbContext.Products
             .AsNoTracking()
-            .Where(p => p.Status == ProductStatus.OnSale);
+            .Where(p => p.Status == ProductStatus.OnSale && p.Category.IsActive && p.Brand.IsActive);
 
         if (!string.IsNullOrWhiteSpace(request.Q))
         {
@@ -75,11 +75,22 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             query = query.Where(p => p.ListedPrice <= request.MaxPrice.Value);
         }
 
+        if (request.MinCondition.HasValue)
+        {
+            query = query.Where(p => p.ConditionPercentage >= request.MinCondition.Value);
+        }
+
         var totalCount = await query.CountAsync(cancellationToken);
 
-        var rows = await query
-            .OrderByDescending(p => p.CreatedAt)
-            .ThenByDescending(p => p.Id)
+        var sortMode = (request.Sort ?? "newest").Trim().ToLowerInvariant();
+        var orderedQuery = sortMode switch
+        {
+            "priceasc" => query.OrderBy(p => p.ListedPrice).ThenBy(p => p.Id),
+            "pricedesc" => query.OrderByDescending(p => p.ListedPrice).ThenByDescending(p => p.Id),
+            _ => query.OrderByDescending(p => p.CreatedAt).ThenByDescending(p => p.Id)
+        };
+
+        var rows = await orderedQuery
             .Skip(request.Skip)
             .Take(request.PageSize)
             .Select(p => new
@@ -127,6 +138,68 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             request.Page,
             request.PageSize,
             totalCount);
+    }
+
+    public async Task<PublicProductDetailResponse?> GetPublicProductDetailAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        var product = await dbContext.Products
+            .AsNoTracking()
+            .Where(p => p.Id == id && p.Status == ProductStatus.OnSale && p.Category.IsActive && p.Brand.IsActive)
+            .Select(p => new
+            {
+                p.Id,
+                p.Name,
+                p.Description,
+                p.ListedPrice,
+                p.Size,
+                p.ConditionPercentage,
+                Category = new
+                {
+                    p.Category.Id,
+                    p.Category.Name
+                },
+                Brand = new
+                {
+                    p.Brand.Id,
+                    p.Brand.Name
+                },
+                Images = p.Images
+                    .Where(img => img.ImageType == ProductImageType.Cover || img.ImageType == ProductImageType.Detail)
+                    .OrderBy(img => img.SortOrder)
+                    .ThenBy(img => img.Id)
+                    .Select(img => new
+                    {
+                        img.Id,
+                        img.Url,
+                        img.ImageType,
+                        img.SortOrder
+                    })
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (product is null)
+        {
+            return null;
+        }
+
+        return new PublicProductDetailResponse(
+            product.Id,
+            product.Name,
+            product.Description,
+            product.ListedPrice.ToString("0.00", CultureInfo.InvariantCulture),
+            product.Size,
+            product.ConditionPercentage,
+            new PublicCategoryResponse(product.Category.Id, product.Category.Name),
+            new PublicBrandResponse(product.Brand.Id, product.Brand.Name),
+            product.Images
+                .Select(img => new PublicProductImageResponse(
+                    img.Id,
+                    img.Url,
+                    img.ImageType.ToString(),
+                    img.SortOrder))
+                .ToList());
     }
 
     public void Add(Product product)
