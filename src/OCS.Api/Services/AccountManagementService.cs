@@ -99,7 +99,7 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
             return Result.Success(MapToSummary(account));
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-                   { SqlState: PostgresErrorCodes.UniqueViolation })
+        { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             await unitOfWork.RollbackTransactionAsync(cancellationToken);
             return Result.Failure<AccountSummaryDto>(ApplicationError.Conflict(
@@ -288,7 +288,7 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
             return Result.Success(MapEmployeeProfile(account));
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-                   { SqlState: PostgresErrorCodes.UniqueViolation })
+        { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             await unitOfWork.RollbackTransactionAsync(cancellationToken);
             return Result.Failure<EmployeeProfileDto>(ApplicationError.Conflict(
@@ -600,7 +600,7 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-                   { SqlState: PostgresErrorCodes.UniqueViolation })
+        { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Result.Failure<AccountSummaryDto>(
                 ApplicationError.Conflict("ACCOUNT.IDENTITY_EXISTS", "Email, tên đăng nhập hoặc số điện thoại đã được sử dụng."));
