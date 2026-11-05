@@ -671,7 +671,8 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         // 9f. Product OnSale with ONLY Detail image (no Cover image) -> CoverImageUrl should be null in public response
         var noCoverProdId = Guid.Parse("70000000-0000-0000-0000-000000000031");
-        if (!await dbContext.Products.AnyAsync(p => p.Id == noCoverProdId, cancellationToken))
+        var existingNoCoverProd = await dbContext.Products.FirstOrDefaultAsync(p => p.Id == noCoverProdId, cancellationToken);
+        if (existingNoCoverProd == null)
         {
             var p = new Product
             {
@@ -683,11 +684,15 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 Size = "XL",
                 ConditionPercentage = 90,
                 Description = "Chỉ có ảnh chi tiết không có ảnh bìa",
-                CreatedAt = baseTime.AddHours(31)
+                CreatedAt = baseTime.AddHours(10)
             };
             p.AssignConsignmentTerms(contractId, 250000m, uniqlo);
             p.OfferForSale();
             dbContext.Products.Add(p);
+        }
+        else
+        {
+            existingNoCoverProd.CreatedAt = baseTime.AddHours(10);
         }
 
         var detailImgId = Guid.Parse("71000000-0000-0000-0000-000000000031");
