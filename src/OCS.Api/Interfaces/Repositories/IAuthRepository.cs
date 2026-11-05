@@ -12,7 +12,12 @@ public interface IAuthRepository
         AccountType? accountType,
         AccountStatus? status,
         bool staffOnly,
+        Guid? roleId,
         CancellationToken cancellationToken = default);
+
+    Task<PagedResponse<AuditLog>> GetPagedAccountAuditLogsAsync(
+        PagedRequest paging, Guid? accountId, CancellationToken cancellationToken = default);
+    void AddAuditLog(AuditLog auditLog);
 
     Task<Account?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
     Task<bool> ExistsEmailAsync(string email, CancellationToken cancellationToken = default);

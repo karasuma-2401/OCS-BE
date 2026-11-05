@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OCS.Api.Common;
@@ -12,6 +15,116 @@ namespace OCS.Api.Services;
 public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
     : IAccountManagementService
 {
+    private const string DefaultInternalPassword = "Ocs@123456";
+    private const string PasswordPattern = @"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$";
+
+    public async Task<Result<bool>> ResetPasswordAsync(Guid requesterAccountId, Guid accountId,
+        ResetAccountPasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (requesterAccountId == accountId)
+            return Result.Failure<bool>(ApplicationError.Conflict(
+                "ACCOUNT.SELF_PASSWORD_RESET", "Dùng chức năng đổi mật khẩu để thay mật khẩu của chính mình."));
+        if (request.UseDefaultPassword && request.Password is not null
+            || !request.UseDefaultPassword && (string.IsNullOrEmpty(request.Password)
+                || Encoding.UTF8.GetByteCount(request.Password) > 72
+                || !new RegularExpressionAttribute(PasswordPattern).IsValid(request.Password)))
+            return Result.Failure<bool>(ApplicationError.Validation(
+                "ACCOUNT.INVALID_PASSWORD", "Chọn mật khẩu mặc định hoặc nhập mật khẩu tự đặt hợp lệ."));
+
+        await unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            await unitOfWork.AuthRepository.LockAccountAsync(accountId, cancellationToken);
+            var requester = await unitOfWork.AuthRepository.GetByIdAsync(requesterAccountId, cancellationToken);
+            if (requester is null || requester.Status != AccountStatus.Active || requester.EmailVerifiedAt is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<bool>(ApplicationError.Unauthorized(
+                    "ACCOUNT.UNAUTHORIZED", "Tài khoản không còn hiệu lực."));
+            }
+            if (!requester.AccountRoles.Any(ar => ar.RoleId == Role.AdminRoleId))
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<bool>(ApplicationError.Forbidden(
+                    "ACCOUNT.FORBIDDEN", "Chỉ Admin được đặt lại mật khẩu tài khoản khác."));
+            }
+            var account = await unitOfWork.AuthRepository.GetByIdAsync(accountId, cancellationToken);
+            if (account is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<bool>(ApplicationError.NotFound(
+                    "ACCOUNT.NOT_FOUND", "Không tìm thấy tài khoản."));
+            }
+            if (IsRootAdmin(account))
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<bool>(ApplicationError.Conflict(
+                    "ACCOUNT.PROTECTED_ADMIN", "Không thể đặt lại mật khẩu Admin gốc."));
+            }
+            if (request.UseDefaultPassword && account.AccountType != AccountType.Internal)
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<bool>(ApplicationError.Validation(
+                    "ACCOUNT.INVALID_PASSWORD", "Mật khẩu mặc định chỉ dành cho tài khoản nội bộ."));
+            }
+
+            var password = request.UseDefaultPassword ? DefaultInternalPassword : request.Password!;
+            account.PasswordHash = passwordHasher.HashPassword(password);
+            var now = DateTimeOffset.UtcNow;
+            unitOfWork.AuthRepository.AddAuditLog(new AuditLog
+            {
+                ActorAccountId = requesterAccountId,
+                ActorType = AuditActorType.User,
+                Action = "PasswordReset",
+                EntityType = nameof(Account),
+                EntityId = accountId.ToString("D"),
+                Source = "Accounts.ResetPassword",
+                OccurredAt = now,
+                RecordedAt = now
+            });
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await unitOfWork.AuthRepository.RevokeSessionsAsync(accountId, now, cancellationToken);
+            await unitOfWork.CommitTransactionAsync(cancellationToken);
+            return Result.Success(true);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            return Result.Failure<bool>(ApplicationError.Conflict(
+                "ACCOUNT.CONCURRENT_UPDATE", "Tài khoản vừa được thay đổi. Vui lòng tải lại."));
+        }
+        catch
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    public async Task<Result<PagedResponse<AccountAuditLogDto>>> GetAccountHistoryAsync(
+        Guid requesterAccountId, PagedRequest paging, Guid? accountId,
+        CancellationToken cancellationToken = default)
+    {
+        var requester = await unitOfWork.AuthRepository.GetByIdAsync(requesterAccountId, cancellationToken);
+        if (requester is null || requester.Status != AccountStatus.Active || requester.EmailVerifiedAt is null)
+            return Result.Failure<PagedResponse<AccountAuditLogDto>>(ApplicationError.Unauthorized(
+                "ACCOUNT.UNAUTHORIZED", "Tài khoản không còn hiệu lực."));
+        if (!requester.AccountRoles.Any(ar => ar.RoleId == Role.AdminRoleId))
+            return Result.Failure<PagedResponse<AccountAuditLogDto>>(ApplicationError.Forbidden(
+                "ACCOUNT.FORBIDDEN", "Chỉ Admin được xem lịch sử tài khoản."));
+        if (accountId.HasValue && await unitOfWork.AuthRepository.GetByIdAsync(accountId.Value, cancellationToken) is null)
+            return Result.Failure<PagedResponse<AccountAuditLogDto>>(ApplicationError.NotFound(
+                "ACCOUNT.NOT_FOUND", "Không tìm thấy tài khoản."));
+
+        var page = await unitOfWork.AuthRepository.GetPagedAccountAuditLogsAsync(
+            paging, accountId, cancellationToken);
+        var items = page.Items.Select(log => new AccountAuditLogDto(log.Id, log.ActorAccountId,
+            log.Action, log.EntityType, log.EntityId,
+            JsonSerializer.Deserialize<JsonElement>(log.Changes), log.OccurredAt, log.Source)).ToList();
+        return Result.Success(new PagedResponse<AccountAuditLogDto>(
+            items, page.Page, page.PageSize, page.TotalCount));
+    }
+
     public async Task<Result<AccountSummaryDto>> UpdateAccountInfoAsync(Guid requesterAccountId,
         Guid accountId, UpdateAccountInfoRequest request, CancellationToken cancellationToken = default)
     {
@@ -134,7 +247,8 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
                 ApplicationError.Validation("ACCOUNT.INVALID_ROLES", "Vai trò phải là Admin, Manager hoặc Staff.")));
 
         var staffRequest = new CreateStaffAccountRequest(request.FullName, request.Email,
-            request.PhoneNumber, request.Username, request.Password, request.JobTitle, request.HiredOn);
+            request.PhoneNumber, request.Username, request.Password, request.JobTitle, request.HiredOn,
+            request.UseDefaultPassword);
         return CreateInternalCoreAsync(requesterAccountId, staffRequest, roleId, true, cancellationToken);
     }
 
@@ -543,6 +657,18 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
                 ApplicationError.Forbidden("ACCOUNT.FORBIDDEN", "Bạn không có quyền tạo tài khoản nhân viên."));
         }
 
+        var useDefaultPassword = request.UseDefaultPassword ?? request.Password is null;
+        if (useDefaultPassword && request.Password is not null
+            || !useDefaultPassword && (string.IsNullOrEmpty(request.Password)
+                || Encoding.UTF8.GetByteCount(request.Password) > 72
+                || !new RegularExpressionAttribute(PasswordPattern).IsValid(request.Password)))
+        {
+            return Result.Failure<AccountSummaryDto>(ApplicationError.Validation(
+                "ACCOUNT.INVALID_PASSWORD", "Chọn mật khẩu mặc định hoặc nhập mật khẩu tự đặt hợp lệ."));
+        }
+
+        var password = useDefaultPassword ? DefaultInternalPassword : request.Password!;
+
         var email = request.Email.Trim();
         if (EmailIdentity.Normalize(email) is null)
         {
@@ -574,7 +700,7 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
             Email = email,
             PhoneNumber = request.PhoneNumber.Trim(),
             Username = username,
-            PasswordHash = passwordHasher.HashPassword(request.Password),
+            PasswordHash = passwordHasher.HashPassword(password),
             AccountType = AccountType.Internal,
             Status = AccountStatus.PendingActivation,
             CreatedByAccountId = requesterAccountId
@@ -650,8 +776,22 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
         string? search,
         AccountType? accountType,
         AccountStatus? status,
+        string? role,
         CancellationToken cancellationToken = default)
     {
+        Guid? roleId = role?.Trim().ToUpperInvariant() switch
+        {
+            null or "" => null,
+            "ADMIN" => Role.AdminRoleId,
+            "MANAGER" => Role.ManagerRoleId,
+            "STAFF" => Role.StaffRoleId,
+            "CUSTOMER" => Role.CustomerRoleId,
+            _ => Guid.Empty
+        };
+        if (roleId == Guid.Empty)
+            return Result.Failure<PagedResponse<AccountSummaryDto>>(ApplicationError.Validation(
+                "ACCOUNT.INVALID_ROLE", "Vai trò lọc phải là Admin, Manager, Staff hoặc Customer."));
+
         var requester = await unitOfWork.AuthRepository.GetByIdAsync(requesterAccountId, cancellationToken);
         if (requester is null || requester.Status != AccountStatus.Active || requester.EmailVerifiedAt is null)
         {
@@ -668,7 +808,7 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
         }
 
         var page = await unitOfWork.AuthRepository.GetPagedAccountsAsync(
-            paging, search, accountType, status, staffOnly: !isAdmin, cancellationToken);
+            paging, search, accountType, status, staffOnly: !isAdmin, roleId, cancellationToken);
         var items = page.Items.Select(MapToSummary).ToList();
         return Result.Success(new PagedResponse<AccountSummaryDto>(
             items, page.Page, page.PageSize, page.TotalCount));

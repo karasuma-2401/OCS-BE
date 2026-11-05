@@ -71,6 +71,7 @@ public sealed class AccountsEndpointAuthorizationTests
     [Theory]
     [InlineData("POST", "/api/accounts/internal")]
     [InlineData("PUT", "/api/accounts/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/accounts/00000000-0000-0000-0000-000000000001/reset-password")]
     [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/status")]
     [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile")]
     public async Task CustomerCannotUseNewManagementEndpoints(string method, string path)
@@ -81,6 +82,18 @@ public sealed class AccountsEndpointAuthorizationTests
             BaseAddress = new Uri("https://localhost")
         });
         using var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CustomerCannotReadAccountHistory()
+    {
+        await using var factory = CreateCustomerFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("https://localhost")
+        });
+        using var response = await client.GetAsync("/api/accounts/history");
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 

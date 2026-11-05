@@ -14,6 +14,32 @@ namespace OCS.Api.Controllers;
 [Authorize(Roles = "Admin,Manager")]
 public sealed class AccountsController(IAccountManagementService accountManagementService) : ControllerBase
 {
+    [HttpPost("{id:guid}/reset-password")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetAccountPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var requesterAccountId))
+            return Unauthorized();
+        var result = await accountManagementService.ResetPasswordAsync(
+            requesterAccountId, id, request, cancellationToken);
+        return result.IsSuccess ? NoContent() : result.ToActionResult(this);
+    }
+
+    [HttpGet("history")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetHistory([FromQuery] PagedRequest paging,
+        [FromQuery] Guid? accountId, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var requesterAccountId))
+            return Unauthorized();
+        var result = await accountManagementService.GetAccountHistoryAsync(
+            requesterAccountId, paging, accountId, cancellationToken);
+        return result.ToActionResult(this);
+    }
+
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateAccountInfo(Guid id, [FromBody] UpdateAccountInfoRequest request,
@@ -161,6 +187,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
         [FromQuery] string? search,
         [FromQuery] AccountType? accountType,
         [FromQuery] AccountStatus? status,
+        [FromQuery] string? role,
         CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
@@ -173,7 +200,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
         }
 
         var result = await accountManagementService.GetPagedAccountsAsync(
-            requesterAccountId, paging, search, accountType, status, cancellationToken);
+            requesterAccountId, paging, search, accountType, status, role, cancellationToken);
         return result.ToActionResult(this);
     }
 }

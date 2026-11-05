@@ -6,6 +6,12 @@ namespace OCS.Api.Interfaces.Services;
 
 public interface IAccountManagementService
 {
+    Task<Result<bool>> ResetPasswordAsync(Guid requesterAccountId, Guid accountId,
+        ResetAccountPasswordRequest request, CancellationToken cancellationToken = default);
+
+    Task<Result<PagedResponse<AccountAuditLogDto>>> GetAccountHistoryAsync(Guid requesterAccountId,
+        PagedRequest paging, Guid? accountId, CancellationToken cancellationToken = default);
+
     Task<Result<AccountSummaryDto>> UpdateAccountInfoAsync(Guid requesterAccountId, Guid accountId,
         UpdateAccountInfoRequest request, CancellationToken cancellationToken = default);
 
@@ -49,5 +55,6 @@ public interface IAccountManagementService
         string? search,
         AccountType? accountType,
         AccountStatus? status,
+        string? role,
         CancellationToken cancellationToken = default);
 }

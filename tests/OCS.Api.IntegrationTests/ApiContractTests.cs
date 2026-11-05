@@ -42,6 +42,7 @@ public sealed class ApiContractTests
     [InlineData("/api/accounts", 401, "UNAUTHORIZED")]
     [InlineData("/api/accounts/00000000-0000-0000-0000-000000000001", 401, "UNAUTHORIZED")]
     [InlineData("/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile", 401, "UNAUTHORIZED")]
+    [InlineData("/api/accounts/history", 401, "UNAUTHORIZED")]
     [InlineData("/__tests/contract/failure", 409, "CATALOG.CONFLICT")]
     [InlineData("/__tests/contract/failure?type=NotFound", 404, "CATALOG.NOTFOUND")]
     [InlineData("/__tests/contract/failure?type=Validation", 400, "CATALOG.VALIDATION")]
@@ -106,6 +107,7 @@ public sealed class ApiContractTests
     [Theory]
     [InlineData("POST", "/api/accounts/internal")]
     [InlineData("PUT", "/api/accounts/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/accounts/00000000-0000-0000-0000-000000000001/reset-password")]
     [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/status")]
     [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile")]
     public async Task NewManagementMutationsRequireAuthentication(string method, string path)

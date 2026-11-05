@@ -427,8 +427,11 @@ public sealed class OtpServiceTests : IDisposable
     private sealed class TestAuthRepository : IAuthRepository
     {
         public Task<PagedResponse<Account>> GetPagedAccountsAsync(
-            PagedRequest paging, string? search, AccountType? accountType, AccountStatus? status, bool staffOnly,
+            PagedRequest paging, string? search, AccountType? accountType, AccountStatus? status, bool staffOnly, Guid? roleId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<PagedResponse<AuditLog>> GetPagedAccountAuditLogsAsync(PagedRequest paging,
+            Guid? accountId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public void AddAuditLog(AuditLog auditLog) => throw new NotSupportedException();
 
         public List<Account> Accounts { get; } = [];
         public List<OtpChallenge> Challenges { get; } = [];

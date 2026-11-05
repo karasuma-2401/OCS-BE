@@ -8,8 +8,9 @@ public sealed record CreateInternalAccountRequest(
     [Required, EmailAddress, MaxLength(254)] string Email,
     [Required, Phone, MaxLength(20)] string PhoneNumber,
     [Required, MaxLength(100)] string Username,
-    [Required, BcryptPassword, RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$")]
-    string Password,
+    [BcryptPassword, RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$")]
+    string? Password,
     [Required, MaxLength(100)] string JobTitle,
     [Required] DateOnly? HiredOn,
-    [Required] string Role);
+    [Required] string Role,
+    bool? UseDefaultPassword = null);

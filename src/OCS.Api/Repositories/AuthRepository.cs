@@ -15,6 +15,7 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
         AccountType? accountType,
         AccountStatus? status,
         bool staffOnly,
+        Guid? roleId,
         CancellationToken cancellationToken = default)
     {
         IQueryable<Account> query = dbContext.Accounts.AsNoTracking();
@@ -29,6 +30,9 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
             query = query.Where(a => a.AccountType == AccountType.Internal
                 && a.AccountRoles.Any(ar => ar.RoleId == Role.StaffRoleId)
                 && !a.AccountRoles.Any(ar => ar.RoleId == Role.AdminRoleId || ar.RoleId == Role.ManagerRoleId));
+
+        if (roleId.HasValue)
+            query = query.Where(a => a.AccountRoles.Any(ar => ar.RoleId == roleId.Value));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -53,6 +57,37 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
 
         return new PagedResponse<Account>(items, paging.Page, paging.PageSize, totalCount);
     }
+
+    public async Task<PagedResponse<AuditLog>> GetPagedAccountAuditLogsAsync(
+        PagedRequest paging, Guid? accountId, CancellationToken cancellationToken = default)
+    {
+        IQueryable<AuditLog> query = dbContext.AuditLogs.AsNoTracking()
+            .Where(log => log.EntityType == nameof(Account)
+                || log.EntityType == nameof(AccountRole)
+                || log.EntityType == nameof(EmployeeProfile));
+
+        if (accountId.HasValue)
+        {
+            var id = accountId.Value.ToString("D");
+            var roleEntityIdPart = $"\"accountId\":\"{id}\"";
+            var roleEntityIdPartPascal = $"\"AccountId\":\"{id}\"";
+            query = query.Where(log =>
+                log.EntityType == nameof(Account) && log.EntityId == id
+                || log.EntityType == nameof(EmployeeProfile) && log.EntityId == id
+                || log.EntityType == nameof(AccountRole)
+                    && (log.EntityId.Contains(roleEntityIdPart)
+                        || log.EntityId.Contains(roleEntityIdPartPascal)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.OrderByDescending(log => log.OccurredAt)
+            .ThenByDescending(log => log.Id)
+            .Skip(paging.Skip).Take(paging.PageSize)
+            .ToListAsync(cancellationToken);
+        return new PagedResponse<AuditLog>(items, paging.Page, paging.PageSize, totalCount);
+    }
+
+    public void AddAuditLog(AuditLog auditLog) => dbContext.AuditLogs.Add(auditLog);
 
     public Task<Account?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
