@@ -19,6 +19,7 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
         auditContext.Initialize("DemoSeed");
 
         // 1. Internal Accounts (Staff, Manager, Admin)
+        var defaultStaffPasswordHash = BCrypt.Net.BCrypt.HashPassword("DevStaff@123");
         (Guid Id, string Name, string Phone, string? Username, Guid Role)[] staffAccounts =
         [
             (Guid.Parse("10000000-0000-0000-0000-000000000001"), "Admin Dev", "0900000001", "admin_dev", Role.AdminRoleId),
@@ -40,7 +41,8 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 Username = username,
                 FullName = name,
                 AccountType = AccountType.Internal,
-                Status = AccountStatus.Active
+                Status = AccountStatus.Active,
+                PasswordHash = defaultStaffPasswordHash
             };
 
             var profile = new EmployeeProfile
@@ -122,15 +124,17 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             extra.IsActive = false;
         }
 
+        var slotMap = new Dictionary<TimeOnly, Guid>();
         foreach (var (id, start, end, max) in timeSlots)
         {
-            var existing = await dbContext.AppointmentTimeSlots.FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+            var existing = await dbContext.AppointmentTimeSlots.FirstOrDefaultAsync(s => s.Id == id || (s.StartTime == start && s.EndTime == end), cancellationToken);
             if (existing != null)
             {
                 existing.StartTime = start;
                 existing.EndTime = end;
                 existing.MaxCustomers = max;
                 existing.IsActive = true;
+                slotMap[start] = existing.Id;
                 continue;
             }
 
@@ -142,6 +146,7 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 MaxCustomers = max,
                 IsActive = true
             });
+            slotMap[start] = id;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -188,12 +193,17 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 continue;
             }
 
+            var effectiveSlotId = slotMap.Values.Contains(slotId) ? slotId
+                : (slotMap.TryGetValue(slotId == Guid.Parse("11111111-0000-0000-0000-000000000001") ? new TimeOnly(9, 0)
+                    : slotId == Guid.Parse("11111111-0000-0000-0000-000000000002") ? new TimeOnly(10, 0)
+                    : new TimeOnly(11, 0), out var mappedId) ? mappedId : slotId);
+
             dbContext.Appointments.Add(new Appointment
             {
                 Id = id,
                 TrackingNumber = tracking,
                 CustomerId = customerId,
-                TimeSlotId = slotId,
+                TimeSlotId = effectiveSlotId,
                 AppointmentDate = date,
                 EstimatedItemCount = items,
                 SubmissionMethod = SubmissionMethod.InPerson,
@@ -346,50 +356,209 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             (Guid.Parse("70000000-0000-0000-0000-000000000025"), "BC-0025", "Quần Baggy Kẻ Caro Routine", catPants, routine, "M", 330000m, 88, false, 200000m)
         ];
 
+        string[] curatedCovers =
+        [
+            "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1548883354-7622d03aca27?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1576995853123-5a10305d93c0?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1583496661160-fb5886a0aaaa?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1509551388413-e18d0ac5d495?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1584370848010-d7fe6bc767ec?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1606760227091-3dd870d97f1d?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1624222247344-550fb60583dc?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1539533018447-63fcce667823?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1576871337632-b9aef4c17ab9?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1502716119720-b23a93e5fe1b?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1551803091-e20673f15770?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1565084888279-aca607ecce0c?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1552902865-b72c031ac5ea?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1517445312882-bc9910d016b7?w=800&auto=format&fit=crop&q=80"
+        ];
+
+        string[] curatedDetailsSide =
+        [
+            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1551537482-f2075a1d41f2?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1601333144130-8cbb312386b6?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1582142306909-195724d33ffc?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1542272604-780c96856592?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1544441893-675973e31985?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1554412933-514a83d2f3c8?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1508296695146-257a814070b4?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1550614000-4895a10e1bfd?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1485968579580-b6d095142e6e?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1485230895905-ec40ba36b9bc?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1445205170230-053b83016050?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80"
+        ];
+
+        string[] curatedDetailsBack =
+        [
+            "https://images.unsplash.com/photo-1544022613-e87ca75a784a?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1516762689617-e1cffcef479d?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1529720317453-c8da503f2051?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1506152983158-b4a74a01c721?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1520006403909-838d6b92c22e?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1518049362265-d5b2a6467637?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1479064555552-3ef4979f8908?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1508746829417-e6f548d8d6ed?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1519748771451-a14ef59b36cb?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1520006403909-838d6b92c22e?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1544441893-675973e31985?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1516762689617-e1cffcef479d?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1548883354-7622d03aca27?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1595777457583-95e059d581b8?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1541099649105-f69ad21f3246?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1584370848010-d7fe6bc767ec?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=800&auto=format&fit=crop&q=80"
+        ];
+
         for (int i = 0; i < onSaleProducts.Length; i++)
         {
             var pInfo = onSaleProducts[i];
-            if (await dbContext.Products.AnyAsync(p => p.Id == pInfo.Id, cancellationToken))
+            var existingProduct = await dbContext.Products.FirstOrDefaultAsync(p => p.Id == pInfo.Id, cancellationToken);
+            if (existingProduct == null)
+            {
+                var product = new Product
+                {
+                    Id = pInfo.Id,
+                    Barcode = pInfo.Barcode,
+                    Name = pInfo.Name,
+                    CategoryId = pInfo.CatId,
+                    BrandId = pInfo.Brand.Id,
+                    Size = pInfo.Size,
+                    ConditionPercentage = pInfo.Condition,
+                    Description = $"Mô tả chi tiết sản phẩm {pInfo.Name}, chất lượng đảm bảo.",
+                    CreatedAt = baseTime.AddHours(i + 1)
+                };
+
+                if (pInfo.isConsignment)
+                {
+                    product.AssignConsignmentTerms(contractId, pInfo.Price, pInfo.Brand);
+                }
+                else
+                {
+                    product.AssignBuyoutTerms(buyoutId, pInfo.Price, pInfo.BuyPrice!.Value);
+                }
+
+                product.OfferForSale();
+                dbContext.Products.Add(product);
+            }
+
+            var coverUrl = curatedCovers[i % curatedCovers.Length];
+            var sideUrl = curatedDetailsSide[i % curatedDetailsSide.Length];
+            var backUrl = curatedDetailsBack[i % curatedDetailsBack.Length];
+
+            // Cover Image (SortOrder = 0)
+            var coverImageId = Guid.Parse($"71000000-0000-0000-0000-{i + 1:D12}");
+            var existingCover = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == coverImageId, cancellationToken);
+            if (existingCover == null)
+            {
+                dbContext.ProductImages.Add(new ProductImage
+                {
+                    Id = coverImageId,
+                    ProductId = pInfo.Id,
+                    Url = coverUrl,
+                    ImageType = ProductImageType.Cover,
+                    SortOrder = 0
+                });
+            }
+            else
+            {
+                existingCover.Url = coverUrl;
+            }
+
+            // Products i = 20 & 21: Edge case - ONLY Cover image (skip detail images)
+            if (i == 20 || i == 21)
             {
                 continue;
             }
 
-            var product = new Product
-            {
-                Id = pInfo.Id,
-                Barcode = pInfo.Barcode,
-                Name = pInfo.Name,
-                CategoryId = pInfo.CatId,
-                BrandId = pInfo.Brand.Id,
-                Size = pInfo.Size,
-                ConditionPercentage = pInfo.Condition,
-                Description = $"Mô tả chi tiết sản phẩm {pInfo.Name}, chất lượng đảm bảo.",
-                CreatedAt = baseTime.AddHours(i + 1)
-            };
-
-            if (pInfo.isConsignment)
-            {
-                product.AssignConsignmentTerms(contractId, pInfo.Price, pInfo.Brand);
-            }
-            else
-            {
-                product.AssignBuyoutTerms(buyoutId, pInfo.Price, pInfo.BuyPrice!.Value);
-            }
-
-            product.OfferForSale();
-            dbContext.Products.Add(product);
-
-            var imageId = Guid.Parse($"71000000-0000-0000-0000-{i + 1:D12}");
-            if (!await dbContext.ProductImages.AnyAsync(img => img.Id == imageId, cancellationToken))
+            // Detail Image 1 (SortOrder = 1 - Multi-angle side/profile)
+            var detail1ImageId = Guid.Parse($"72000000-0000-0000-0000-{i + 1:D12}");
+            var existingDetail1 = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == detail1ImageId, cancellationToken);
+            if (existingDetail1 == null)
             {
                 dbContext.ProductImages.Add(new ProductImage
                 {
-                    Id = imageId,
-                    ProductId = product.Id,
-                    Url = $"https://images.unsplash.com/demo/product-{i + 1}.jpg",
-                    ImageType = ProductImageType.Cover,
-                    SortOrder = 0
+                    Id = detail1ImageId,
+                    ProductId = pInfo.Id,
+                    Url = sideUrl,
+                    ImageType = ProductImageType.Detail,
+                    SortOrder = 1
                 });
+            }
+            else
+            {
+                existingDetail1.Url = sideUrl;
+            }
+
+            // Product i = 22: Edge case - Cover + Detail + Incident image (to verify Incident is excluded in public detail)
+            if (i == 22)
+            {
+                var incidentImageId = Guid.Parse($"74000000-0000-0000-0000-{i + 1:D12}");
+                var existingIncident = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == incidentImageId, cancellationToken);
+                if (existingIncident == null)
+                {
+                    dbContext.ProductImages.Add(new ProductImage
+                    {
+                        Id = incidentImageId,
+                        ProductId = pInfo.Id,
+                        Url = "https://images.unsplash.com/demo/incident-scratch-proof.jpg",
+                        ImageType = ProductImageType.Incident,
+                        SortOrder = 99
+                    });
+                }
+                continue;
+            }
+
+            // Detail Image 2 (SortOrder = 2 - Multi-angle back/texture)
+            var detail2ImageId = Guid.Parse($"73000000-0000-0000-0000-{i + 1:D12}");
+            var existingDetail2 = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == detail2ImageId, cancellationToken);
+            if (existingDetail2 == null)
+            {
+                dbContext.ProductImages.Add(new ProductImage
+                {
+                    Id = detail2ImageId,
+                    ProductId = pInfo.Id,
+                    Url = backUrl,
+                    ImageType = ProductImageType.Detail,
+                    SortOrder = 2
+                });
+            }
+            else
+            {
+                existingDetail2.Url = backUrl;
             }
         }
 
