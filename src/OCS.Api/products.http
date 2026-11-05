@@ -1,0 +1,51 @@
+### Public Products API - HTTP Request Samples
+# Dành cho Landing Page - Hoàn toàn không yêu cầu đăng nhập, cookie hay CSRF token
+@baseUrl = http://localhost:5204
+
+### 1. Lấy danh sách sản phẩm trang đầu tiên (mặc định page=1, pageSize=20)
+GET {{baseUrl}}/api/products
+Accept: application/json
+
+### 2. Phân trang - Lấy trang 2 với pageSize=10
+GET {{baseUrl}}/api/products?page=2&pageSize=10
+Accept: application/json
+
+### 3. Tìm kiếm từ khóa 'blazer' (không phân biệt hoa thường)
+GET {{baseUrl}}/api/products?q=blazer
+Accept: application/json
+
+### 4. Tìm kiếm từ khóa thương hiệu 'zara'
+GET {{baseUrl}}/api/products?q=zara
+Accept: application/json
+
+### 5. Lọc theo danh mục (Ví dụ Áo khoác: 30000000-0000-0000-0000-000000000001)
+GET {{baseUrl}}/api/products?categoryId=30000000-0000-0000-0000-000000000001
+Accept: application/json
+
+### 6. Lọc theo thương hiệu (Ví dụ Uniqlo: 40000000-0000-0000-0000-000000000002)
+GET {{baseUrl}}/api/products?brandId=40000000-0000-0000-0000-000000000002
+Accept: application/json
+
+### 7. Lọc theo kích cỡ (Size = M)
+GET {{baseUrl}}/api/products?size=M
+Accept: application/json
+
+### 8. Lọc theo khoảng giá (Từ 300,000 VND đến 800,000 VND)
+GET {{baseUrl}}/api/products?minPrice=300000&maxPrice=800000
+Accept: application/json
+
+### 9. Kết hợp nhiều bộ lọc: Danh mục Áo khoác + Size L + Giá từ 400k đến 1M
+GET {{baseUrl}}/api/products?categoryId=30000000-0000-0000-0000-000000000001&size=L&minPrice=400000&maxPrice=1000000
+Accept: application/json
+
+### 10. Kiểm tra lỗi Validation 400 - Khoảng giá không hợp lệ (minPrice > maxPrice)
+GET {{baseUrl}}/api/products?minPrice=500000&maxPrice=200000
+Accept: application/problem+json
+### 11. Kiểm tra lỗi Validation 400 - Kích thước trang vượt quá tối đa 100
+GET {{baseUrl}}/api/products?pageSize=150
+Accept: application/problem+json
+
+### 12. Kiểm tra bảo vệ route nội bộ - GET /api/products/{id} không token bị từ chối 401 UNAUTHORIZED
+GET {{baseUrl}}/api/products/00000000-0000-0000-0000-000000000001
+Accept: application/problem+json
+

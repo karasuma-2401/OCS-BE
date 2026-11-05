@@ -1,4 +1,18 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
+using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using OCS.Api.Auditing;
 using OCS.Api.Consts;
 using OCS.Api.Context;
@@ -507,6 +521,245 @@ public sealed class CustomerSelfProfileRealIntegrationTests
             var bDb = await verifyContext.Accounts.Include(a => a.CustomerProfile).FirstAsync(a => a.Id == customerB);
             Assert.Equal("Customer B", bDb.FullName);
             Assert.Equal("2222", bDb.CustomerProfile!.BankAccountNumber);
+        }
+    }
+
+    private static async Task SeedSessionAsync(AppDbContext context, Guid accountId, Guid sessionId)
+    {
+        var session = new AuthSession
+        {
+            Id = sessionId,
+            AccountId = accountId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(8)
+        };
+        context.AuthSessions.Add(session);
+        await context.SaveChangesAsync();
+    }
+
+    private static string GenerateJwt(Guid accountId, string name, string phone, string email, string role, Guid sessionId)
+    {
+        var key = Encoding.UTF8.GetBytes("ocs-super-secret-key-that-is-at-least-32-bytes-long");
+        var secKey = new SymmetricSecurityKey(key);
+        var creds = new SigningCredentials(secKey, SecurityAlgorithms.HmacSha256);
+        var handler = new JwtSecurityTokenHandler();
+
+        var identity = new ClaimsIdentity(
+        [
+            new Claim("sub", accountId.ToString()),
+            new Claim(ClaimTypes.NameIdentifier, accountId.ToString()),
+            new Claim(ClaimTypes.Name, name),
+            new Claim("sid", sessionId.ToString()),
+            new Claim(JwtRegisteredClaimNames.Sid, sessionId.ToString()),
+            new Claim(ClaimTypes.MobilePhone, phone),
+            new Claim(ClaimTypes.Email, email),
+            new Claim(ClaimTypes.Role, role)
+        ]);
+
+        var desc = new SecurityTokenDescriptor
+        {
+            Subject = identity,
+            Issuer = "ocs-api",
+            Audience = "ocs-clients",
+            Expires = DateTime.UtcNow.AddHours(6),
+            SigningCredentials = creds
+        };
+
+        return handler.WriteToken(handler.CreateToken(desc));
+    }
+
+    private static WebApplicationFactory<Program> CreateHttpFactory(TestDatabase database) =>
+        new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Testing");
+            builder.ConfigureLogging(logging => logging.ClearProviders());
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:DefaultConnection"] = "",
+                ["Redis:ConnectionString"] = "",
+                ["Email:Provider"] = "TestSink",
+                ["Jwt:Issuer"] = "ocs-api",
+                ["Jwt:Audience"] = "ocs-clients",
+                ["Jwt:Key"] = "ocs-super-secret-key-that-is-at-least-32-bytes-long",
+                ["Auth:SessionExpirySeconds"] = "28800"
+            }));
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IHostedService>();
+                services.AddDbContext<AppDbContext>(options => options.UseNpgsql(database.ConnectionString));
+            });
+        });
+
+    [PostgresFact]
+    public async Task HttpPipeline_EndToEndFlow_WithRealPostgreSql_VerifiesAllSecurityAndDataContracts()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var customerA = Guid.NewGuid();
+        var sessionA = Guid.NewGuid();
+        var customerPending = Guid.NewGuid();
+        var sessionPending = Guid.NewGuid();
+        var staffId = Guid.NewGuid();
+        var sessionStaff = Guid.NewGuid();
+
+        await using (var context = database.Context())
+        {
+            await SeedCustomerAsync(context, customerA, "Customer A", "0908888111", "cust_a@example.com", "VCB", "11112222", "HOLDER A");
+            await SeedSessionAsync(context, customerA, sessionA);
+
+            await SeedCustomerAsync(context, customerPending, "Customer Pending", "0908888222", "cust_pending@example.com", "BIDV", "33334444", "HOLDER PENDING");
+            await SeedSessionAsync(context, customerPending, sessionPending);
+            await SeedPayoutAsync(context, customerPending, PayoutStatus.Pending);
+
+            var staffAccount = new Account
+            {
+                Id = staffId,
+                FullName = "Staff Member",
+                Username = "staff_pipeline",
+                Email = "staff_pipeline@example.com",
+                PhoneNumber = "0908888555",
+                AccountType = AccountType.Internal,
+                Status = AccountStatus.Active,
+                PasswordHash = "$2a$11$LVrkKmxPZJm4JnKXZsgMjuGNMXKczO5VF71yH10t42unyeBUM6Kb.",
+                EmailVerifiedAt = DateTimeOffset.UtcNow,
+                ActivatedAt = DateTimeOffset.UtcNow,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+            context.Accounts.Add(staffAccount);
+            context.AccountRoles.Add(new AccountRole { AccountId = staffId, RoleId = Role.StaffRoleId });
+            await SeedSessionAsync(context, staffId, sessionStaff);
+        }
+
+        var tokenA = GenerateJwt(customerA, "Customer A", "0908888111", "cust_a@example.com", "Customer", sessionA);
+        var tokenPending = GenerateJwt(customerPending, "Customer Pending", "0908888222", "cust_pending@example.com", "Customer", sessionPending);
+        var tokenStaff = GenerateJwt(staffId, "Staff Member", "0908888555", "staff_pipeline@example.com", "Staff", sessionStaff);
+
+        await using var factory = CreateHttpFactory(database);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), HandleCookies = false });
+
+        // 1. Unauthenticated request -> 401 Unauthorized
+        using (var unauthRes = await client.GetAsync("/api/customers/me"))
+        {
+            Assert.Equal(HttpStatusCode.Unauthorized, unauthRes.StatusCode);
+        }
+
+        // 2. Staff user -> 403 Forbidden
+        using (var staffReq = new HttpRequestMessage(HttpMethod.Get, "/api/customers/me"))
+        {
+            staffReq.Headers.Add("Cookie", $"ocs_session={tokenStaff}");
+            using var staffRes = await client.SendAsync(staffReq);
+            Assert.Equal(HttpStatusCode.Forbidden, staffRes.StatusCode);
+        }
+
+        // 3. Customer A GET Profile -> 200 OK with redacted sensitive internal fields
+        using (var getReq = new HttpRequestMessage(HttpMethod.Get, "/api/customers/me"))
+        {
+            getReq.Headers.Add("Cookie", $"ocs_session={tokenA}");
+            using var getRes = await client.SendAsync(getReq);
+            Assert.Equal(HttpStatusCode.OK, getRes.StatusCode);
+
+            var json = await getRes.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            Assert.Equal("Customer A", root.GetProperty("fullName").GetString());
+            Assert.Equal("0908888111", root.GetProperty("phoneNumber").GetString());
+            Assert.Equal("VCB", root.GetProperty("bankAccount").GetProperty("bankCode").GetString());
+
+            Assert.False(root.TryGetProperty("email", out _));
+            Assert.False(root.TryGetProperty("passwordHash", out _));
+            Assert.False(root.TryGetProperty("status", out _));
+            Assert.False(root.TryGetProperty("roles", out _));
+        }
+
+        // 4. Customer A PUT Profile without CSRF -> 403 Forbidden with AUTH.CSRF_INVALID
+        var updatePayload = new
+        {
+            fullName = "Customer A Updated",
+            phoneNumber = "0908888999",
+            bankAccount = new
+            {
+                bankCode = "tpb",
+                accountNumber = "99990000",
+                accountHolderName = "holder updated"
+            }
+        };
+
+        using (var noCsrfReq = new HttpRequestMessage(HttpMethod.Put, "/api/customers/me"))
+        {
+            noCsrfReq.Headers.Add("Cookie", $"ocs_session={tokenA}");
+            noCsrfReq.Content = JsonContent.Create(updatePayload);
+            using var noCsrfRes = await client.SendAsync(noCsrfReq);
+            Assert.Equal(HttpStatusCode.Forbidden, noCsrfRes.StatusCode);
+            var errJson = await noCsrfRes.Content.ReadAsStringAsync();
+            Assert.Contains("AUTH.CSRF_INVALID", errJson, StringComparison.Ordinal);
+        }
+
+        // 5. Customer A PUT Profile with CSRF bypass -> 200 OK and persists to PostgreSQL
+        using (var validPutReq = new HttpRequestMessage(HttpMethod.Put, "/api/customers/me"))
+        {
+            validPutReq.Headers.Add("Cookie", $"ocs_session={tokenA}");
+            validPutReq.Headers.Add("X-Test-Bypass-Csrf", "true");
+            validPutReq.Content = JsonContent.Create(updatePayload);
+            using var validPutRes = await client.SendAsync(validPutReq);
+            Assert.Equal(HttpStatusCode.OK, validPutRes.StatusCode);
+
+            var resJson = await validPutRes.Content.ReadAsStringAsync();
+            using var resDoc = JsonDocument.Parse(resJson);
+            Assert.Equal("Customer A Updated", resDoc.RootElement.GetProperty("fullName").GetString());
+            Assert.Equal("0908888999", resDoc.RootElement.GetProperty("phoneNumber").GetString());
+            Assert.Equal("TPB", resDoc.RootElement.GetProperty("bankAccount").GetProperty("bankCode").GetString());
+        }
+
+        // 6. Verify database updated
+        await using (var verifyContext = database.Context())
+        {
+            var accountDb = await verifyContext.Accounts.Include(a => a.CustomerProfile).FirstAsync(a => a.Id == customerA);
+            Assert.Equal("Customer A Updated", accountDb.FullName);
+            Assert.Equal("0908888999", accountDb.PhoneNumber);
+            Assert.Equal("TPB", accountDb.CustomerProfile!.BankCode);
+            Assert.Equal("99990000", accountDb.CustomerProfile.BankAccountNumber);
+            Assert.Equal("holder updated", accountDb.CustomerProfile.BankAccountHolderName);
+        }
+
+        // 7. Customer Pending PUT changing bank -> 409 Conflict with CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT
+        using (var lockReq = new HttpRequestMessage(HttpMethod.Put, "/api/customers/me"))
+        {
+            lockReq.Headers.Add("Cookie", $"ocs_session={tokenPending}");
+            lockReq.Headers.Add("X-Test-Bypass-Csrf", "true");
+            lockReq.Content = JsonContent.Create(new
+            {
+                fullName = "Customer Pending",
+                phoneNumber = "0908888222",
+                bankAccount = new
+                {
+                    bankCode = "MB",
+                    accountNumber = "77778888",
+                    accountHolderName = "HOLDER PENDING"
+                }
+            });
+            using var lockRes = await client.SendAsync(lockReq);
+            Assert.Equal(HttpStatusCode.Conflict, lockRes.StatusCode);
+            var lockBody = await lockRes.Content.ReadAsStringAsync();
+            Assert.Contains("CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT", lockBody, StringComparison.Ordinal);
+        }
+
+        // 8. Customer Pending PUT only updating contact name -> 200 OK
+        using (var contactOnlyReq = new HttpRequestMessage(HttpMethod.Put, "/api/customers/me"))
+        {
+            contactOnlyReq.Headers.Add("Cookie", $"ocs_session={tokenPending}");
+            contactOnlyReq.Headers.Add("X-Test-Bypass-Csrf", "true");
+            contactOnlyReq.Content = JsonContent.Create(new
+            {
+                fullName = "Customer Pending Name Updated",
+                phoneNumber = "0908888222",
+                bankAccount = new
+                {
+                    bankCode = "BIDV",
+                    accountNumber = "33334444",
+                    accountHolderName = "HOLDER PENDING"
+                }
+            });
+            using var contactOnlyRes = await client.SendAsync(contactOnlyReq);
+            Assert.Equal(HttpStatusCode.OK, contactOnlyRes.StatusCode);
         }
     }
 }

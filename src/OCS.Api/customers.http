@@ -1,0 +1,153 @@
+### Customer Self-Profile API - HTTP Test File (Dữ liệu thật Neon DB)
+# Môi trường chạy local: https://localhost:7282 hoặc http://localhost:5204
+@baseUrl = http://localhost:5204
+
+# Session Tokens cho từng tài khoản test fixture đã khởi tạo trong Neon DB:
+@tokenCustomerA = <paste-customer-a-session-token-here>
+@tokenCustomerB = <paste-customer-b-session-token-here>
+@tokenCustomerC = <paste-customer-c-session-token-here>
+@tokenCustomerD = <paste-customer-d-session-token-here>
+@tokenCustomerE = <paste-customer-e-session-token-here>
+@tokenStaffUser = <paste-staff-session-token-here>
+
+# CSRF Headers & Cookies mẫu (Cập nhật sau khi gọi request 1)
+@csrfToken = paste_csrf_token_from_request_1_here
+@csrfCookie = paste_antiforgery_cookie_from_request_1_here
+
+### 1. Lấy CSRF Token & Cookie ocs_antiforgery
+# Dùng token và Set-Cookie nhận được để gắn vào header X-XSRF-TOKEN và cookie ocs_antiforgery
+# GET /api/auth/csrf
+GET {{baseUrl}}/api/auth/csrf
+Accept: application/json
+
+### 2. Customer A - Xem hồ sơ bản thân (Kỳ vọng 200 OK, bankAccount: null)
+# GET /api/customers/me
+GET {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerA}}
+Accept: application/json
+
+### 3. Customer B - Xem hồ sơ bản thân (Kỳ vọng 200 OK, bankAccount có ACB, 222233334444)
+# GET /api/customers/me
+GET {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerB}}
+Accept: application/json
+
+### 4. Customer A - Cập nhật thông tin ngân hàng thành công (Kỳ vọng 200 OK)
+# Ghi nhận: Customer A không có Payout Pending nào nên được phép cập nhật ngân hàng
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerA}}; ocs_antiforgery={{csrfCookie}}
+X-XSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer A Updated",
+  "phoneNumber": "0901111999",
+  "bankAccount": {
+    "bankCode": "VCB",
+    "accountNumber": "111122223333",
+    "accountHolderName": "NGUYEN VAN A"
+  }
+}
+
+### 5. Customer C - Thay đổi ngân hàng khi có Payout Pending (Kỳ vọng 409 Conflict - CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT)
+# PO-TEST-C001 đang ở trạng thái 'Pending' nên việc sửa bankAccount bị từ chối
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerC}}; ocs_antiforgery={{csrfCookie}}
+X-XSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer C New Contact Name",
+  "phoneNumber": "0903333888",
+  "bankAccount": {
+    "bankCode": "MB",
+    "accountNumber": "999988887777",
+    "accountHolderName": "CUSTOMER C NEW"
+  }
+}
+
+### 6. Customer C - Chỉ sửa họ tên và số điện thoại khi có Payout Pending (Kỳ vọng 200 OK)
+# BankAccount giữ nguyên giá trị hiện có (BIDV / 333344445555 / CUSTOMER C)
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerC}}; ocs_antiforgery={{csrfCookie}}
+X-XSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer C Full Name Valid",
+  "phoneNumber": "0903333888",
+  "bankAccount": {
+    "bankCode": "BIDV",
+    "accountNumber": "333344445555",
+    "accountHolderName": "CUSTOMER C"
+  }
+}
+
+### 7. Customer D - Cập nhật ngân hàng khi có Payout Transferred & Completed (Kỳ vọng 200 OK)
+# PO-TEST-D001 ('Transferred') và PO-TEST-D002 ('Completed') KHÔNG khóa thay đổi tài khoản ngân hàng
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerD}}; ocs_antiforgery={{csrfCookie}}
+X-XSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer D PayoutCompleted",
+  "phoneNumber": "0904444444",
+  "bankAccount": {
+    "bankCode": "TCB",
+    "accountNumber": "190399998888",
+    "accountHolderName": "CUSTOMER D UPDATED"
+  }
+}
+
+### 8. Customer B - Xóa cấu hình ngân hàng (bankAccount: null) (Kỳ vọng 200 OK)
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerB}}; ocs_antiforgery={{csrfCookie}}
+X-XSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer B Test",
+  "phoneNumber": "0902222222",
+  "bankAccount": null
+}
+
+### 9. Customer A - Trùng lặp số điện thoại với Customer B (Kỳ vọng 409 Conflict - CUSTOMER.PHONE_NUMBER_EXISTS)
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerA}}; ocs_antiforgery={{csrfCookie}}
+X-XSRF-TOKEN: {{csrfToken}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer A New Name",
+  "phoneNumber": "0902222222",
+  "bankAccount": null
+}
+
+### 10. Customer E - Tài khoản Legacy chưa có CustomerProfile (Kỳ vọng 404 Not Found - CUSTOMER.PROFILE_NOT_FOUND)
+GET {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerE}}
+Accept: application/json
+
+### 11. Staff User - Tài khoản Internal/Staff gọi API khách hàng (Kỳ vọng 403 Forbidden)
+GET {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenStaffUser}}
+Accept: application/json
+
+### 12. Không có Header X-XSRF-TOKEN khi PUT (Kỳ vọng 403 Forbidden - AUTH.CSRF_INVALID)
+PUT {{baseUrl}}/api/customers/me
+Cookie: ocs_session={{tokenCustomerA}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "fullName": "Customer A Without CSRF",
+  "phoneNumber": "0901111999",
+  "bankAccount": null
+}

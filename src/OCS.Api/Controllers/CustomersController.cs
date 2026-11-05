@@ -9,7 +9,7 @@ using OCS.Api.Models.Customers;
 namespace OCS.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/customers")]
+[Route("api/customers")]
 [Authorize(Roles = "Customer")]
 public sealed class CustomersController(ICustomerProfileService customerProfileService) : ControllerBase
 {
