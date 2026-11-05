@@ -9,7 +9,7 @@ using OCS.Api.Contracts.Brands;
 namespace OCS.Api.Controllers;
 
 [ApiController]
-[Route("api/v1/brands")]
+[Route("api/brands")]
 [AllowAnonymous]
 public sealed class BrandsController(AppDbContext dbContext) : ControllerBase
 {

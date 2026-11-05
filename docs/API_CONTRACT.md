@@ -7,7 +7,7 @@ Tài liệu này là đặc tả HTTP contract chuẩn giữa Web frontend OCS v
 | Nhóm | Hiện trạng triển khai | Ghi chú & Ràng buộc |
 | --- | --- | --- |
 | Auth | Hoàn thành đầy đủ: Đăng nhập Email + Mật khẩu, Đăng ký + Email OTP kích hoạt, HttpOnly Cookie (`ocs_session`), Hồ sơ phiên server (`AuthSession`), Bảo vệ CSRF (`X-XSRF-TOKEN`), Strict ClockSkew UTC, Anti-enumeration | Tuyệt đối không dùng login username/SĐT hay SMS OTP; token không lưu tại client storage |
-| Products | `/api/Products` và các action con | Giữ nguyên tiền tố hiện hành |
+| Products | `GET /api/products` (Công khai Landing Page); `/api/products/{id}`, `/api/products/barcode/*`, `POST /api/products` (Nội bộ Admin/Manager/Staff) | Public response chỉ là projection an toàn; tuyệt đối không lộ dữ liệu người ký gửi |
 | Health | `/api/health`, `/api/health/live` | Giữ nguyên |
 
 ---
@@ -25,8 +25,8 @@ Tài liệu này là đặc tả HTTP contract chuẩn giữa Web frontend OCS v
 
 ### 1.1. Nhóm endpoint và tiền tố định tuyến
 - **Operational endpoints (Vận hành):** Giữ tiền tố `/api/health` và `/api/health/live`.
-- **Authentication endpoints (Xác thực):** Giữ tiền tố `/api/auth/*` cho đợt này để đảm bảo tính ổn định và tương thích giữa Backend và Frontend (chưa chuyển sang `/api/v1/auth`).
-- **Business endpoints (Nghiệp vụ):** Sẽ sử dụng tiền tố `/api/v1/*` (ví dụ: `/api/v1/products`, `/api/v1/contracts`).
+- **Authentication endpoints (Xác thực):** Giữ tiền tố `/api/auth/*` cho đợt này để đảm bảo tính ổn định và tương thích giữa Backend và Frontend.
+- **Business endpoints (Nghiệp vụ):** Dùng tiền tố `/api/*` hiện hành; project này không version hóa route bằng `v1`.
 
 ### 1.2. Quy ước dữ liệu
 - JSON sử dụng quy ước đặt tên **camelCase** cho các trường dữ liệu và mã hóa UTF-8.
@@ -432,7 +432,7 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
 ### 8.1. Nguyên tắc thiết kế và bảo mật
 - **Tự phục vụ chính chủ (Self-only):** Không có tham số `id` hoặc `customerId` trong URL hay body. Danh tính tài khoản được lấy trực tiếp và duy nhất từ claim `sub` (`ClaimTypes.NameIdentifier`) của phiên đăng nhập (`ocs_session`).
 - **Phân quyền:** Chỉ tài khoản có vai trò `Customer` (`Role.Code = Customer`) mới có quyền truy cập. Yêu cầu không có phiên trả về `401 UNAUTHORIZED`; có phiên nhưng không phải vai trò `Customer` trả về `403 FORBIDDEN`.
-- **Bảo vệ CSRF:** Endpoint cập nhật (`PUT /api/v1/customers/me`) bắt buộc kèm header `X-XSRF-TOKEN` cùng cookie chống giả mạo `ocs_antiforgery` (lấy từ `GET /api/auth/csrf`).
+- **Bảo vệ CSRF:** Endpoint cập nhật (`PUT /api/customers/me`) bắt buộc kèm header `X-XSRF-TOKEN` cùng cookie chống giả mạo `ocs_antiforgery` (lấy từ `GET /api/auth/csrf`).
 - **Bảo vệ dữ liệu nhạy cảm:** Không trả về các trường nội bộ như email, mật khẩu hash, trạng thái tài khoản, vai trò hoặc audit log. Số tài khoản ngân hàng chỉ được trả nguyên vẹn cho chính chủ ở endpoint self-profile này để rà soát chi trả, không đưa vào danh sách tra cứu chung. Mọi thay đổi qua hệ thống đều được tự động lưu log qua `AuditSaveChangesInterceptor` với cơ chế che (mask) số điện thoại, số tài khoản và redact họ tên, tên chủ tài khoản.
 - **Ràng buộc giải ngân đang chờ (Payout Lock):** Khi khách hàng có ít nhất một lệnh giải ngân ở trạng thái `Pending`, hệ thống từ chối mọi yêu cầu thay đổi hoặc xóa thông tin tài khoản ngân hàng (`409 CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT`). Khách hàng vẫn được phép cập nhật họ tên và số điện thoại trong trường hợp này. Các trạng thái giải ngân khác (`Transferred`, `Completed`) không kích hoạt khóa.
 - **Tính duy nhất số điện thoại:** Kiểm tra duy nhất số điện thoại trong phạm vi `AccountType.Customer` trước khi ghi, đồng thời bắt lỗi unique constraint của database để chống xung đột tương thời (`409 CUSTOMER.PHONE_NUMBER_EXISTS`).
@@ -441,12 +441,12 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
 
 | Phương thức | Đường dẫn | Quyền | Mục đích |
 | --- | --- | --- | --- |
-| GET | `/api/v1/customers/me` | Customer (Cookie session) | Xem thông tin hồ sơ của chính mình. |
-| PUT | `/api/v1/customers/me` | Customer (Cookie session + `X-XSRF-TOKEN`) | Cập nhật hồ sơ (họ tên, số điện thoại, tài khoản ngân hàng). |
+| GET | `/api/customers/me` | Customer (Cookie session) | Xem thông tin hồ sơ của chính mình. |
+| PUT | `/api/customers/me` | Customer (Cookie session + `X-XSRF-TOKEN`) | Cập nhật hồ sơ (họ tên, số điện thoại, tài khoản ngân hàng). |
 
 ### 8.3. Chi tiết đặc tả
 
-#### 8.3.1. Xem hồ sơ: `GET /api/v1/customers/me`
+#### 8.3.1. Xem hồ sơ: `GET /api/customers/me`
 - **Request Headers:**
   - `Cookie: ocs_session=<jwt_token>`
 - **Response 200 OK:**
@@ -469,10 +469,10 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
   - `403 FORBIDDEN`: Tài khoản không có vai trò `Customer` (`code: "FORBIDDEN"`).
   - `404 NOT_FOUND`: Không tìm thấy hồ sơ người ký gửi (`code: "CUSTOMER.PROFILE_NOT_FOUND"`).
 
-#### 8.3.2. Cập nhật hồ sơ: `PUT /api/v1/customers/me`
+#### 8.3.2. Cập nhật hồ sơ: `PUT /api/customers/me`
 - **Thứ tự thực hiện phía client:**
   1. Gửi `GET /api/auth/csrf` để nhận CSRF token và cookie `ocs_antiforgery`.
-  2. Gửi `PUT /api/v1/customers/me` với cookie `ocs_session`, cookie `ocs_antiforgery`, và header `X-XSRF-TOKEN: <token>`.
+  2. Gửi `PUT /api/customers/me` với cookie `ocs_session`, cookie `ocs_antiforgery`, và header `X-XSRF-TOKEN: <token>`.
 - **Request Body (Cập nhật đầy đủ):**
 ```json
 {
@@ -508,3 +508,73 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
   - `404 CUSTOMER.PROFILE_NOT_FOUND`: Không tìm thấy hồ sơ khách hàng (`code: "CUSTOMER.PROFILE_NOT_FOUND"`).
   - `409 CUSTOMER.PHONE_NUMBER_EXISTS`: Số điện thoại đã được đăng ký bởi một khách hàng khác (`code: "CUSTOMER.PHONE_NUMBER_EXISTS"`).
   - `409 CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT`: Không thể sửa/xóa thông tin ngân hàng do đang có giải ngân `Pending` (`code: "CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT"`).
+
+---
+
+## 9. Danh mục sản phẩm công khai cho Landing Page (Public Product Catalog)
+
+### 9.1. Lấy danh sách sản phẩm công khai: `GET /api/products`
+- **Xác thực:** `[AllowAnonymous]`. Endpoint hoàn toàn mở cho Landing Page công khai, không yêu cầu token, cookie phiên hoặc token CSRF.
+- **Query Parameters:**
+  - `page` *(int, tùy chọn, mặc định: 1)*: Số trang cần lấy, tối thiểu là 1.
+  - `pageSize` *(int, tùy chọn, mặc định: 20, tối đa: 100)*: Số lượng sản phẩm mỗi trang.
+  - `q` *(string, tùy chọn, tối đa 100 ký tự)*: Từ khóa tìm kiếm không phân biệt hoa thường theo tên sản phẩm, tên thương hiệu hoặc tên danh mục. Chuỗi rỗng hoặc chỉ có khoảng trắng được bỏ qua.
+  - `categoryId` *(UUID/GUID, tùy chọn)*: Lọc chính xác theo danh mục sản phẩm.
+  - `brandId` *(UUID/GUID, tùy chọn)*: Lọc chính xác theo thương hiệu sản phẩm.
+  - `size` *(string, tùy chọn, tối đa 30 ký tự)*: Lọc theo kích cỡ sản phẩm (không phân biệt hoa thường, tự động loại bỏ khoảng trắng thừa).
+  - `minPrice` *(decimal, tùy chọn, tối thiểu 0)*: Lọc theo giá niêm yết tối thiểu.
+  - `maxPrice` *(decimal, tùy chọn, tối thiểu 0)*: Lọc theo giá niêm yết tối đa.
+- **Quy tắc hiển thị sản phẩm công khai:**
+  - Chỉ hiển thị sản phẩm có `Product.Status == OnSale`.
+  - Thứ tự sắp xếp ổn định: `CreatedAt` giảm dần, sau đó `Id` giảm dần.
+- **Quy tắc bảo mật và riêng tư (Public Privacy Guarantee):**
+  - Tuyệt đối **KHÔNG** trả về: `barcode`, `status` nội bộ, `sourceType`, `purchasePrice`, `agreedCommissionRate`, `agreedBrandTier`, `consignmentContractId`, `buyoutId`, `storageLocationId`.
+  - Tuyệt đối **KHÔNG** trả về hoặc điều hướng tới bất kỳ thông tin nào của người ký gửi (`customerId`, `customerProfile`, `account`, số điện thoại, email, thông tin tài khoản ngân hàng).
+- **Quy tắc ảnh đại diện (Cover Image):**
+  - Lấy ảnh có `ImageType == 'Cover'` với `SortOrder` nhỏ nhất, kế tiếp theo `Id`.
+  - Nếu sản phẩm chưa có ảnh cover, trường `coverImageUrl` trả về `null`.
+- **Response 200 OK:**
+```json
+{
+  "items": [
+    {
+      "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "name": "Áo Blazer Dạ Hàn Quốc",
+      "description": "Áo blazer phom suông thanh lịch, độ mới cao",
+      "listedPrice": "450000.00",
+      "size": "M",
+      "conditionPercentage": 95,
+      "category": {
+        "id": "c1000000-0000-0000-0000-000000000001",
+        "name": "Áo khoác"
+      },
+      "brand": {
+        "id": "b1000000-0000-0000-0000-000000000001",
+        "name": "Zara"
+      },
+      "coverImageUrl": "https://cdn.example.com/products/blazer-cover.jpg"
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1
+}
+```
+- **Mã lỗi:**
+  - `400 VALIDATION_FAILED`: Một hoặc nhiều tham số query không hợp lệ (`application/problem+json`). Ví dụ:
+    - `page < 1`
+    - `pageSize < 1` hoặc `pageSize > 100`
+    - Phân trang vượt quá giới hạn integer offset (`(page - 1) * pageSize > int.MaxValue`)
+    - `minPrice < 0` hoặc `maxPrice < 0`
+    - `minPrice > maxPrice` khi cả hai cùng được truyền
+    - `q` dài hơn 100 ký tự hoặc `size` dài hơn 30 ký tự
+  - `500 INTERNAL_ERROR`: Lỗi hệ thống nội bộ.
+
+### 9.2. Bảo vệ các endpoint nội bộ cùng resource
+- Các endpoint quản lý sản phẩm nội bộ:
+  - `GET /api/products/{id}`
+  - `GET /api/products/barcode/{barcode}`
+  - `POST /api/products`
+  được cấu hình yêu cầu xác thực vai trò nội bộ: `[Authorize(Roles = "Admin,Manager,Staff")]`.
+- Người dùng chưa đăng nhập hoặc anonymous caller khi truy cập các route nội bộ trên sẽ nhận mã lỗi `401 UNAUTHORIZED`. `GET /api/products` là endpoint public duy nhất cho danh sách Landing Page.

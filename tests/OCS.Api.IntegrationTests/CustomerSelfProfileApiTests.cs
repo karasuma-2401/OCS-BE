@@ -64,7 +64,7 @@ public sealed class CustomerSelfProfileApiTests
             BaseAddress = new Uri("https://localhost")
         });
 
-        using var response = await client.GetAsync("/api/v1/customers/me");
+        using var response = await client.GetAsync("/api/customers/me");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -89,7 +89,7 @@ public sealed class CustomerSelfProfileApiTests
             PhoneNumber = "0912345678"
         };
 
-        using var response = await client.PutAsJsonAsync("/api/v1/customers/me", requestBody);
+        using var response = await client.PutAsJsonAsync("/api/customers/me", requestBody);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -112,7 +112,7 @@ public sealed class CustomerSelfProfileApiTests
         using var bodyStream = new MemoryStream();
         context.Response.Body = bodyStream;
         context.Request.Method = HttpMethods.Put;
-        context.Request.Path = "/api/v1/customers/me";
+        context.Request.Path = "/api/customers/me";
 
         await middleware.InvokeAsync(context);
 
@@ -142,7 +142,7 @@ public sealed class CustomerSelfProfileApiTests
 
         var context = new DefaultHttpContext();
         context.Request.Method = HttpMethods.Put;
-        context.Request.Path = "/api/v1/customers/me";
+        context.Request.Path = "/api/customers/me";
         context.Request.Headers["X-Test-Bypass-Csrf"] = "true";
 
         await middleware.InvokeAsync(context);
@@ -419,7 +419,7 @@ public sealed class CustomerSelfProfileApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var json = await response.Content.ReadAsStringAsync();
-        Assert.Contains("/api/v1/customers/me", json, StringComparison.Ordinal);
+        Assert.Contains("/api/customers/me", json, StringComparison.Ordinal);
         Assert.Contains("CustomerSelfProfileResponse", json, StringComparison.Ordinal);
         Assert.Contains("UpdateCustomerSelfProfileRequest", json, StringComparison.Ordinal);
     }

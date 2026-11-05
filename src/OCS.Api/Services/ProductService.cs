@@ -1,5 +1,6 @@
 using OCS.Api.Common;
 using OCS.Api.Consts;
+using OCS.Api.Contracts.Products;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
 using OCS.Api.Interfaces.Services;
@@ -34,6 +35,11 @@ public sealed class ProductService(IUnitOfWork unitOfWork) : IProductService
         }
         return Result.Success(MapToDto(product));
     }
+
+    public Task<PagedResponse<PublicProductResponse>> GetPublicProductsAsync(
+        GetPublicProductsRequest request,
+        CancellationToken cancellationToken = default) =>
+        unitOfWork.ProductRepository.GetPublicProductsAsync(request, cancellationToken);
 
     public async Task<Result<ProductDto>> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
     {

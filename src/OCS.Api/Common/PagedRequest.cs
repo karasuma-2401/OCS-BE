@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 
 namespace OCS.Api.Common;
 
-public sealed class PagedRequest : IValidatableObject
+public class PagedRequest : IValidatableObject
 {
     public const int MaximumPageSize = 100;
 
@@ -18,7 +18,7 @@ public sealed class PagedRequest : IValidatableObject
     [JsonIgnore]
     public int Skip => checked((Page - 1) * PageSize);
 
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    public virtual IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (Page >= 1 && PageSize >= 1 && (long)(Page - 1) * PageSize > int.MaxValue)
         {
