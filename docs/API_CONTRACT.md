@@ -423,3 +423,88 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
 | GET | `/api/notifications` | Đăng nhập | Xem thông báo của tài khoản. |
 | PATCH | `/api/notifications/{id}/read` | Đăng nhập | Đánh dấu một thông báo đã đọc. |
 | PATCH | `/api/notifications/read-all` | Đăng nhập | Đánh dấu tất cả thông báo đã đọc. |
+
+
+---
+
+## 8. Hồ sơ tự phục vụ của người ký gửi (Customer Self-Profile)
+
+### 8.1. Nguyên tắc thiết kế và bảo mật
+- **Tự phục vụ chính chủ (Self-only):** Không có tham số `id` hoặc `customerId` trong URL hay body. Danh tính tài khoản được lấy trực tiếp và duy nhất từ claim `sub` (`ClaimTypes.NameIdentifier`) của phiên đăng nhập (`ocs_session`).
+- **Phân quyền:** Chỉ tài khoản có vai trò `Customer` (`Role.Code = Customer`) mới có quyền truy cập. Yêu cầu không có phiên trả về `401 UNAUTHORIZED`; có phiên nhưng không phải vai trò `Customer` trả về `403 FORBIDDEN`.
+- **Bảo vệ CSRF:** Endpoint cập nhật (`PUT /api/v1/customers/me`) bắt buộc kèm header `X-XSRF-TOKEN` cùng cookie chống giả mạo `ocs_antiforgery` (lấy từ `GET /api/auth/csrf`).
+- **Bảo vệ dữ liệu nhạy cảm:** Không trả về các trường nội bộ như email, mật khẩu hash, trạng thái tài khoản, vai trò hoặc audit log. Số tài khoản ngân hàng chỉ được trả nguyên vẹn cho chính chủ ở endpoint self-profile này để rà soát chi trả, không đưa vào danh sách tra cứu chung. Mọi thay đổi qua hệ thống đều được tự động lưu log qua `AuditSaveChangesInterceptor` với cơ chế che (mask) số điện thoại, số tài khoản và redact họ tên, tên chủ tài khoản.
+- **Ràng buộc giải ngân đang chờ (Payout Lock):** Khi khách hàng có ít nhất một lệnh giải ngân ở trạng thái `Pending`, hệ thống từ chối mọi yêu cầu thay đổi hoặc xóa thông tin tài khoản ngân hàng (`409 CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT`). Khách hàng vẫn được phép cập nhật họ tên và số điện thoại trong trường hợp này. Các trạng thái giải ngân khác (`Transferred`, `Completed`) không kích hoạt khóa.
+- **Tính duy nhất số điện thoại:** Kiểm tra duy nhất số điện thoại trong phạm vi `AccountType.Customer` trước khi ghi, đồng thời bắt lỗi unique constraint của database để chống xung đột tương thời (`409 CUSTOMER.PHONE_NUMBER_EXISTS`).
+
+### 8.2. Danh sách endpoint
+
+| Phương thức | Đường dẫn | Quyền | Mục đích |
+| --- | --- | --- | --- |
+| GET | `/api/v1/customers/me` | Customer (Cookie session) | Xem thông tin hồ sơ của chính mình. |
+| PUT | `/api/v1/customers/me` | Customer (Cookie session + `X-XSRF-TOKEN`) | Cập nhật hồ sơ (họ tên, số điện thoại, tài khoản ngân hàng). |
+
+### 8.3. Chi tiết đặc tả
+
+#### 8.3.1. Xem hồ sơ: `GET /api/v1/customers/me`
+- **Request Headers:**
+  - `Cookie: ocs_session=<jwt_token>`
+- **Response 200 OK:**
+```json
+{
+  "id": "a0d6e1a1-1f7b-4fe7-bc74-20b720a254c1",
+  "fullName": "Nguyễn Văn A",
+  "phoneNumber": "0912345678",
+  "bankAccount": {
+    "bankCode": "VCB",
+    "accountNumber": "000000000001",
+    "accountHolderName": "NGUYEN VAN A"
+  }
+}
+```
+*Ghi chú:* `bankAccount` trả về `null` nếu khách hàng chưa thiết lập tài khoản ngân hàng nhận tiền.
+
+- **Mã lỗi:**
+  - `401 UNAUTHORIZED`: Phiên đăng nhập không hợp lệ hoặc đã hết hạn (`code: "UNAUTHORIZED"`).
+  - `403 FORBIDDEN`: Tài khoản không có vai trò `Customer` (`code: "FORBIDDEN"`).
+  - `404 NOT_FOUND`: Không tìm thấy hồ sơ người ký gửi (`code: "CUSTOMER.PROFILE_NOT_FOUND"`).
+
+#### 8.3.2. Cập nhật hồ sơ: `PUT /api/v1/customers/me`
+- **Thứ tự thực hiện phía client:**
+  1. Gửi `GET /api/auth/csrf` để nhận CSRF token và cookie `ocs_antiforgery`.
+  2. Gửi `PUT /api/v1/customers/me` với cookie `ocs_session`, cookie `ocs_antiforgery`, và header `X-XSRF-TOKEN: <token>`.
+- **Request Body (Cập nhật đầy đủ):**
+```json
+{
+  "fullName": "Nguyễn Văn A",
+  "phoneNumber": "0912345678",
+  "bankAccount": {
+    "bankCode": "VCB",
+    "accountNumber": "000000000001",
+    "accountHolderName": "NGUYEN VAN A"
+  }
+}
+```
+- **Request Body (Xóa cấu hình ngân hàng):**
+```json
+{
+  "fullName": "Nguyễn Văn A",
+  "phoneNumber": "0912345678",
+  "bankAccount": null
+}
+```
+- **Quy tắc kiểm tra dữ liệu:**
+  - `fullName`: Chuỗi bắt buộc sau khi trim, tối đa 150 ký tự.
+  - `phoneNumber`: Chuỗi bắt buộc, đúng định dạng số điện thoại Việt Nam 10 chữ số bắt đầu bằng số 0 (`^0[0-9]{9}$`).
+  - `bankAccount`:
+    - Nếu là `null`: Xóa cả 3 trường thông tin ngân hàng.
+    - Nếu khác `null`: Cả 3 trường phải hiện diện sau khi trim: `bankCode` (viết hoa, tối đa 50 ký tự), `accountNumber` (tối đa 50 ký tự), `accountHolderName` (tối đa 200 ký tự).
+- **Response 200 OK:** Trả về `CustomerSelfProfileResponse` mới nhất.
+- **Mã lỗi:**
+  - `400 VALIDATION_FAILED`: Dữ liệu không hợp lệ theo quy tắc (`ValidationProblemDetails`).
+  - `401 UNAUTHORIZED`: Thiếu hoặc phiên đăng nhập không hợp lệ (`code: "UNAUTHORIZED"`).
+  - `403 AUTH.CSRF_INVALID`: Thiếu hoặc token CSRF không hợp lệ (`code: "AUTH.CSRF_INVALID"`).
+  - `403 FORBIDDEN`: Không có vai trò `Customer` (`code: "FORBIDDEN"`).
+  - `404 CUSTOMER.PROFILE_NOT_FOUND`: Không tìm thấy hồ sơ khách hàng (`code: "CUSTOMER.PROFILE_NOT_FOUND"`).
+  - `409 CUSTOMER.PHONE_NUMBER_EXISTS`: Số điện thoại đã được đăng ký bởi một khách hàng khác (`code: "CUSTOMER.PHONE_NUMBER_EXISTS"`).
+  - `409 CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT`: Không thể sửa/xóa thông tin ngân hàng do đang có giải ngân `Pending` (`code: "CUSTOMER.BANK_ACCOUNT_LOCKED_FOR_PAYOUT"`).

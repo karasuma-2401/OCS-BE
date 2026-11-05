@@ -46,7 +46,7 @@ public sealed class AppointmentMergeTests
         context.AppointmentTimeSlots.Add(slot);
         await context.SaveChangesAsync();
 
-        using var unit = new UnitOfWork(context, new ProductRepository(context), new AuthRepository(context), new AppointmentRepository(context), new NotificationRepository(context));
+        using var unit = new UnitOfWork(context, new ProductRepository(context), new AuthRepository(context), new AppointmentRepository(context), new NotificationRepository(context), new CustomerProfileRepository(context));
         var request = new CreateAppointmentRequest { AppointmentDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1), TimeSlotId = slot.Id, EstimatedItemCount = 1 };
         var service = new AppointmentService(unit, new NotificationService(unit));
         var result = await service.CreateAsync(account.Id, request);

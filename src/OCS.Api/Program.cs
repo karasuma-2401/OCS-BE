@@ -5,11 +5,22 @@ using dotenv.net;
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Context;
 
-// Local secrets are loaded only in Development; explicit environment variables take precedence.
-if (string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase))
-    DotEnv.Load(new DotEnvOptions(probeForEnv: true, probeLevelsToSearch: 4, overwriteExistingVars: false));
-
 var builder = WebApplication.CreateBuilder(args);
+
+// Local secrets are loaded in Development; explicit environment variables take precedence.
+if (builder.Environment.IsDevelopment())
+{
+    var envPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "..", ".env"));
+    if (File.Exists(envPath))
+    {
+        DotEnv.Load(new DotEnvOptions(envFilePaths: [envPath], overwriteExistingVars: false));
+    }
+    else
+    {
+        DotEnv.Load(new DotEnvOptions(probeForEnv: true, probeLevelsToSearch: 6, overwriteExistingVars: false));
+    }
+    builder.Configuration.AddEnvironmentVariables();
+}
 
 ProductionConfiguration.Validate(builder.Configuration, builder.Environment);
 
