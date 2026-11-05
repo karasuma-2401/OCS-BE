@@ -688,19 +688,25 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             p.AssignConsignmentTerms(contractId, 250000m, uniqlo);
             p.OfferForSale();
             dbContext.Products.Add(p);
+        }
 
-            var detailImgId = Guid.Parse("71000000-0000-0000-0000-000000000031");
-            if (!await dbContext.ProductImages.AnyAsync(img => img.Id == detailImgId, cancellationToken))
+        var detailImgId = Guid.Parse("71000000-0000-0000-0000-000000000031");
+        var whiteTeeDetailUrl = "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800&auto=format&fit=crop&q=80";
+        var existingNoCoverDetail = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == detailImgId, cancellationToken);
+        if (existingNoCoverDetail == null)
+        {
+            dbContext.ProductImages.Add(new ProductImage
             {
-                dbContext.ProductImages.Add(new ProductImage
-                {
-                    Id = detailImgId,
-                    ProductId = noCoverProdId,
-                    Url = "https://images.unsplash.com/demo/detail-only.jpg",
-                    ImageType = ProductImageType.Detail,
-                    SortOrder = 1
-                });
-            }
+                Id = detailImgId,
+                ProductId = noCoverProdId,
+                Url = whiteTeeDetailUrl,
+                ImageType = ProductImageType.Detail,
+                SortOrder = 1
+            });
+        }
+        else
+        {
+            existingNoCoverDetail.Url = whiteTeeDetailUrl;
         }
 
         // 9g. Consignment product with active customer profile to verify zero data leak
@@ -722,19 +728,44 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             p.AssignConsignmentTerms(contractId, 320000m, zara);
             p.OfferForSale();
             dbContext.Products.Add(p);
+        }
 
-            var coverImgId = Guid.Parse("71000000-0000-0000-0000-000000000032");
-            if (!await dbContext.ProductImages.AnyAsync(img => img.Id == coverImgId, cancellationToken))
+        var coverImgId = Guid.Parse("71000000-0000-0000-0000-000000000032");
+        var scarfCoverUrl = "https://images.unsplash.com/photo-1520903920243-00d872a2d1c9?w=800&auto=format&fit=crop&q=80";
+        var existingScarfCover = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == coverImgId, cancellationToken);
+        if (existingScarfCover == null)
+        {
+            dbContext.ProductImages.Add(new ProductImage
             {
-                dbContext.ProductImages.Add(new ProductImage
-                {
-                    Id = coverImgId,
-                    ProductId = consignorProdId,
-                    Url = "https://images.unsplash.com/demo/scarf-cover.jpg",
-                    ImageType = ProductImageType.Cover,
-                    SortOrder = 0
-                });
-            }
+                Id = coverImgId,
+                ProductId = consignorProdId,
+                Url = scarfCoverUrl,
+                ImageType = ProductImageType.Cover,
+                SortOrder = 0
+            });
+        }
+        else
+        {
+            existingScarfCover.Url = scarfCoverUrl;
+        }
+
+        var scarfDetailImgId = Guid.Parse("72000000-0000-0000-0000-000000000032");
+        var scarfDetailUrl = "https://images.unsplash.com/photo-1608256246200-53e635b5b65f?w=800&auto=format&fit=crop&q=80";
+        var existingScarfDetail = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == scarfDetailImgId, cancellationToken);
+        if (existingScarfDetail == null)
+        {
+            dbContext.ProductImages.Add(new ProductImage
+            {
+                Id = scarfDetailImgId,
+                ProductId = consignorProdId,
+                Url = scarfDetailUrl,
+                ImageType = ProductImageType.Detail,
+                SortOrder = 1
+            });
+        }
+        else
+        {
+            existingScarfDetail.Url = scarfDetailUrl;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
