@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Common;
+using OCS.Api.Consts;
 using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
@@ -8,6 +9,86 @@ namespace OCS.Api.Repositories;
 
 public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
 {
+    public async Task<PagedResponse<Account>> GetPagedAccountsAsync(
+        PagedRequest paging,
+        string? search,
+        AccountType? accountType,
+        AccountStatus? status,
+        bool staffOnly,
+        Guid? roleId,
+        CancellationToken cancellationToken = default)
+    {
+        IQueryable<Account> query = dbContext.Accounts.AsNoTracking();
+
+        if (accountType.HasValue)
+            query = query.Where(a => a.AccountType == accountType.Value);
+
+        if (status.HasValue)
+            query = query.Where(a => a.Status == status.Value);
+
+        if (staffOnly)
+            query = query.Where(a => a.AccountType == AccountType.Internal
+                && a.AccountRoles.Any(ar => ar.RoleId == Role.StaffRoleId)
+                && !a.AccountRoles.Any(ar => ar.RoleId == Role.AdminRoleId || ar.RoleId == Role.ManagerRoleId));
+
+        if (roleId.HasValue)
+            query = query.Where(a => a.AccountRoles.Any(ar => ar.RoleId == roleId.Value));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var pattern = $"%{search.Trim()}%";
+            query = query.Where(a =>
+                EF.Functions.ILike(a.FullName, pattern) ||
+                (a.Email != null && EF.Functions.ILike(a.Email, pattern)) ||
+                EF.Functions.ILike(a.PhoneNumber, pattern) ||
+                (a.Username != null && EF.Functions.ILike(a.Username, pattern)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Include(a => a.AccountRoles)
+                .ThenInclude(ar => ar.Role)
+            .OrderByDescending(a => a.CreatedAt)
+            .ThenBy(a => a.Id)
+            .Skip(paging.Skip)
+            .Take(paging.PageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResponse<Account>(items, paging.Page, paging.PageSize, totalCount);
+    }
+
+    public async Task<PagedResponse<AuditLog>> GetPagedAccountAuditLogsAsync(
+        PagedRequest paging, Guid? accountId, CancellationToken cancellationToken = default)
+    {
+        IQueryable<AuditLog> query = dbContext.AuditLogs.AsNoTracking()
+            .Where(log => log.EntityType == nameof(Account)
+                || log.EntityType == nameof(AccountRole)
+                || log.EntityType == nameof(EmployeeProfile));
+
+        if (accountId.HasValue)
+        {
+            var id = accountId.Value.ToString("D");
+            var roleEntityIdPart = $"\"accountId\":\"{id}\"";
+            var roleEntityIdPartPascal = $"\"AccountId\":\"{id}\"";
+            query = query.Where(log =>
+                log.EntityType == nameof(Account) && log.EntityId == id
+                || log.EntityType == nameof(EmployeeProfile) && log.EntityId == id
+                || log.EntityType == nameof(AccountRole)
+                    && (log.EntityId.Contains(roleEntityIdPart)
+                        || log.EntityId.Contains(roleEntityIdPartPascal)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query.OrderByDescending(log => log.OccurredAt)
+            .ThenByDescending(log => log.Id)
+            .Skip(paging.Skip).Take(paging.PageSize)
+            .ToListAsync(cancellationToken);
+        return new PagedResponse<AuditLog>(items, paging.Page, paging.PageSize, totalCount);
+    }
+
+    public void AddAuditLog(AuditLog auditLog) => dbContext.AuditLogs.Add(auditLog);
+
     public Task<Account?> GetByEmailAsync(string email, CancellationToken cancellationToken = default)
     {
         var normalized = EmailIdentity.Normalize(email);
@@ -64,6 +145,17 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
         dbContext.Accounts.Add(account);
     }
 
+    public void ReplaceAccountRoles(Account account, IReadOnlyCollection<Guid> roleIds)
+    {
+        var removed = account.AccountRoles.Where(ar => !roleIds.Contains(ar.RoleId)).ToList();
+        dbContext.AccountRoles.RemoveRange(removed);
+        foreach (var role in removed)
+            account.AccountRoles.Remove(role);
+
+        foreach (var roleId in roleIds.Where(id => account.AccountRoles.All(ar => ar.RoleId != id)))
+            account.AccountRoles.Add(new AccountRole { AccountId = account.Id, RoleId = roleId, Account = account });
+    }
+
     public Task<OtpChallenge?> GetOtpChallengeByIdAsync(Guid challengeId, CancellationToken cancellationToken = default) =>
         dbContext.OtpChallenges
             .Include(c => c.Account)
@@ -83,6 +175,17 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
 
     public Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default) =>
         dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Accounts\" WHERE \"Id\" = {accountId} FOR UPDATE", cancellationToken);
+
+    public Task LockRoleAsync(Guid roleId, CancellationToken cancellationToken = default) =>
+        dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM \"Roles\" WHERE \"Id\" = {roleId} FOR UPDATE", cancellationToken);
+
+    public Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default) =>
+        dbContext.Accounts.CountAsync(a => a.Status == AccountStatus.Active && a.EmailVerifiedAt != null
+            && a.AccountRoles.Any(ar => ar.RoleId == Role.AdminRoleId), cancellationToken);
+
+    public Task<int> RevokeSessionsAsync(Guid accountId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default) =>
+        dbContext.AuthSessions.Where(s => s.AccountId == accountId && s.RevokedAt == null)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.RevokedAt, revokedAt), cancellationToken);
 
     public Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default) =>
         dbContext.Entry(challenge).ReloadAsync(cancellationToken);

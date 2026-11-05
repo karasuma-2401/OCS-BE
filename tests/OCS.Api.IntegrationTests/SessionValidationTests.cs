@@ -521,6 +521,13 @@ public sealed class SessionValidationTests : IDisposable
 
     private sealed class TestAuthRepository : IAuthRepository
     {
+        public Task<PagedResponse<Account>> GetPagedAccountsAsync(
+            PagedRequest paging, string? search, AccountType? accountType, AccountStatus? status, bool staffOnly, Guid? roleId,
+            CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<PagedResponse<AuditLog>> GetPagedAccountAuditLogsAsync(PagedRequest paging,
+            Guid? accountId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public void AddAuditLog(AuditLog auditLog) => throw new NotSupportedException();
+
         public List<Account> Accounts { get; } = [];
         public List<OtpChallenge> Challenges { get; } = [];
         public List<AuthSession> Sessions { get; } = [];
@@ -562,6 +569,8 @@ public sealed class SessionValidationTests : IDisposable
             Accounts.Add(account);
         }
 
+        public void ReplaceAccountRoles(Account account, IReadOnlyCollection<Guid> roleIds) => throw new NotSupportedException();
+
         public Task<OtpChallenge?> GetOtpChallengeByIdAsync(Guid challengeId, CancellationToken cancellationToken = default)
             => Task.FromResult(Challenges.FirstOrDefault(c => c.Id == challengeId));
 
@@ -569,6 +578,9 @@ public sealed class SessionValidationTests : IDisposable
             => Task.FromResult(Challenges.Count(c => c.NormalizedEmail == normalizedEmail && c.CreatedAt >= windowStart));
 
         public Task LockAccountAsync(Guid accountId, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task LockRoleAsync(Guid roleId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> CountActiveAdminsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> RevokeSessionsAsync(Guid accountId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task ReloadChallengeAsync(OtpChallenge challenge, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<OtpChallenge?> GetLatestOtpChallengeAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Challenges.Where(c => c.AccountId == id && c.DeliveryStatus != "Failed").OrderByDescending(c => c.CreatedAt).FirstOrDefault());
         public Task<List<OtpChallenge>> GetActiveOtpChallengesAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Challenges.Where(c => c.AccountId == id && !c.InvalidatedAt.HasValue && !c.ConsumedAt.HasValue).ToList());

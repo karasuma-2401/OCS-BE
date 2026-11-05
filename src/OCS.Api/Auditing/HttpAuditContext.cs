@@ -36,10 +36,20 @@ public sealed class HttpAuditContext(
             ? AuditActorType.User
             : systemContext.ActorType;
 
-    public string Source =>
-        httpContextAccessor.HttpContext?.Request.Path.Value is { } path && !string.IsNullOrWhiteSpace(path)
-            ? path
-            : systemContext.Source;
+    public string Source
+    {
+        get
+        {
+            var request = httpContextAccessor.HttpContext?.Request;
+            var controller = request?.RouteValues["controller"]?.ToString();
+            var action = request?.RouteValues["action"]?.ToString();
+            // Route values are stable and avoid putting an account ID into the 50-character audit source.
+            var source = !string.IsNullOrWhiteSpace(controller) && !string.IsNullOrWhiteSpace(action)
+                ? $"{controller}.{action}"
+                : request?.Path.Value ?? systemContext.Source;
+            return source.Length <= 50 ? source : source[..50];
+        }
+    }
 
     public string? IpAddress =>
         httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? systemContext.IpAddress;

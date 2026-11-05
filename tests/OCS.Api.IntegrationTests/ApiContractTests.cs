@@ -39,6 +39,10 @@ public sealed class ApiContractTests
     [Theory]
     [InlineData("/missing-route", 404, "NOT_FOUND")]
     [InlineData("/__tests/contract/protected", 401, "UNAUTHORIZED")]
+    [InlineData("/api/accounts", 401, "UNAUTHORIZED")]
+    [InlineData("/api/accounts/00000000-0000-0000-0000-000000000001", 401, "UNAUTHORIZED")]
+    [InlineData("/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile", 401, "UNAUTHORIZED")]
+    [InlineData("/api/accounts/history", 401, "UNAUTHORIZED")]
     [InlineData("/__tests/contract/failure", 409, "CATALOG.CONFLICT")]
     [InlineData("/__tests/contract/failure?type=NotFound", 404, "CATALOG.NOTFOUND")]
     [InlineData("/__tests/contract/failure?type=Validation", 400, "CATALOG.VALIDATION")]
@@ -69,6 +73,49 @@ public sealed class ApiContractTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var payload = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Healthy", payload.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task CreatingStaffRequiresAuthentication()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        using var response = await client.PostAsync("/api/accounts/staff", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ChangingAccountLockRequiresAuthentication()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        using var response = await client.PatchAsync(
+            "/api/accounts/00000000-0000-0000-0000-000000000001/lock-status", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AssigningRolesRequiresAuthentication()
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        using var response = await client.PutAsync(
+            "/api/accounts/00000000-0000-0000-0000-000000000001/roles", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/accounts/internal")]
+    [InlineData("PUT", "/api/accounts/00000000-0000-0000-0000-000000000001")]
+    [InlineData("POST", "/api/accounts/00000000-0000-0000-0000-000000000001/reset-password")]
+    [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/status")]
+    [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile")]
+    public async Task NewManagementMutationsRequireAuthentication(string method, string path)
+    {
+        await using var factory = CreateFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        using var response = await client.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
