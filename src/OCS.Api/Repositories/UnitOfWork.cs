@@ -10,12 +10,14 @@ public sealed class UnitOfWork(
     IProductRepository productRepository,
     IAuthRepository authRepository,
     IAppointmentRepository appointmentRepository,
-    INotificationRepository notificationRepository) : IUnitOfWork
+    INotificationRepository notificationRepository,
+    ICustomerProfileRepository customerProfileRepository) : IUnitOfWork
 {
     public IProductRepository ProductRepository => productRepository;
     public IAuthRepository AuthRepository => authRepository;
     public IAppointmentRepository AppointmentRepository => appointmentRepository;
     public INotificationRepository NotificationRepository => notificationRepository;
+    public ICustomerProfileRepository CustomerProfileRepository => customerProfileRepository;
 
     public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) =>
         dbContext.SaveChangesAsync(cancellationToken);

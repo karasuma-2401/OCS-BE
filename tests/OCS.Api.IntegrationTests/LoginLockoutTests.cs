@@ -461,6 +461,7 @@ public sealed class LoginLockoutTests : IDisposable
         public IProductRepository ProductRepository => null!;
         public IAppointmentRepository AppointmentRepository => throw new NotSupportedException();
         public INotificationRepository NotificationRepository => throw new NotSupportedException();
+        public ICustomerProfileRepository CustomerProfileRepository => throw new NotSupportedException();
         public IAuthRepository AuthRepository => repository;
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(1);

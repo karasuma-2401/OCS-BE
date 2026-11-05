@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Common;
 
@@ -21,7 +22,15 @@ internal static class ApiConventionExtensions
         {
             options.InvalidModelStateResponseFactory = context =>
             {
-                var details = new ValidationProblemDetails(context.ModelState)
+                var errors = context.ModelState
+                    .Where(entry => entry.Value is { Errors.Count: > 0 })
+                    .ToDictionary(
+                        entry => JsonNamingPolicy.CamelCase.ConvertName(entry.Key),
+                        entry => entry.Value!.Errors
+                            .Select(error => error.ErrorMessage)
+                            .ToArray());
+
+                var details = new ValidationProblemDetails(errors)
                 {
                     Status = StatusCodes.Status400BadRequest,
                     Title = "One or more validation errors occurred.",
@@ -31,7 +40,9 @@ internal static class ApiConventionExtensions
                 details.Extensions["code"] = ApiErrorCodes.ValidationFailed;
                 details.Extensions["traceId"] = Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
 
-                return new BadRequestObjectResult(details);
+                var response = new BadRequestObjectResult(details);
+                response.ContentTypes.Add("application/problem+json");
+                return response;
             };
         });
 

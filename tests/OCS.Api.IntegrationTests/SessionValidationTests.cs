@@ -482,7 +482,7 @@ public sealed class SessionValidationTests : IDisposable
         public void SetCookieTokenAndHeader(HttpContext httpContext) { }
     }
 
-    private sealed class TestFailingAntiforgery : IAntiforgery
+    internal sealed class TestFailingAntiforgery : IAntiforgery
     {
         public AntiforgeryTokenSet GetAndStoreTokens(HttpContext httpContext)
             => new("test-request-token", "test-cookie-token", "X-XSRF-TOKEN", "ocs_antiforgery");
@@ -495,7 +495,7 @@ public sealed class SessionValidationTests : IDisposable
         public void SetCookieTokenAndHeader(HttpContext httpContext) { }
     }
 
-    private sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
+    internal sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
     {
         public string EnvironmentName { get; set; } = environmentName;
         public string ApplicationName { get; set; } = "OCS.Api";
@@ -508,6 +508,7 @@ public sealed class SessionValidationTests : IDisposable
         public IProductRepository ProductRepository => null!;
         public IAppointmentRepository AppointmentRepository => throw new NotSupportedException();
         public INotificationRepository NotificationRepository => throw new NotSupportedException();
+        public ICustomerProfileRepository CustomerProfileRepository => throw new NotSupportedException();
         public IAuthRepository AuthRepository => repository;
 
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(1);
