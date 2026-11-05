@@ -294,6 +294,14 @@ public static class ServiceCollectionExtensions
         services.AddCors(options => options.AddPolicy(CorsPolicyName, policy =>
         {
             policy.WithOrigins(allowedOrigins)
+                .SetIsOriginAllowed(origin =>
+                {
+                    if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                    {
+                        return uri.Host is "localhost" or "127.0.0.1";
+                    }
+                    return false;
+                })
                 .AllowAnyHeader()
                 .AllowAnyMethod()
                 .AllowCredentials();
@@ -397,8 +405,12 @@ public static class ServiceCollectionExtensions
             app.MapScalarApiReference();
         }
 
-        app.UseHttpsRedirection();
         app.UseCors(CorsPolicyName);
+
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHttpsRedirection();
+        }
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseMiddleware<CsrfValidationMiddleware>();
