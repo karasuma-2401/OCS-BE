@@ -575,6 +575,7 @@ public sealed class AccountManagementServiceTests
         public IProductRepository ProductRepository => throw new NotSupportedException();
         public IAppointmentRepository AppointmentRepository => throw new NotSupportedException();
         public INotificationRepository NotificationRepository => throw new NotSupportedException();
+        public ICustomerProfileRepository CustomerProfileRepository => throw new NotSupportedException();
         public bool Committed { get; private set; }
         public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(1);
         public Task BeginTransactionAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
