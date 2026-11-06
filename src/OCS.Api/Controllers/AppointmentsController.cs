@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Common;
+using OCS.Api.Authorization;
 using OCS.Api.Consts;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
@@ -11,7 +12,7 @@ namespace OCS.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public sealed class AppointmentsController(IAppointmentService appointmentService) : ControllerBase
+public sealed class AppointmentsController(IAppointmentService appointmentService, IAuthorizationService authorizationService) : ControllerBase
 {
     /// <summary>
     /// Lấy danh sách các khung giờ và số chỗ còn trống theo ngày đã chọn.
@@ -31,6 +32,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     /// </summary>
     [HttpPost]
     [Authorize]
+    [Authorize(Policy = PermissionCatalog.AppointmentsCreate)]
     public async Task<IActionResult> Create(
         [FromBody] CreateAppointmentRequest request,
         CancellationToken cancellationToken)
@@ -50,6 +52,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     /// </summary>
     [HttpGet("my-history")]
     [Authorize]
+    [Authorize(Policy = PermissionCatalog.AppointmentsOwnRead)]
     public async Task<IActionResult> GetMyHistory(CancellationToken cancellationToken)
     {
         var customerId = GetCurrentUserId();
@@ -70,7 +73,10 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         var currentUserId = GetCurrentUserId();
-        var isStaff = User.IsInRole("Staff") || User.IsInRole("Manager") || User.IsInRole("Admin");
+        var isStaff = (User.IsInRole("Staff") || User.IsInRole("Manager") || User.IsInRole("Admin"))
+            && (await authorizationService.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffRead)).Succeeded;
+        if (!isStaff && !(await authorizationService.AuthorizeAsync(User, PermissionCatalog.AppointmentsOwnRead)).Succeeded)
+            return Forbid();
 
         var result = await appointmentService.GetByIdAsync(id, currentUserId, isStaff, cancellationToken);
         return result.ToActionResult();
@@ -81,6 +87,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     /// </summary>
     [HttpPut("{id:guid}/cancel")]
     [Authorize]
+    [Authorize(Policy = PermissionCatalog.AppointmentsOwnCancel)]
     public async Task<IActionResult> Cancel(
         Guid id,
         [FromBody] CancelAppointmentRequest request,
@@ -101,6 +108,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     /// </summary>
     [HttpGet]
     [Authorize(Roles = "Admin,Manager,Staff")]
+    [Authorize(Policy = PermissionCatalog.AppointmentsStaffRead)]
     public async Task<IActionResult> GetAppointments(
         [FromQuery] DateOnly? date,
         [FromQuery] Guid? timeSlotId,
@@ -117,6 +125,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     /// </summary>
     [HttpPatch("{id:guid}/status")]
     [Authorize(Roles = "Admin,Manager,Staff")]
+    [Authorize(Policy = PermissionCatalog.AppointmentsStaffUpdate)]
     public async Task<IActionResult> UpdateStatus(
         Guid id,
         [FromBody] UpdateAppointmentStatusRequest request,
@@ -132,6 +141,7 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     /// </summary>
     [HttpPost("{id:guid}/start-reception")]
     [Authorize(Roles = "Admin,Manager,Staff")]
+    [Authorize(Policy = PermissionCatalog.AppointmentsStaffReception)]
     public async Task<IActionResult> StartReception(
         Guid id,
         CancellationToken cancellationToken)

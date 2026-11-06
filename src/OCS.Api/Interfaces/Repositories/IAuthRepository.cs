@@ -41,5 +41,7 @@ public interface IAuthRepository
     void AddOtpChallenge(OtpChallenge challenge);
 
     Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default);
+    Task<List<string>> GetEffectivePermissionsAsync(Guid accountId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new List<string>());
     void AddSession(AuthSession session);
 }

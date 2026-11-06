@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Microsoft.Extensions.Options;
 using OCS.Api.Common;
+using OCS.Api.Authorization;
 using OCS.Api.Configuration;
 using OCS.Api.Consts;
 using OCS.Api.Entities;
@@ -173,7 +174,10 @@ public sealed partial class AuthService : IAuthService
             var token = _tokenService.GenerateAccessToken(account, roles, sessionId);
             // Never return success when session persistence fails.
             await _unitOfWork.SaveChangesAsync(cancellationToken);
-            var user = new UserDto(account.Id, account.FullName, account.Email, account.PhoneNumber, roles, account.Username);
+            var permissions = await _unitOfWork.AuthRepository.GetEffectivePermissionsAsync(account.Id, cancellationToken);
+            if (roles.Contains("Admin", StringComparer.Ordinal))
+                permissions = permissions.Concat(PermissionCatalog.RequiredAdminCodes).Distinct(StringComparer.Ordinal).ToList();
+            var user = new UserDto(account.Id, account.FullName, account.Email, account.PhoneNumber, roles, account.Username, permissions);
             LogLoginSuccess(_logger, account.Id);
             return Result.Success(new LoginResultDto(token, expiresIn, expiresAt, user));
         }
@@ -346,13 +350,17 @@ public sealed partial class AuthService : IAuthService
 
         var remainingSeconds = Math.Max(0, (int)Math.Ceiling((session.ExpiresAt - now).TotalSeconds));
 
+        var permissions = await _unitOfWork.AuthRepository.GetEffectivePermissionsAsync(account.Id, cancellationToken);
+        if (roles.Contains("Admin", StringComparer.Ordinal))
+            permissions = permissions.Concat(PermissionCatalog.RequiredAdminCodes).Distinct(StringComparer.Ordinal).ToList();
         var userDto = new UserDto(
             account.Id,
             account.FullName,
             account.Email,
             account.PhoneNumber,
             roles,
-            account.Username);
+            account.Username,
+            permissions);
 
         return Result.Success(new CurrentUserResponseDto(remainingSeconds, session.ExpiresAt, userDto));
     }

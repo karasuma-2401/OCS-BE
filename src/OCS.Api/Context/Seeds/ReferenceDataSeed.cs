@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Entities;
+using OCS.Api.Authorization;
 
 namespace OCS.Api.Context.Seeds;
 
@@ -10,9 +11,6 @@ internal static class ReferenceDataSeed
     private static readonly Guid StaffRoleId = new("20000000-0000-0000-0000-000000000002");
     private static readonly Guid AdminRoleId = new("20000000-0000-0000-0000-000000000003");
     private static readonly Guid CustomerRoleId = new("20000000-0000-0000-0000-000000000004");
-    private static readonly Guid ReadCustomersPermissionId = new("30000000-0000-0000-0000-000000000001");
-    private static readonly Guid CreateAccountsPermissionId = new("30000000-0000-0000-0000-000000000002");
-    private static readonly Guid CreateAppointmentsPermissionId = new("30000000-0000-0000-0000-000000000003");
 
     public static void Configure(ModelBuilder modelBuilder) => SeedRolesAndPermissions(modelBuilder);
 
@@ -48,37 +46,30 @@ internal static class ReferenceDataSeed
                 Description = "Vai trò khách hàng sử dụng mini app để đặt lịch ký gửi."
             });
 
-        modelBuilder.Entity<Permission>().HasData(
-            new
-            {
-                Id = ReadCustomersPermissionId,
-                Code = "customers.read",
-                Name = "Xem hồ sơ khách",
-                Description = "Tra cứu hồ sơ phục vụ tiếp nhận tại cửa hàng."
-            },
-            new
-            {
-                Id = CreateAccountsPermissionId,
-                Code = "accounts.create",
-                Name = "Cấp tài khoản nội bộ",
-                Description = "Quản lý cấp tài khoản cho nhân viên."
-            },
-            new
-            {
-                Id = CreateAppointmentsPermissionId,
-                Code = "appointments.create",
-                Name = "Đặt lịch ký gửi",
-                Description = "Khách hàng tạo lịch hẹn ký gửi của mình trên mini app."
-            });
+        modelBuilder.Entity<Permission>().HasData(PermissionCatalog.All.Select(permission => new
+        {
+            Id = PermissionCatalog.IdFor(permission.Number),
+            permission.Code,
+            permission.Name,
+            permission.Description
+        }).ToArray());
 
         // Each role receives explicit sample permissions; Customer gets no internal permissions.
-        modelBuilder.Entity<RolePermission>().HasData(
-            new { RoleId = AdminRoleId, PermissionId = ReadCustomersPermissionId },
-            new { RoleId = AdminRoleId, PermissionId = CreateAccountsPermissionId },
-            new { RoleId = StaffRoleId, PermissionId = ReadCustomersPermissionId },
-            new { RoleId = ManagerRoleId, PermissionId = ReadCustomersPermissionId },
-            new { RoleId = ManagerRoleId, PermissionId = CreateAccountsPermissionId },
-            new { RoleId = CustomerRoleId, PermissionId = CreateAppointmentsPermissionId });
+        var grants = new List<object>();
+        void Grant(Guid roleId, params string[] codes)
+        {
+            foreach (var code in codes)
+            {
+                var permission = PermissionCatalog.All.Single(item => item.Code == code);
+                grants.Add(new { RoleId = roleId, PermissionId = PermissionCatalog.IdFor(permission.Number) });
+            }
+        }
+
+        Grant(AdminRoleId, PermissionCatalog.DefaultsFor("Admin").ToArray());
+        Grant(ManagerRoleId, PermissionCatalog.DefaultsFor("Manager").ToArray());
+        Grant(StaffRoleId, PermissionCatalog.DefaultsFor("Staff").ToArray());
+        Grant(CustomerRoleId, PermissionCatalog.DefaultsFor("Customer").ToArray());
+        modelBuilder.Entity<RolePermission>().HasData(grants.ToArray());
     }
 
 }

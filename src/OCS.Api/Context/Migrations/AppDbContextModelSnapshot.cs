@@ -127,7 +127,7 @@ namespace OCS.Api.Context.Migrations
 
                             t.HasCheckConstraint("CK_Accounts_LoginAttempts", "\"FailedLoginAttempts\" >= 0");
 
-                            t.HasCheckConstraint("CK_Accounts_NormalizedEmail", "\"NormalizedEmail\" IS NOT DISTINCT FROM (CASE WHEN length(btrim(\"Email\", E' \\t\\n\\r\\013\\f')) <= 254\n    AND length(split_part(btrim(\"Email\", E' \\t\\n\\r\\013\\f'), '@', 1)) <= 64\n    AND btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'\nTHEN upper(btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\") ELSE NULL END)");
+                            t.HasCheckConstraint("CK_Accounts_NormalizedEmail", "\"NormalizedEmail\" IS NOT DISTINCT FROM (CASE WHEN length(btrim(\"Email\", E' \\t\\n\\r\\013\\f')) <= 254\r\n    AND length(split_part(btrim(\"Email\", E' \\t\\n\\r\\013\\f'), '@', 1)) <= 64\r\n    AND btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\" ~ '^[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'\r\nTHEN upper(btrim(\"Email\", E' \\t\\n\\r\\013\\f') COLLATE \"C\") ELSE NULL END)");
 
                             t.HasCheckConstraint("CK_Accounts_Status", "\"Status\" IN (\r\n    'PendingActivation',\r\n    'Active',\r\n    'Locked',\r\n    'Deactivated'\r\n)");
                         });
@@ -156,6 +156,10 @@ namespace OCS.Api.Context.Migrations
                     b.Property<DateOnly>("AppointmentDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -164,6 +168,13 @@ namespace OCS.Api.Context.Migrations
 
                     b.Property<int>("EstimatedItemCount")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -181,17 +192,6 @@ namespace OCS.Api.Context.Migrations
                     b.Property<string>("TrackingNumber")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("CancellationReason")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<DateTimeOffset?>("ReminderSentAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1132,22 +1132,169 @@ namespace OCS.Api.Context.Migrations
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000001"),
                             Code = "customers.read",
-                            Description = "Tra cứu hồ sơ phục vụ tiếp nhận tại cửa hàng.",
+                            Description = "Tra cứu hồ sơ khách hàng.",
                             Name = "Xem hồ sơ khách"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000002"),
                             Code = "accounts.create",
-                            Description = "Quản lý cấp tài khoản cho nhân viên.",
-                            Name = "Cấp tài khoản nội bộ"
+                            Description = "Cấp tài khoản nhân viên.",
+                            Name = "Tạo tài khoản nội bộ"
                         },
                         new
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000003"),
                             Code = "appointments.create",
-                            Description = "Khách hàng tạo lịch hẹn ký gửi của mình trên mini app.",
+                            Description = "Khách hàng tạo lịch hẹn của mình.",
                             Name = "Đặt lịch ký gửi"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000004"),
+                            Code = "permissions.manage",
+                            Description = "Xem và chỉnh quyền của các vai trò.",
+                            Name = "Quản lý phân quyền"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000005"),
+                            Code = "accounts.read",
+                            Description = "Xem danh sách và chi tiết tài khoản.",
+                            Name = "Xem tài khoản"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000006"),
+                            Code = "accounts.update",
+                            Description = "Cập nhật thông tin và hồ sơ nhân viên.",
+                            Name = "Sửa thông tin tài khoản"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000007"),
+                            Code = "accounts.status",
+                            Description = "Khóa, mở khóa và vô hiệu hóa tài khoản.",
+                            Name = "Đổi trạng thái tài khoản"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000008"),
+                            Code = "accounts.roles",
+                            Description = "Thay đổi vai trò của tài khoản nội bộ.",
+                            Name = "Gán vai trò tài khoản"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000009"),
+                            Code = "accounts.history",
+                            Description = "Xem nhật ký thay đổi tài khoản.",
+                            Name = "Xem lịch sử tài khoản"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000010"),
+                            Code = "accounts.reset-password",
+                            Description = "Đặt lại mật khẩu cho tài khoản.",
+                            Name = "Đặt lại mật khẩu"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000011"),
+                            Code = "appointments.staff.read",
+                            Description = "Xem lịch hẹn của khách tại cửa hàng.",
+                            Name = "Xem lịch hẹn tại cửa hàng"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000012"),
+                            Code = "appointments.staff.update",
+                            Description = "Cập nhật trạng thái lịch hẹn.",
+                            Name = "Cập nhật lịch hẹn"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000013"),
+                            Code = "appointments.staff.reception",
+                            Description = "Bắt đầu tiếp nhận từ lịch hẹn.",
+                            Name = "Tiếp nhận lịch hẹn"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000014"),
+                            Code = "products.create",
+                            Description = "Thêm sản phẩm vào kho.",
+                            Name = "Tạo sản phẩm"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000015"),
+                            Code = "screens.pos",
+                            Description = "Hiển thị tab bán hàng POS.",
+                            Name = "Màn hình POS"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000016"),
+                            Code = "screens.inventory",
+                            Description = "Hiển thị tab kho hàng.",
+                            Name = "Màn hình Kho hàng"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000017"),
+                            Code = "screens.consignment",
+                            Description = "Hiển thị tab tiếp nhận ký gửi.",
+                            Name = "Màn hình Ký gửi"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000018"),
+                            Code = "screens.customers",
+                            Description = "Hiển thị tab khách hàng.",
+                            Name = "Màn hình Khách hàng"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000019"),
+                            Code = "screens.settlement",
+                            Description = "Hiển thị tab quyết toán.",
+                            Name = "Màn hình Quyết toán"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000020"),
+                            Code = "screens.reports",
+                            Description = "Hiển thị tab báo cáo.",
+                            Name = "Màn hình Báo cáo"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000021"),
+                            Code = "screens.settings",
+                            Description = "Hiển thị tab cấu hình.",
+                            Name = "Màn hình Cấu hình"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000022"),
+                            Code = "screens.accounts",
+                            Description = "Hiển thị tab quản lý tài khoản.",
+                            Name = "Màn hình Tài khoản"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000023"),
+                            Code = "appointments.own.read",
+                            Description = "Khách hàng xem lịch hẹn của chính mình.",
+                            Name = "Xem lịch hẹn của mình"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000024"),
+                            Code = "appointments.own.cancel",
+                            Description = "Khách hàng hủy lịch hẹn của chính mình.",
+                            Name = "Hủy lịch hẹn của mình"
                         });
                 });
 
@@ -1419,12 +1566,107 @@ namespace OCS.Api.Context.Migrations
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000003"),
-                            PermissionId = new Guid("30000000-0000-0000-0000-000000000001")
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000004")
                         },
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000003"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000021")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000003"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000005")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000003"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000008")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000003"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000022")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000005")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000006")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000007")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000011")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000012")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000013")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000014")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000015")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000017")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000018")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000019")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000020")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000022")
                         },
                         new
                         {
@@ -1433,18 +1675,68 @@ namespace OCS.Api.Context.Migrations
                         },
                         new
                         {
-                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
-                            PermissionId = new Guid("30000000-0000-0000-0000-000000000001")
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000011")
                         },
                         new
                         {
-                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
-                            PermissionId = new Guid("30000000-0000-0000-0000-000000000002")
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000012")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000013")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000014")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000015")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000017")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000018")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000019")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000020")
                         },
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000004"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000004"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000023")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000004"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000024")
                         });
                 });
 

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using OCS.Api.Common;
 using OCS.Api.Contracts.Products;
+using OCS.Api.Authorization;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Products;
@@ -53,6 +54,7 @@ public class ProductsController(IProductService productService) : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "Admin,Manager,Staff")]
+    [Authorize(Policy = PermissionCatalog.ProductsCreate)]
     public async Task<IActionResult> Create([FromBody] CreateProductDto dto, CancellationToken cancellationToken)
     {
         var result = await productService.CreateAsync(dto, cancellationToken);
