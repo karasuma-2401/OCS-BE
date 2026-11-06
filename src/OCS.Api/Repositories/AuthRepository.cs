@@ -203,6 +203,14 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
                     .ThenInclude(ar => ar.Role)
             .SingleOrDefaultAsync(s => s.Id == sessionId, cancellationToken);
 
+    public Task<List<string>> GetEffectivePermissionsAsync(Guid accountId, CancellationToken cancellationToken = default) =>
+        dbContext.AccountRoles
+            .Where(accountRole => accountRole.AccountId == accountId)
+            .SelectMany(accountRole => accountRole.Role.RolePermissions.Select(rolePermission => rolePermission.Permission.Code))
+            .Distinct()
+            .OrderBy(code => code)
+            .ToListAsync(cancellationToken);
+
     public void AddSession(AuthSession session)
     {
         ArgumentNullException.ThrowIfNull(session);

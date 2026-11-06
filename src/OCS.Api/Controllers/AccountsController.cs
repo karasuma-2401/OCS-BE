@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Common;
+using OCS.Api.Authorization;
 using OCS.Api.Consts;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
@@ -16,6 +17,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
 {
     [HttpPost("{id:guid}/reset-password")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = PermissionCatalog.AccountsResetPassword)]
     public async Task<IActionResult> ResetPassword(Guid id, [FromBody] ResetAccountPasswordRequest request,
         CancellationToken cancellationToken)
     {
@@ -29,6 +31,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
 
     [HttpGet("history")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = PermissionCatalog.AccountsHistory)]
     public async Task<IActionResult> GetHistory([FromQuery] PagedRequest paging,
         [FromQuery] Guid? accountId, CancellationToken cancellationToken)
     {
@@ -42,6 +45,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
 
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = PermissionCatalog.AccountsUpdate)]
     public async Task<IActionResult> UpdateAccountInfo(Guid id, [FromBody] UpdateAccountInfoRequest request,
         CancellationToken cancellationToken)
     {
@@ -55,6 +59,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
 
     [HttpPost("internal")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = PermissionCatalog.AccountsCreate)]
     public async Task<IActionResult> CreateInternal([FromBody] CreateInternalAccountRequest request,
         CancellationToken cancellationToken)
     {
@@ -69,6 +74,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpPatch("{id:guid}/status")]
+    [Authorize(Policy = PermissionCatalog.AccountsStatus)]
     public async Task<IActionResult> ChangeStatus(Guid id, [FromBody] ChangeAccountStatusRequest request,
         CancellationToken cancellationToken)
     {
@@ -81,6 +87,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpGet("{id:guid}/employee-profile")]
+    [Authorize(Policy = PermissionCatalog.AccountsRead)]
     public async Task<IActionResult> GetEmployeeProfile(Guid id, CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
@@ -92,6 +99,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpPatch("{id:guid}/employee-profile")]
+    [Authorize(Policy = PermissionCatalog.AccountsUpdate)]
     public async Task<IActionResult> UpdateEmployeeProfile(Guid id,
         [FromBody] UpdateEmployeeProfileRequest request, CancellationToken cancellationToken)
     {
@@ -105,6 +113,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
 
     [HttpPut("{id:guid}/roles")]
     [Authorize(Roles = "Admin")]
+    [Authorize(Policy = PermissionCatalog.AccountsRoles)]
     public async Task<IActionResult> UpdateRoles(
         Guid id,
         [FromBody] UpdateAccountRolesRequest request,
@@ -124,6 +133,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpPatch("{id:guid}/lock-status")]
+    [Authorize(Policy = PermissionCatalog.AccountsStatus)]
     public async Task<IActionResult> ChangeLockStatus(
         Guid id,
         [FromBody] ChangeAccountLockRequest request,
@@ -144,6 +154,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpPost("staff")]
+    [Authorize(Policy = PermissionCatalog.AccountsCreate)]
     public async Task<IActionResult> CreateStaff(
         [FromBody] CreateStaffAccountRequest request,
         CancellationToken cancellationToken)
@@ -165,6 +176,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = PermissionCatalog.AccountsRead)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         Response.Headers.CacheControl = "no-store";
@@ -182,6 +194,7 @@ public sealed class AccountsController(IAccountManagementService accountManageme
     }
 
     [HttpGet]
+    [Authorize(Policy = PermissionCatalog.AccountsRead)]
     public async Task<IActionResult> GetAccounts(
         [FromQuery] PagedRequest paging,
         [FromQuery] string? search,

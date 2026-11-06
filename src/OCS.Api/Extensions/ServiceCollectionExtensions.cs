@@ -8,6 +8,7 @@ using Amazon.S3;
 using Hangfire;
 using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -15,6 +16,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using OCS.Api.Auditing;
+using OCS.Api.Authorization;
 using OCS.Api.Configuration;
 using OCS.Api.Consts;
 using OCS.Api.Context;
@@ -279,7 +281,15 @@ public static class ServiceCollectionExtensions
                 };
             });
 
-        services.AddAuthorization();
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        services.AddAuthorization(options =>
+        {
+            foreach (var permission in PermissionCatalog.All)
+            {
+                options.AddPolicy(permission.Code, policy =>
+                    policy.RequireAuthenticatedUser().AddRequirements(new PermissionRequirement(permission.Code)));
+            }
+        });
         return services;
     }
 

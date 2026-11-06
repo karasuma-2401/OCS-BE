@@ -52,7 +52,8 @@ public record UserDto(
     string? Email,
     string? PhoneNumber,
     List<string> Roles,
-    string? Username = null);
+    string? Username = null,
+    List<string>? Permissions = null);
 
 public sealed record CurrentUserResponseDto(
     int ExpiresIn,

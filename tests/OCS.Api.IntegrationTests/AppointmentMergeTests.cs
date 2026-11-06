@@ -23,7 +23,7 @@ public sealed class AppointmentMergeTests
     public void StaffOperationsRequireStaffRoles(string action)
     {
         var method = typeof(AppointmentsController).GetMethod(action)!;
-        var authorize = Assert.Single(method.GetCustomAttributes<AuthorizeAttribute>());
+        var authorize = Assert.Single(method.GetCustomAttributes<AuthorizeAttribute>(), attribute => attribute.Roles is not null);
         Assert.Equal("Admin,Manager,Staff", authorize.Roles);
     }
 
