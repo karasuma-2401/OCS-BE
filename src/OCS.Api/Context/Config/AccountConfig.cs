@@ -117,6 +117,9 @@ public sealed class AccountConfig : IEntityTypeConfiguration<Account>
 
         builder.HasIndex(x => x.NormalizedEmail).IsUnique().HasFilter("\"NormalizedEmail\" IS NOT NULL");
 
+        builder.HasIndex(x => new { x.CreatedAt, x.Id }).IsDescending(true, false);
+        builder.HasIndex(x => new { x.AccountType, x.CreatedAt, x.Id }).IsDescending(false, true, false);
+
         builder.HasIndex(x => new
         {
             x.AccountType,

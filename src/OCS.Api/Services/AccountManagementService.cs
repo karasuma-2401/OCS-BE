@@ -792,7 +792,7 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
             return Result.Failure<PagedResponse<AccountSummaryDto>>(ApplicationError.Validation(
                 "ACCOUNT.INVALID_ROLE", "Vai trò lọc phải là Admin, Manager, Staff hoặc Customer."));
 
-        var requester = await unitOfWork.AuthRepository.GetByIdAsync(requesterAccountId, cancellationToken);
+        var requester = await unitOfWork.AuthRepository.GetListRequesterAsync(requesterAccountId, cancellationToken);
         if (requester is null || requester.Status != AccountStatus.Active || requester.EmailVerifiedAt is null)
         {
             return Result.Failure<PagedResponse<AccountSummaryDto>>(

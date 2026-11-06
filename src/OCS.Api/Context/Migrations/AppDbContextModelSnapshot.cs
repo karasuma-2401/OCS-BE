@@ -104,6 +104,9 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("CreatedByAccountId");
 
+                    b.HasIndex("CreatedAt", "Id")
+                        .IsDescending(true, false);
+
                     b.HasIndex("NormalizedEmail")
                         .IsUnique()
                         .HasFilter("\"NormalizedEmail\" IS NOT NULL");
@@ -116,6 +119,9 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("AccountType", "PhoneNumber")
                         .IsUnique();
+
+                    b.HasIndex("AccountType", "CreatedAt", "Id")
+                        .IsDescending(false, true, false);
 
                     b.ToTable("Accounts", null, t =>
                         {

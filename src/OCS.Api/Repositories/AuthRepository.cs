@@ -47,12 +47,26 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
         var totalCount = await query.CountAsync(cancellationToken);
 
         var items = await query
-            .Include(a => a.AccountRoles)
-                .ThenInclude(ar => ar.Role)
             .OrderByDescending(a => a.CreatedAt)
             .ThenBy(a => a.Id)
             .Skip(paging.Skip)
             .Take(paging.PageSize)
+            .Select(a => new Account
+            {
+                Id = a.Id,
+                FullName = a.FullName,
+                Email = a.Email,
+                PhoneNumber = a.PhoneNumber,
+                AccountType = a.AccountType,
+                Status = a.Status,
+                Username = a.Username,
+                CreatedAt = a.CreatedAt,
+                AccountRoles = a.AccountRoles.Select(ar => new AccountRole
+                {
+                    RoleId = ar.RoleId,
+                    Role = new Role { Code = ar.Role.Code }
+                }).ToList()
+            })
             .ToListAsync(cancellationToken);
 
         return new PagedResponse<Account>(items, paging.Page, paging.PageSize, totalCount);
@@ -132,6 +146,18 @@ public sealed class AuthRepository(AppDbContext dbContext) : IAuthRepository
             .Include(a => a.EmployeeProfile)
             .Include(a => a.CustomerProfile)
             .SingleOrDefaultAsync(a => a.Id == id, cancellationToken);
+
+    public Task<Account?> GetListRequesterAsync(Guid id, CancellationToken cancellationToken = default) =>
+        dbContext.Accounts.AsNoTracking()
+            .Where(a => a.Id == id)
+            .Select(a => new Account
+            {
+                Id = a.Id,
+                Status = a.Status,
+                EmailVerifiedAt = a.EmailVerifiedAt,
+                AccountRoles = a.AccountRoles.Select(ar => new AccountRole { RoleId = ar.RoleId }).ToList()
+            })
+            .SingleOrDefaultAsync(cancellationToken);
 
     public Task<bool> ExistsUsernameAsync(string username, CancellationToken cancellationToken = default) =>
         dbContext.Accounts.AnyAsync(a => a.Username == username, cancellationToken);
