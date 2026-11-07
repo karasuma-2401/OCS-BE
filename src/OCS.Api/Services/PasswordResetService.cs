@@ -67,11 +67,16 @@ public sealed class PasswordResetService(
             foreach (var old in previous.Where(c => c.ConsumedAt == null && c.InvalidatedAt == null)) old.InvalidatedAt = now;
             challenge = new OtpChallenge
             {
-                AccountId = account.Id, NormalizedEmail = normalized!, Purpose = Purpose,
-                CodeHash = Hash(code), ContinuationTokenHash = Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
-                CreatedAt = now, ExpiresAt = now.AddMinutes(Options.ExpiryMinutes),
+                AccountId = account.Id,
+                NormalizedEmail = normalized!,
+                Purpose = Purpose,
+                CodeHash = Hash(code),
+                ContinuationTokenHash = Hash(Convert.ToHexString(RandomNumberGenerator.GetBytes(32))),
+                CreatedAt = now,
+                ExpiresAt = now.AddMinutes(Options.ExpiryMinutes),
                 ContinuationExpiresAt = now.AddMinutes(Options.ContinuationExpiryMinutes),
-                ResendAvailableAt = now.AddSeconds(Options.ResendCooldownSeconds), DeliveryStatus = "Pending"
+                ResendAvailableAt = now.AddSeconds(Options.ResendCooldownSeconds),
+                DeliveryStatus = "Pending"
             };
             db.OtpChallenges.Add(challenge);
             await db.SaveChangesAsync(ct);

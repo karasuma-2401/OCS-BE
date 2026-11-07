@@ -74,8 +74,10 @@ public sealed class AuthSecurityFlowTests
         var registrationChallenge = await registration.Content.ReadFromJsonAsync<JsonElement>();
         var inbox = factory.Services.GetRequiredService<TestInboxEmailSender>();
         var activationCode = Code(inbox);
-        var activation = await client.PostAsJsonAsync("/api/auth/otp/verify", new {
-            challengeId = registrationChallenge.GetProperty("challengeId").GetGuid(), code = activationCode,
+        var activation = await client.PostAsJsonAsync("/api/auth/otp/verify", new
+        {
+            challengeId = registrationChallenge.GetProperty("challengeId").GetGuid(),
+            code = activationCode,
             continuationToken = registrationChallenge.GetProperty("continuationToken").GetString()
         });
         Assert.Equal(HttpStatusCode.OK, activation.StatusCode);

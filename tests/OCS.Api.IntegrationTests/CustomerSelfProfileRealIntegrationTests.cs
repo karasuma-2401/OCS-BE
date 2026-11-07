@@ -1,9 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
-using System.IdentityModel.Tokens.Jwt;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -26,6 +25,7 @@ namespace OCS.Api.IntegrationTests;
 
 public sealed class CustomerSelfProfileRealIntegrationTests
 {
+    private const string TestJwtKey = "ocs-super-secret-key-that-is-at-least-32-bytes-long";
     private static (AppDbContext Context, CustomerProfileService Service, SystemAuditContext AuditContext) CreateService(TestDatabase database)
     {
         var auditContext = new SystemAuditContext();
@@ -539,33 +539,14 @@ public sealed class CustomerSelfProfileRealIntegrationTests
 
     private static string GenerateJwt(Guid accountId, string name, string phone, string email, string role, Guid sessionId)
     {
-        var key = Encoding.UTF8.GetBytes("ocs-super-secret-key-that-is-at-least-32-bytes-long");
-        var secKey = new SymmetricSecurityKey(key);
-        var creds = new SigningCredentials(secKey, SecurityAlgorithms.HmacSha256);
-        var handler = new JwtSecurityTokenHandler();
-
-        var identity = new ClaimsIdentity(
-        [
-            new Claim("sub", accountId.ToString()),
-            new Claim(ClaimTypes.NameIdentifier, accountId.ToString()),
-            new Claim(ClaimTypes.Name, name),
-            new Claim("sid", sessionId.ToString()),
-            new Claim(JwtRegisteredClaimNames.Sid, sessionId.ToString()),
-            new Claim(ClaimTypes.MobilePhone, phone),
-            new Claim(ClaimTypes.Email, email),
-            new Claim(ClaimTypes.Role, role)
-        ]);
-
-        var desc = new SecurityTokenDescriptor
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            Subject = identity,
-            Issuer = "ocs-api",
-            Audience = "ocs-clients",
-            Expires = DateTime.UtcNow.AddHours(6),
-            SigningCredentials = creds
-        };
-
-        return handler.WriteToken(handler.CreateToken(desc));
+            ["Jwt:Issuer"] = "ocs-api",
+            ["Jwt:Audience"] = "ocs-clients",
+            ["Jwt:Key"] = TestJwtKey
+        }).Build();
+        var account = new Account { Id = accountId, FullName = name, PhoneNumber = phone, Email = email };
+        return new TokenService(configuration).GenerateAccessToken(account, [role], sessionId);
     }
 
     private static WebApplicationFactory<Program> CreateHttpFactory(TestDatabase database) =>
@@ -580,13 +561,19 @@ public sealed class CustomerSelfProfileRealIntegrationTests
                 ["Email:Provider"] = "TestSink",
                 ["Jwt:Issuer"] = "ocs-api",
                 ["Jwt:Audience"] = "ocs-clients",
-                ["Jwt:Key"] = "ocs-super-secret-key-that-is-at-least-32-bytes-long",
+                ["Jwt:Key"] = TestJwtKey,
                 ["Auth:SessionExpirySeconds"] = "28800"
             }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IHostedService>();
                 services.AddDbContext<AppDbContext>(options => options.UseNpgsql(database.ConnectionString));
+                services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                {
+                    options.TokenValidationParameters.ValidIssuer = "ocs-api";
+                    options.TokenValidationParameters.ValidAudience = "ocs-clients";
+                    options.TokenValidationParameters.IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestJwtKey));
+                });
             });
         });
 
