@@ -56,24 +56,11 @@ public sealed class ProductService(IUnitOfWork unitOfWork) : IProductService
 
     public async Task<Result<ProductDto>> CreateAsync(CreateProductDto dto, CancellationToken cancellationToken = default)
     {
-        var product = new Product
-        {
-            Id = Guid.NewGuid(),
-            Name = dto.Name,
-            Barcode = dto.Barcode,
-            Size = dto.Size,
-            ListedPrice = dto.ListedPrice,
-            Description = dto.Description,
-            CategoryId = dto.CategoryId,
-            BrandId = dto.BrandId,
-            Status = ProductStatus.OnSale,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        unitOfWork.ProductRepository.Add(product);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return Result.Success(MapToDto(product));
+        // This legacy request cannot supply the required source or agreed terms.
+        // Reject it until products can be created through the appraisal workflow.
+        await Task.CompletedTask;
+        return Result.Failure<ProductDto>(ApplicationError.Conflict("PRODUCT.SOURCE_REQUIRED",
+            "Cần tạo sản phẩm từ hợp đồng ký gửi hoặc phiếu mua đứt đã thẩm định."));
     }
 
     private static ProductDto MapToDto(Product p) =>

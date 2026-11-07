@@ -18,6 +18,12 @@ public static class PermissionCatalog
     public const string AppointmentsStaffUpdate = "appointments.staff.update";
     public const string AppointmentsStaffReception = "appointments.staff.reception";
     public const string ProductsCreate = "products.create";
+    public const string ProductsRead = "products.read";
+    public const string ProductsApprove = "products.approve";
+    public const string ProductsOffer = "products.offer";
+    public const string ProductsLocation = "products.location.update";
+    public const string ProductsLocationsManage = "products.locations.manage";
+    public const string ProductsPrice = "products.price.update";
     public const string ScreenPos = "screens.pos";
     public const string ScreenInventory = "screens.inventory";
     public const string ScreenConsignment = "screens.consignment";
@@ -52,7 +58,13 @@ public static class PermissionCatalog
         new(ScreenSettings, "Màn hình Cấu hình", "Hiển thị tab cấu hình.", 21),
         new(ScreenAccounts, "Màn hình Tài khoản", "Hiển thị tab quản lý tài khoản.", 22),
         new(AppointmentsOwnRead, "Xem lịch hẹn của mình", "Khách hàng xem lịch hẹn của chính mình.", 23),
-        new(AppointmentsOwnCancel, "Hủy lịch hẹn của mình", "Khách hàng hủy lịch hẹn của chính mình.", 24)
+        new(AppointmentsOwnCancel, "Hủy lịch hẹn của mình", "Khách hàng hủy lịch hẹn của chính mình.", 24),
+        new(ProductsRead, "Xem kho", "Xem sản phẩm và lịch sử kho.", 25),
+        new(ProductsApprove, "Duyệt sản phẩm", "Duyệt hoặc từ chối sản phẩm.", 26),
+        new(ProductsOffer, "Đưa sản phẩm lên bán", "Đưa sản phẩm đã duyệt lên bán.", 27),
+        new(ProductsLocation, "Chuyển vị trí sản phẩm", "Cập nhật vị trí lưu kho.", 28),
+        new(ProductsLocationsManage, "Quản lý vị trí kho", "Tạo vị trí lưu kho.", 29),
+        new(ProductsPrice, "Đổi giá hàng mua đứt", "Cập nhật giá hàng mua đứt.", 30)
     ];
 
     public static readonly IReadOnlySet<string> AdminOnly = new HashSet<string>(StringComparer.Ordinal)
@@ -73,13 +85,13 @@ public static class PermissionCatalog
             [
                 CustomersRead, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
                 AppointmentsStaffRead, AppointmentsStaffUpdate, AppointmentsStaffReception,
-                ProductsCreate, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
+                ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
                 ScreenSettlement, ScreenReports, ScreenAccounts
             ],
             ["Staff"] =
             [
                 CustomersRead, AppointmentsStaffRead, AppointmentsStaffUpdate,
-                AppointmentsStaffReception, ProductsCreate, ScreenPos, ScreenInventory,
+                AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ScreenPos, ScreenInventory,
                 ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports
             ],
             ["Customer"] = [AppointmentsCreate, AppointmentsOwnRead, AppointmentsOwnCancel]

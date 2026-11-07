@@ -45,7 +45,7 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
     return;
 }
 
-if (args.Contains("--seed-demo", StringComparer.Ordinal))
+if (args.Contains("--seed-demo", StringComparer.Ordinal) || args.Contains("--seed-inventory-locations", StringComparer.Ordinal))
 {
     if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
     {
@@ -53,7 +53,11 @@ if (args.Contains("--seed-demo", StringComparer.Ordinal))
     }
 
     await using var scope = app.Services.CreateAsyncScope();
-    await scope.ServiceProvider.GetRequiredService<DevelopmentDataSeeder>().SeedAsync();
+    var seeder = scope.ServiceProvider.GetRequiredService<DevelopmentDataSeeder>();
+    if (args.Contains("--seed-demo", StringComparer.Ordinal))
+        await seeder.SeedAsync();
+    else
+        await seeder.SeedInventoryLocationsAsync();
     return;
 }
 

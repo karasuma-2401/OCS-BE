@@ -45,7 +45,8 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
         [typeof(Product)] = [nameof(Product.Barcode), nameof(Product.Name), nameof(Product.Size), nameof(Product.Description),
             nameof(Product.ConditionPercentage), nameof(Product.BrandId), nameof(Product.CategoryId), nameof(Product.StorageLocationId),
             nameof(Product.SourceType), nameof(Product.ConsignmentContractId), nameof(Product.BuyoutId), nameof(Product.ListedPrice),
-            nameof(Product.PurchasePrice), nameof(Product.AgreedCommissionRate), nameof(Product.AgreedBrandTier), nameof(Product.Status)],
+            nameof(Product.PurchasePrice), nameof(Product.AgreedCommissionRate), nameof(Product.AgreedBrandTier), nameof(Product.Status),
+            nameof(Product.ApprovalStatus), nameof(Product.AgreedListedPrice), nameof(Product.AgreementEvidence)],
         [typeof(ProductImage)] = [nameof(ProductImage.ProductId), nameof(ProductImage.Url), nameof(ProductImage.ImageType),
             nameof(ProductImage.SortOrder)],
         [typeof(SaleInvoice)] = [nameof(SaleInvoice.InvoiceNumber), nameof(SaleInvoice.SoldByEmployeeId),
@@ -149,6 +150,8 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
         {
             throw new InvalidOperationException("Product status history cannot be updated or deleted through SaveChanges.");
         }
+        if (context.ChangeTracker.Entries<InventoryEvent>().Any(x => x.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Inventory history cannot be updated or deleted through SaveChanges.");
 
         // Also handles exceptions thrown by a later SavingChanges interceptor.
         RemovePendingLogs(context);
