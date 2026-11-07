@@ -1,12 +1,16 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Globalization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using OCS.Api.Common;
+using OCS.Api.Configuration;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Auth;
+using OCS.Api.Services;
 
 namespace OCS.Api.Controllers;
 
@@ -78,6 +82,36 @@ public class AuthController(
         var clientIp = HttpContext.GetClientIp();
         var result = await authService.ResendRegistrationOtpAsync(request, clientIp, cancellationToken);
         return result.ToActionResult(this);
+    }
+
+    [HttpPost("password-reset/request")]
+    [AllowAnonymous]
+    public async Task<IActionResult> RequestPasswordReset([FromBody] PasswordResetRequestDto request, [FromServices] PasswordResetService service, [FromServices] IOptions<OtpOptions> options, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var result = await service.RequestAsync(request.Email, HttpContext.GetClientIp(), cancellationToken);
+        if (result.IsSuccess)
+        {
+            Response.Headers["X-Otp-Expiry-Minutes"] = options.Value.ExpiryMinutes.ToString(CultureInfo.InvariantCulture);
+            Response.Headers["X-Otp-Resend-Seconds"] = options.Value.ResendCooldownSeconds.ToString(CultureInfo.InvariantCulture);
+        }
+        return result.ToActionResult(this);
+    }
+
+    [HttpPost("password-reset/verify")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VerifyPasswordReset([FromBody] PasswordResetVerifyDto request, [FromServices] PasswordResetService service, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return (await service.VerifyAsync(request.Email, request.Code, cancellationToken)).ToActionResult(this);
+    }
+
+    [HttpPost("password-reset/complete")]
+    [AllowAnonymous]
+    public async Task<IActionResult> CompletePasswordReset([FromBody] PasswordResetCompleteDto request, [FromServices] PasswordResetService service, CancellationToken cancellationToken)
+    {
+        Response.Headers.CacheControl = "no-store";
+        return (await service.CompleteAsync(request.Email, request.ResetToken, request.Password, cancellationToken)).ToActionResult(this);
     }
 
     [HttpGet("me")]

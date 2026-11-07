@@ -137,6 +137,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOtpRateLimiter, OtpRateLimiter>();
         services.AddScoped<ILoginRateLimiter, LoginRateLimiter>();
         services.AddScoped<IOtpService, OtpService>();
+        services.AddScoped<PasswordResetService>();
         services.AddScoped<IPasswordHasher, PasswordHasher>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IAuthService, AuthService>();
@@ -314,6 +315,7 @@ public static class ServiceCollectionExtensions
                 })
                 .AllowAnyHeader()
                 .AllowAnyMethod()
+                .WithExposedHeaders("X-Otp-Expiry-Minutes", "X-Otp-Resend-Seconds")
                 .AllowCredentials();
         }));
 

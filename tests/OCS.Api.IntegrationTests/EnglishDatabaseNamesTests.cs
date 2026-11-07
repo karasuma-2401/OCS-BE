@@ -7,6 +7,7 @@ namespace OCS.Api.IntegrationTests;
 public sealed class EnglishDatabaseNamesTests
 {
     private const string BeforeRename = "20261104100000_UpdateAppointmentStatusAndFields";
+    private const string Rename = "20261104150256_UseEnglishDatabaseNames";
     private static readonly Dictionary<string, string> TableNames = new()
     {
         ["TAIKHOAN"] = "Accounts",
@@ -121,7 +122,7 @@ public sealed class EnglishDatabaseNamesTests
         }
 
         var expectedColumns = await ColumnsAsync(database, true);
-        await database.MigrateAsync();
+        await database.MigrateAsync(Rename);
         var actualColumns = await ColumnsAsync(database, false);
         Assert.True(expectedColumns.SetEquals(actualColumns), "Renaming must preserve every table column.");
         await using (var context = database.Context())

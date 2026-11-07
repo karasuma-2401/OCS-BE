@@ -6,7 +6,7 @@ Tài liệu này là đặc tả HTTP contract chuẩn giữa Web frontend OCS v
 
 | Nhóm | Hiện trạng triển khai | Ghi chú & Ràng buộc |
 | --- | --- | --- |
-| Auth | Hoàn thành đầy đủ: Đăng nhập Email + Mật khẩu, Đăng ký + Email OTP kích hoạt, HttpOnly Cookie (`ocs_session`), Hồ sơ phiên server (`AuthSession`), Bảo vệ CSRF (`X-XSRF-TOKEN`), Strict ClockSkew UTC, Anti-enumeration | Tuyệt đối không dùng login username/SĐT hay SMS OTP; token không lưu tại client storage |
+| Auth | Đăng nhập Email + Mật khẩu, Đăng ký + Email OTP kích hoạt, quên mật khẩu bằng Email OTP, HttpOnly Cookie (`ocs_session`), Hồ sơ phiên server (`AuthSession`), Bảo vệ CSRF (`X-XSRF-TOKEN`) | Tuyệt đối không dùng login username/SĐT hay SMS OTP; token không lưu tại client storage |
 | Products | `GET /api/products` (Công khai Landing Page); `/api/products/{id}`, `/api/products/barcode/*`, `POST /api/products` (Nội bộ Admin/Manager/Staff) | Public response chỉ là projection an toàn; tuyệt đối không lộ dữ liệu người ký gửi |
 | Health | `/api/health`, `/api/health/live` | Giữ nguyên |
 
@@ -16,7 +16,7 @@ Tài liệu này là đặc tả HTTP contract chuẩn giữa Web frontend OCS v
 
 1. **Số điện thoại & Hồ sơ:** Số điện thoại lưu tại `Account.PhoneNumber` đóng vai trò thông tin liên hệ ký gửi, chưa được xác minh quyền sở hữu qua SMS OTP. Khi xác thực OTP email thành công, chỉ đặt `EmailVerifiedAt` và `ActivatedAt`, tuyệt đối giữ nguyên `PhoneVerifiedAt`.
 2. **Không tự cấp quyền từ số điện thoại:** Tài khoản đăng ký mới trùng số điện thoại với hồ sơ cũ nhưng khác email không được tự động gộp hoặc chuyển quyền sở hữu mà chưa có chứng thực.
-3. **Phạm vi tính năng Auth:** Bản phát hành hiện tại chưa bao gồm Forgot password (quên mật khẩu), Đổi email/SĐT, Multi-Factor Authentication (MFA / Passkey), Refresh Token xoay vòng (rotating refresh token), hay giao diện quản trị thu hồi đa phiên từ xa.
+3. **Phạm vi tính năng Auth:** Chưa bao gồm Đổi email/SĐT, Multi-Factor Authentication (MFA / Passkey), Refresh Token xoay vòng (rotating refresh token), hay giao diện quản trị thu hồi đa phiên từ xa.
 4. **Thu hồi phiên hiện tại:** Được đảm bảo an toàn tuyệt đối qua `POST /api/auth/logout`: đánh dấu `RevokedAt` trên bản ghi `AuthSession` của database và xóa cookie `ocs_session` (`Path=/api; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT`). Token hoặc session đã thu hồi bị từ chối `401 UNAUTHORIZED` ngay lập tức.
 
 ---
@@ -361,6 +361,17 @@ Cấp Anti-Forgery Request Token cho Web client để sử dụng trong header `
   ```
 
 ---
+
+### 4.7. Khôi phục mật khẩu qua email OTP
+
+Ba endpoint đều là `POST` công khai, dùng CSRF như các thao tác auth khác và trả `Cache-Control: no-store`:
+
+- `/api/auth/password-reset/request`: `{ "email": "user@example.com" }`. Trả cùng thông báo chung cho email có hoặc không có tài khoản đủ điều kiện. Chỉ tài khoản đang hoạt động và đã xác thực email mới nhận mã. Gửi lại bằng endpoint này; giới hạn lượt gửi và thời gian chờ theo cấu hình `Otp`.
+- Response thành công có `X-Otp-Expiry-Minutes` và `X-Otp-Resend-Seconds` theo cấu hình chung, không xác nhận đã gửi email hay thời điểm hết hạn thực tế của một mã cụ thể.
+- `/api/auth/password-reset/verify`: `{ "email": "user@example.com", "code": "123456" }`. Nếu thành công trả `{ "resetToken": "..." }`. OTP hết hạn và số lần nhập sai được giới hạn theo cấu hình `Otp`.
+- `/api/auth/password-reset/complete`: `{ "email": "user@example.com", "resetToken": "...", "password": "NewPassword123@" }`. Mật khẩu tuân theo chính sách đăng ký. Token chỉ dùng một lần và hết hạn theo `Otp:ContinuationExpiryMinutes`; sau khi thành công, tất cả phiên đăng nhập cũ bị thu hồi.
+
+OTP sai, hết hạn hoặc token không còn hợp lệ trả `400 AUTH.RESET_INVALID`. Không lưu OTP hoặc reset token dưới dạng bản rõ trên server. Cần áp dụng migration `20261107000000_AddPasswordResetOtp` trước khi dùng tính năng; rollback migration chỉ thực hiện được sau khi xử lý các challenge đặt lại mật khẩu hiện có.
 
 ## 5. Bảng mã lỗi chuẩn Authentication (`AUTH.*`)
 
