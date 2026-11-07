@@ -142,6 +142,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IAccountManagementService, AccountManagementService>();
         services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<InventoryService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();

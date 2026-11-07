@@ -18,6 +18,9 @@ public sealed class AccountsEndpointAuthorizationTests
     [InlineData("/api/accounts")]
     [InlineData("/api/accounts/00000000-0000-0000-0000-000000000001")]
     [InlineData("/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile")]
+    [InlineData("/api/inventory")]
+    [InlineData("/api/inventory/00000000-0000-0000-0000-000000000001")]
+    [InlineData("/api/inventory/locations")]
     public async Task CustomerCannotReadAccounts(string path)
     {
         await using var factory = CreateCustomerFactory();
@@ -74,6 +77,11 @@ public sealed class AccountsEndpointAuthorizationTests
     [InlineData("POST", "/api/accounts/00000000-0000-0000-0000-000000000001/reset-password")]
     [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/status")]
     [InlineData("PATCH", "/api/accounts/00000000-0000-0000-0000-000000000001/employee-profile")]
+    [InlineData("POST", "/api/inventory/00000000-0000-0000-0000-000000000001/review")]
+    [InlineData("POST", "/api/inventory/00000000-0000-0000-0000-000000000001/offer")]
+    [InlineData("PUT", "/api/inventory/00000000-0000-0000-0000-000000000001/location")]
+    [InlineData("PUT", "/api/inventory/00000000-0000-0000-0000-000000000001/price")]
+    [InlineData("PUT", "/api/inventory/00000000-0000-0000-0000-000000000001/details")]
     public async Task CustomerCannotUseNewManagementEndpoints(string method, string path)
     {
         await using var factory = CreateCustomerFactory();

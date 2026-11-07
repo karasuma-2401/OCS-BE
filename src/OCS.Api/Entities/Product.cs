@@ -27,7 +27,26 @@ public sealed class Product : BaseEntity
 
     public Guid? BuyoutId { get; private set; }
 
-    public decimal ListedPrice { get; set; }
+    private decimal listedPrice;
+
+    public decimal ListedPrice
+    {
+        get => listedPrice;
+        set
+        {
+            if (ConsignmentContractId.HasValue && listedPrice != value)
+                throw new InvalidOperationException("The agreed consignment price cannot be changed.");
+            listedPrice = value;
+        }
+    }
+
+    public decimal? AgreedListedPrice { get; private set; }
+
+    public string? AgreementEvidence { get; set; }
+
+    public ProductApprovalStatus ApprovalStatus { get; set; } = ProductApprovalStatus.Pending;
+
+    public Guid InventoryVersion { get; set; } = Guid.NewGuid();
 
     public decimal? PurchasePrice { get; private set; }
 
@@ -75,10 +94,11 @@ public sealed class Product : BaseEntity
             throw new ArgumentOutOfRangeException(nameof(brand), "The brand commission rate must be between 0 and 100.");
         }
 
+        ListedPrice = fixedListedPrice;
+        AgreedListedPrice = fixedListedPrice;
         SourceType = ProductSourceType.Consignment;
         ConsignmentContractId = contractId;
         BrandId = brand.Id;
-        ListedPrice = fixedListedPrice;
         AgreedBrandTier = brand.Tier;
         AgreedCommissionRate = brand.DefaultCommissionRate;
     }
@@ -97,6 +117,16 @@ public sealed class Product : BaseEntity
         BuyoutId = buyoutId;
         ListedPrice = listedPrice;
         PurchasePrice = purchasePrice;
+    }
+
+    public void RecordVerifiedAgreement(decimal agreedPrice, string evidence)
+    {
+        if (SourceType != ProductSourceType.Consignment || ConsignmentContractId is null ||
+            agreedPrice != ListedPrice || (AgreedListedPrice.HasValue && AgreedListedPrice != agreedPrice) ||
+            string.IsNullOrWhiteSpace(evidence))
+            throw new InvalidOperationException("The verified agreement must match the current consignment price.");
+        AgreedListedPrice = agreedPrice;
+        AgreementEvidence = evidence.Trim();
     }
 
     public void OfferForSale()

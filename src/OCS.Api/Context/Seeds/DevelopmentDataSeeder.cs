@@ -774,5 +774,61 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        await SeedInventoryLocationsAsync(cancellationToken);
+    }
+
+    public async Task SeedInventoryLocationsAsync(CancellationToken cancellationToken = default)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+        {
+            throw new InvalidOperationException("Demo seeding is only allowed in Development or Testing.");
+        }
+
+        auditContext.Initialize("DemoSeed");
+
+        (Guid Id, string Code, string Name, Guid CategoryId)[] samples =
+        [
+            (Guid.Parse("75000000-0000-0000-0000-000000000001"), "DEMO-A01", "Kệ áo (mẫu)", Guid.Parse("30000000-0000-0000-0000-000000000001")),
+            (Guid.Parse("75000000-0000-0000-0000-000000000002"), "DEMO-B01", "Kệ đầm và váy (mẫu)", Guid.Parse("30000000-0000-0000-0000-000000000002")),
+            (Guid.Parse("75000000-0000-0000-0000-000000000003"), "DEMO-C01", "Kệ quần (mẫu)", Guid.Parse("30000000-0000-0000-0000-000000000003")),
+            (Guid.Parse("75000000-0000-0000-0000-000000000004"), "DEMO-D01", "Kệ phụ kiện (mẫu)", Guid.Parse("30000000-0000-0000-0000-000000000004"))
+        ];
+
+        var locationsByCategory = new Dictionary<Guid, Guid>();
+        foreach (var sample in samples)
+        {
+            var location = await dbContext.StorageLocations.SingleOrDefaultAsync(
+                x => x.Id == sample.Id || x.Code == sample.Code, cancellationToken);
+            if (location is null)
+            {
+                location = new StorageLocation { Id = sample.Id, Code = sample.Code, Name = sample.Name };
+                dbContext.StorageLocations.Add(location);
+            }
+            else if (location.Id != sample.Id || location.Code != sample.Code || !location.IsActive)
+            {
+                throw new InvalidOperationException($"Demo location {sample.Code} conflicts with an existing or inactive location.");
+            }
+
+            locationsByCategory.Add(sample.CategoryId, location.Id);
+        }
+
+        var demoProducts = Enumerable.Range(1, 26).Concat([31, 32])
+            .ToDictionary(i => Guid.Parse($"70000000-0000-0000-0000-{i:D12}"), i => $"BC-{i:D4}");
+        var demoIds = demoProducts.Keys.ToArray();
+        var products = await dbContext.Products
+            .Where(p => demoIds.Contains(p.Id) && p.StorageLocationId == null &&
+                (p.Status == ProductStatus.OnSale || p.Status == ProductStatus.PendingProcessing))
+            .ToListAsync(cancellationToken);
+
+        foreach (var product in products)
+        {
+            if (product.Barcode == demoProducts[product.Id] && locationsByCategory.TryGetValue(product.CategoryId, out var locationId))
+            {
+                product.StorageLocationId = locationId;
+                product.InventoryVersion = Guid.NewGuid();
+            }
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

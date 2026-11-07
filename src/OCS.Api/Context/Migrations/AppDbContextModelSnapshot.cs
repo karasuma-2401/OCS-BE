@@ -104,9 +104,6 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("CreatedByAccountId");
 
-                    b.HasIndex("CreatedAt", "Id")
-                        .IsDescending(true, false);
-
                     b.HasIndex("NormalizedEmail")
                         .IsUnique()
                         .HasFilter("\"NormalizedEmail\" IS NOT NULL");
@@ -119,6 +116,9 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("AccountType", "PhoneNumber")
                         .IsUnique();
+
+                    b.HasIndex("CreatedAt", "Id")
+                        .IsDescending(true, false);
 
                     b.HasIndex("AccountType", "CreatedAt", "Id")
                         .IsDescending(false, true, false);
@@ -864,6 +864,46 @@ namespace OCS.Api.Context.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.InventoryEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<Guid>("ActorAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("NewValue")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PreviousValue")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorAccountId");
+
+                    b.HasIndex("ProductId", "OccurredAt");
+
+                    b.ToTable("InventoryEvents", (string)null);
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1301,6 +1341,48 @@ namespace OCS.Api.Context.Migrations
                             Code = "appointments.own.cancel",
                             Description = "Khách hàng hủy lịch hẹn của chính mình.",
                             Name = "Hủy lịch hẹn của mình"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000025"),
+                            Code = "products.read",
+                            Description = "Xem sản phẩm và lịch sử kho.",
+                            Name = "Xem kho"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000026"),
+                            Code = "products.approve",
+                            Description = "Duyệt hoặc từ chối sản phẩm.",
+                            Name = "Duyệt sản phẩm"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000027"),
+                            Code = "products.offer",
+                            Description = "Đưa sản phẩm đã duyệt lên bán.",
+                            Name = "Đưa sản phẩm lên bán"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000028"),
+                            Code = "products.location.update",
+                            Description = "Cập nhật vị trí lưu kho.",
+                            Name = "Chuyển vị trí sản phẩm"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000029"),
+                            Code = "products.locations.manage",
+                            Description = "Tạo vị trí lưu kho.",
+                            Name = "Quản lý vị trí kho"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000030"),
+                            Code = "products.price.update",
+                            Description = "Cập nhật giá hàng mua đứt.",
+                            Name = "Đổi giá hàng mua đứt"
                         });
                 });
 
@@ -1316,6 +1398,19 @@ namespace OCS.Api.Context.Migrations
                     b.Property<decimal?>("AgreedCommissionRate")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)");
+
+                    b.Property<decimal?>("AgreedListedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("AgreementEvidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Barcode")
                         .IsRequired()
@@ -1343,6 +1438,10 @@ namespace OCS.Api.Context.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("InventoryVersion")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
 
                     b.Property<decimal>("ListedPrice")
                         .HasPrecision(18, 2)
@@ -1642,6 +1741,36 @@ namespace OCS.Api.Context.Migrations
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000025")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000026")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000027")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000028")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000029")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000030")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000015")
                         },
                         new
@@ -1698,6 +1827,16 @@ namespace OCS.Api.Context.Migrations
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000014")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000025")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000028")
                         },
                         new
                         {
@@ -2144,6 +2283,23 @@ namespace OCS.Api.Context.Migrations
                     b.Navigation("ApprovedByEmployee");
 
                     b.Navigation("CreatedByEmployee");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.InventoryEvent", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.Account", null)
+                        .WithMany()
+                        .HasForeignKey("ActorAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Product");
                 });

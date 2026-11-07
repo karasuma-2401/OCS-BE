@@ -716,6 +716,40 @@ public sealed class PublicProductsApiTests
     }
 
     [Fact]
+    public async Task InventoryLocationSeed_OnlyAssignsUnplacedDemoProductsAndPreservesChanges()
+    {
+        await using var db = CreateInMemoryDbContext();
+        var seeder = new DevelopmentDataSeeder(db, new FakeHostEnvironment { EnvironmentName = "Development" }, new SystemAuditContext());
+        await seeder.SeedAsync();
+
+        Assert.Equal(4, await db.StorageLocations.CountAsync());
+        var demo = await db.Products.SingleAsync(p => p.Barcode == "BC-0001");
+        Assert.NotNull(demo.StorageLocationId);
+        var sold = await db.Products.SingleAsync(p => p.Barcode == "BC-0027");
+        Assert.Null(sold.StorageLocationId);
+
+        var userLocation = new StorageLocation { Id = Guid.NewGuid(), Code = "USER-01", Name = "Vị trí tự tạo" };
+        db.StorageLocations.Add(userLocation);
+        demo.StorageLocationId = userLocation.Id;
+        var version = demo.InventoryVersion;
+        var unplacedDemo = await db.Products.SingleAsync(p => p.Barcode == "BC-0002");
+        unplacedDemo.StorageLocationId = null;
+        var previousVersion = unplacedDemo.InventoryVersion;
+        var other = new Product { Id = Guid.NewGuid(), Barcode = "OTHER", Name = "Other", Size = "M", CategoryId = demo.CategoryId, BrandId = demo.BrandId, Status = ProductStatus.OnSale };
+        db.Products.Add(other);
+        await db.SaveChangesAsync();
+
+        await seeder.SeedInventoryLocationsAsync();
+
+        Assert.Equal(userLocation.Id, demo.StorageLocationId);
+        Assert.Equal(version, demo.InventoryVersion);
+        Assert.NotNull(unplacedDemo.StorageLocationId);
+        Assert.NotEqual(previousVersion, unplacedDemo.InventoryVersion);
+        Assert.Null(other.StorageLocationId);
+        Assert.Equal(5, await db.StorageLocations.CountAsync());
+    }
+
+    [Fact]
     public async Task RepositoryQuery_SortOptions_Newest_PriceAsc_PriceDesc_AreStable()
     {
         await using var db = CreateInMemoryDbContext();

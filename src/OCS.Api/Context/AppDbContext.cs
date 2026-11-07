@@ -46,6 +46,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
 
     public DbSet<ProductStatusHistory> ProductStatusHistories => Set<ProductStatusHistory>();
+    public DbSet<InventoryEvent> InventoryEvents => Set<InventoryEvent>();
 
     public DbSet<SaleInvoice> SaleInvoices => Set<SaleInvoice>();
 

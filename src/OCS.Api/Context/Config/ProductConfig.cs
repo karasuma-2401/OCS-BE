@@ -99,6 +99,11 @@ public sealed class ProductConfig : IEntityTypeConfiguration<Product>
         builder.Property(x => x.ListedPrice)
             .HasPrecision(18, 2);
 
+        builder.Property(x => x.AgreedListedPrice).HasPrecision(18, 2);
+        builder.Property(x => x.AgreementEvidence).HasMaxLength(1000);
+        builder.Property(x => x.ApprovalStatus).HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.InventoryVersion).IsConcurrencyToken();
+
         builder.Property(x => x.PurchasePrice)
             .HasPrecision(18, 2);
 
