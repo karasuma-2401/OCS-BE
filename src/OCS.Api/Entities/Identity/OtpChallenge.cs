@@ -13,6 +13,7 @@ public sealed class OtpChallenge : BaseEntity
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset ResendAvailableAt { get; set; }
     public int FailedAttempts { get; set; }
+    public DateTimeOffset? VerifiedAt { get; set; }
     public DateTimeOffset? ConsumedAt { get; set; }
     public DateTimeOffset? InvalidatedAt { get; set; }
     // Pending/failed delivery must never be treated as proof; resend replaces the old challenge.

@@ -975,6 +975,9 @@ namespace OCS.Api.Context.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<uint>("Version")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -997,7 +1000,7 @@ namespace OCS.Api.Context.Migrations
 
                             t.HasCheckConstraint("CK_OtpChallenges_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND \"ContinuationExpiresAt\" >= \"ExpiresAt\" AND \"ResendAvailableAt\" >= \"CreatedAt\"");
 
-                            t.HasCheckConstraint("CK_OtpChallenges_Purpose", "\"Purpose\" = 'RegistrationActivation'");
+                            t.HasCheckConstraint("CK_OtpChallenges_Purpose", "\"Purpose\" IN ('RegistrationActivation', 'PasswordReset')");
                         });
                 });
 

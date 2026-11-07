@@ -10,7 +10,7 @@ public sealed class OtpChallengeConfig : IEntityTypeConfiguration<OtpChallenge>
     {
         builder.ToTable("OtpChallenges", table =>
         {
-            table.HasCheckConstraint("CK_OtpChallenges_Purpose", "\"Purpose\" = 'RegistrationActivation'");
+            table.HasCheckConstraint("CK_OtpChallenges_Purpose", "\"Purpose\" IN ('RegistrationActivation', 'PasswordReset')");
             table.HasCheckConstraint("CK_OtpChallenges_Attempts", "\"FailedAttempts\" >= 0");
             table.HasCheckConstraint("CK_OtpChallenges_Lifetime", "\"ExpiresAt\" > \"CreatedAt\" AND \"ContinuationExpiresAt\" >= \"ExpiresAt\" AND \"ResendAvailableAt\" >= \"CreatedAt\"");
             table.HasCheckConstraint("CK_OtpChallenges_Delivery", "\"DeliveryStatus\" IN ('Pending', 'Sent', 'Failed') AND (\"DeliveryStatus\" <> 'Sent' OR \"SentAt\" IS NOT NULL)");

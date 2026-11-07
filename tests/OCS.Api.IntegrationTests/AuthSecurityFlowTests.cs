@@ -59,6 +59,76 @@ public sealed class AuthSecurityFlowTests
         Regex.Match(inbox.SentMessages.Last().Body, @"\b[0-9]{6}\b").Value;
 
     [PostgresFact]
+    public async Task PasswordResetRequiresEmailProofAndRevokesSessions()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        await using var factory = CreateFactory(database, clock);
+        using var client = CreateClient(factory);
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost:3000");
+        const string email = "reset@example.com";
+        const string password = "Password123@";
+        const string newPassword = "NewPassword123@";
+        var registration = await client.PostAsJsonAsync("/api/auth/register", new { fullName = "Reset User", email, phoneNumber = "0912345678", password });
+        Assert.Equal(HttpStatusCode.OK, registration.StatusCode);
+        var registrationChallenge = await registration.Content.ReadFromJsonAsync<JsonElement>();
+        var inbox = factory.Services.GetRequiredService<TestInboxEmailSender>();
+        var activationCode = Code(inbox);
+        var activation = await client.PostAsJsonAsync("/api/auth/otp/verify", new {
+            challengeId = registrationChallenge.GetProperty("challengeId").GetGuid(), code = activationCode,
+            continuationToken = registrationChallenge.GetProperty("continuationToken").GetString()
+        });
+        Assert.Equal(HttpStatusCode.OK, activation.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/login", new { email, password })).StatusCode);
+
+        var unknown = await client.PostAsJsonAsync("/api/auth/password-reset/request", new { email = "missing@example.com" });
+        var request = await client.PostAsJsonAsync("/api/auth/password-reset/request", new { email });
+        Assert.Equal(HttpStatusCode.OK, request.StatusCode);
+        Assert.Equal(await unknown.Content.ReadAsStringAsync(), await request.Content.ReadAsStringAsync());
+        Assert.Equal(request.Headers.GetValues("X-Otp-Expiry-Minutes"), unknown.Headers.GetValues("X-Otp-Expiry-Minutes"));
+        Assert.Equal(request.Headers.GetValues("X-Otp-Resend-Seconds"), unknown.Headers.GetValues("X-Otp-Resend-Seconds"));
+        Assert.Equal("5", Assert.Single(request.Headers.GetValues("X-Otp-Expiry-Minutes")));
+        Assert.Equal("60", Assert.Single(request.Headers.GetValues("X-Otp-Resend-Seconds")));
+        Assert.Contains("X-Otp-Expiry-Minutes", string.Join(",", request.Headers.GetValues("Access-Control-Expose-Headers")), StringComparison.OrdinalIgnoreCase);
+        var code = Code(inbox);
+        var wrong = code == "000000" ? "000001" : "000000";
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code = wrong })).StatusCode);
+        var verification = await client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code });
+        Assert.Equal(HttpStatusCode.OK, verification.StatusCode);
+        var resetToken = (await verification.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("resetToken").GetString();
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/complete", new { email, resetToken = "wrong", password = newPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/complete", new { email, resetToken, password = "weak" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/password-reset/complete", new { email, resetToken, password = newPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/complete", new { email, resetToken, password = newPassword })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login", new { email, password })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/login", new { email, password = newPassword })).StatusCode);
+
+        clock.Advance(TimeSpan.FromMinutes(6));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/password-reset/request", new { email })).StatusCode);
+        var expiredCode = Code(inbox);
+        clock.Advance(TimeSpan.FromMinutes(6));
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code = expiredCode })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/password-reset/request", new { email })).StatusCode);
+        code = Code(inbox);
+        wrong = code == "000000" ? "000001" : "000000";
+        for (var i = 0; i < 5; i++)
+            Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code = wrong })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code })).StatusCode);
+
+        clock.Advance(TimeSpan.FromSeconds(61));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/password-reset/request", new { email })).StatusCode);
+        code = Code(inbox);
+        using var secondClient = CreateClient(factory);
+        var attempts = await Task.WhenAll(
+            client.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code }),
+            secondClient.PostAsJsonAsync("/api/auth/password-reset/verify", new { email, code }));
+        Assert.Single(attempts, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(attempts, response => response.StatusCode == HttpStatusCode.BadRequest);
+    }
+
+    [PostgresFact]
     public async Task HttpFlowEnforcesContinuationResendSessionAndConcurrentLockout()
     {
         await using var database = await TestDatabase.CreateAsync();
