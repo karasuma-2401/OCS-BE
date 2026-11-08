@@ -27,5 +27,17 @@ services:
     ports:
       - "5204:8080"
 
+  tunnel:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - "http"
+      - "api:8080"
+      - "--url=${NGROK_DOMAIN:-unorderable-eventful-lovetta.ngrok-free.dev}"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - api
+
 volumes:
   redis_data:
