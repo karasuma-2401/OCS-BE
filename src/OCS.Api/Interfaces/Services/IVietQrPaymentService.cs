@@ -16,4 +16,12 @@ public interface IVietQrPaymentService
 
     Task<Result<IReadOnlyList<PosPendingInvoiceSummaryDto>>> GetPendingInvoicesAsync(
         CancellationToken cancellationToken = default);
+
+    Task<Result<VietQrWebhookProcessResultDto>> ProcessWebhookAsync(
+        VietQrWebhookPayloadDto payload,
+        CancellationToken cancellationToken = default);
+
+    Task<Result<VietQrPaymentSessionDto>> SimulateWebhookAsync(
+        Guid transactionId,
+        CancellationToken cancellationToken = default);
 }
