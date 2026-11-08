@@ -778,7 +778,10 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             (Guid.Parse("80000000-0000-0000-0000-000000000001"), "HD-POS-DEMO-001", 650000m),
             (Guid.Parse("80000000-0000-0000-0000-000000000002"), "HD-POS-DEMO-002", 1230000m),
             (Guid.Parse("80000000-0000-0000-0000-000000000003"), "HD-POS-TEST-10K", 10000m),
-            (Guid.Parse("80000000-0000-0000-0000-000000000004"), "HD-POS-TEST-20K", 20000m)
+            (Guid.Parse("80000000-0000-0000-0000-000000000004"), "HD-POS-TEST-20K", 20000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000005"), "HD-POS-TEST-10K-A", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000006"), "HD-POS-TEST-10K-B", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000007"), "HD-POS-TEST-10K-C", 10000m)
         ];
 
         var staffEmployeeId = Guid.Parse("10000000-0000-0000-0000-000000000003");
