@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
         services.AddScoped<IPaymentGatewayAdapter, VietQrQuickLinkAdapter>();
+        services.AddScoped<IVietQrPaymentService, VietQrPaymentService>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
 

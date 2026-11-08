@@ -775,6 +775,45 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await SeedInventoryLocationsAsync(cancellationToken);
+        await SeedPosDemoInvoicesAsync(cancellationToken);
+    }
+
+    public async Task SeedPosDemoInvoicesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+        {
+            throw new InvalidOperationException("Demo seeding is only allowed in Development or Testing.");
+        }
+
+        auditContext.Initialize("DemoSeed");
+
+        (Guid Id, string InvoiceNumber, decimal TotalAmount)[] demoUnpaidInvoices =
+        [
+            (Guid.Parse("80000000-0000-0000-0000-000000000001"), "HD-POS-DEMO-001", 650000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000002"), "HD-POS-DEMO-002", 1230000m)
+        ];
+
+        var staffEmployeeId = Guid.Parse("10000000-0000-0000-0000-000000000003");
+        foreach (var (id, invoiceNumber, totalAmount) in demoUnpaidInvoices)
+        {
+            var exists = await dbContext.SaleInvoices
+                .AnyAsync(x => x.Id == id || x.InvoiceNumber == invoiceNumber, cancellationToken);
+            if (exists)
+            {
+                continue;
+            }
+
+            dbContext.SaleInvoices.Add(new SaleInvoice
+            {
+                Id = id,
+                InvoiceNumber = invoiceNumber,
+                SoldByEmployeeId = staffEmployeeId,
+                TotalAmount = totalAmount,
+                PaymentStatus = InvoicePaymentStatus.Unpaid
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task SeedInventoryLocationsAsync(CancellationToken cancellationToken = default)
