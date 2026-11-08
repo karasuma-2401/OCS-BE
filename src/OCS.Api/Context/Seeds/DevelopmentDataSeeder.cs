@@ -775,6 +775,53 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         await dbContext.SaveChangesAsync(cancellationToken);
         await SeedInventoryLocationsAsync(cancellationToken);
+        await SeedPosDemoInvoicesAsync(cancellationToken);
+    }
+
+    public async Task SeedPosDemoInvoicesAsync(CancellationToken cancellationToken = default)
+    {
+        if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+        {
+            throw new InvalidOperationException("Demo seeding is only allowed in Development or Testing.");
+        }
+
+        auditContext.Initialize("DemoSeed");
+
+        (Guid Id, string InvoiceNumber, decimal TotalAmount)[] demoUnpaidInvoices =
+        [
+            (Guid.Parse("80000000-0000-0000-0000-000000000001"), "HD-POS-DEMO-001", 650000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000002"), "HD-POS-DEMO-002", 1230000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000003"), "HD-POS-TEST-10K", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000004"), "HD-POS-TEST-20K", 20000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000005"), "HD-POS-TEST-10K-A", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000006"), "HD-POS-TEST-10K-B", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000007"), "HD-POS-TEST-10K-C", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000008"), "HD-POS-TEST-10K-D", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000009"), "HD-POS-TEST-10K-E", 10000m),
+            (Guid.Parse("80000000-0000-0000-0000-000000000010"), "HD-POS-TEST-10K-F", 10000m)
+        ];
+
+        var staffEmployeeId = Guid.Parse("10000000-0000-0000-0000-000000000003");
+        foreach (var (id, invoiceNumber, totalAmount) in demoUnpaidInvoices)
+        {
+            var exists = await dbContext.SaleInvoices
+                .AnyAsync(x => x.Id == id || x.InvoiceNumber == invoiceNumber, cancellationToken);
+            if (exists)
+            {
+                continue;
+            }
+
+            dbContext.SaleInvoices.Add(new SaleInvoice
+            {
+                Id = id,
+                InvoiceNumber = invoiceNumber,
+                SoldByEmployeeId = staffEmployeeId,
+                TotalAmount = totalAmount,
+                PaymentStatus = InvoicePaymentStatus.Unpaid
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task SeedInventoryLocationsAsync(CancellationToken cancellationToken = default)
