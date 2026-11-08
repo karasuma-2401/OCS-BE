@@ -739,6 +739,18 @@ namespace OCS.Api.Context.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("BankAccountHolderName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("BankCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("BankTransactionReference")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -755,6 +767,9 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid?>("EarlyWithdrawalId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -762,6 +777,10 @@ namespace OCS.Api.Context.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<Guid?>("PayoutId")
                         .HasColumnType("uuid");
@@ -772,6 +791,18 @@ namespace OCS.Api.Context.Migrations
                     b.Property<string>("ProofUrl")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("ProviderName")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("QrCodeUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("QrPayload")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
 
                     b.Property<Guid?>("SaleInvoiceId")
                         .HasColumnType("uuid");
@@ -796,6 +827,10 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("EarlyWithdrawalId");
+
+                    b.HasIndex("PaymentReference")
+                        .IsUnique()
+                        .HasFilter("\"PaymentReference\" IS NOT NULL");
 
                     b.HasIndex("PayoutId");
 

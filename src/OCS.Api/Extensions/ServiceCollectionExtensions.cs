@@ -124,6 +124,7 @@ public static class ServiceCollectionExtensions
         services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
         services.Configure<FirebaseOptions>(configuration.GetSection(FirebaseOptions.SectionName));
         services.AddHttpClient("FcmClient");
+        services.Configure<VietQrOptions>(configuration.GetSection(VietQrOptions.SectionName));
 
         var emailProvider = configuration["Email:Provider"];
         if (string.Equals(emailProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
@@ -151,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<IConsignmentService, ConsignmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+        services.AddScoped<IPaymentGatewayAdapter, VietQrQuickLinkAdapter>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
 
