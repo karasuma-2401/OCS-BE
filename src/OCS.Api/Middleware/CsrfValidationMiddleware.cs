@@ -20,8 +20,15 @@ public sealed class CsrfValidationMiddleware(
     public async Task InvokeAsync(HttpContext context)
     {
         if (MutationMethods.Contains(context.Request.Method) &&
-            context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
+            context.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase) &&
+            !context.Request.Path.StartsWithSegments("/api/webhooks", StringComparison.OrdinalIgnoreCase))
         {
+            if (context.GetEndpoint()?.Metadata.GetMetadata<IAntiforgeryMetadata>() is { RequiresValidation: false })
+            {
+                await next(context);
+                return;
+            }
+
             // Allow test bypass in non-production environments when test header is explicitly provided
             if (!environment.IsProduction() &&
                 context.Request.Headers.TryGetValue("X-Test-Bypass-Csrf", out var bypass) &&

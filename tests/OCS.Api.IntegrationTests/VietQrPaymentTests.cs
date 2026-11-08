@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using OCS.Api.Authorization;
 using OCS.Api.Common;
@@ -187,6 +189,102 @@ public sealed class VietQrPaymentTests
         }
     }
 
+    [Fact]
+    public async Task WebhookReconcilesPaymentMarksInvoicePaidAndProductsSoldAndIsIdempotent()
+    {
+        var clock = new FakeClock(new DateTimeOffset(2026, 11, 8, 14, 0, 0, TimeSpan.Zero));
+        var (db, employeeId, invoice, service) = await CreateTestHarnessAsync(clock);
+        await using (db)
+        {
+            var initiated = await service.InitiateAsync(employeeId, new InitiateVietQrPaymentRequest(invoice.Id));
+            Assert.True(initiated.IsSuccess);
+            var reference = initiated.Data!.PaymentReference;
+
+            var webhookPayload = new VietQrWebhookPayloadDto(
+                Gateway: "MBBank",
+                TransactionDate: "2026-11-08 21:02:15",
+                AccountNumber: "0900000001",
+                Content: $"MBVCB.88991122.{reference}.CT tu NGUYEN VAN A",
+                TransferType: "in",
+                TransferAmount: 650000m,
+                ReferenceCode: "FT26312998877");
+
+            var firstProcess = await service.ProcessWebhookAsync(webhookPayload);
+            Assert.True(firstProcess.IsSuccess);
+            Assert.True(firstProcess.Data!.Processed);
+            Assert.False(firstProcess.Data.AlreadyPaid);
+            Assert.Equal(reference, firstProcess.Data.PaymentReference);
+            Assert.Equal("Paid", firstProcess.Data.InvoicePaymentStatus);
+
+            var updatedTx = await db.FinancialTransactions.SingleAsync(x => x.Id == initiated.Data.TransactionId);
+            Assert.Equal(FinancialTransactionStatus.Success, updatedTx.Status);
+            Assert.Equal("FT26312998877", updatedTx.BankTransactionReference);
+
+            var updatedInvoice = await db.SaleInvoices
+                .Include(x => x.Lines)
+                    .ThenInclude(l => l.Product)
+                .SingleAsync(x => x.Id == invoice.Id);
+            Assert.Equal(InvoicePaymentStatus.Paid, updatedInvoice.PaymentStatus);
+            Assert.All(updatedInvoice.Lines, line => Assert.Equal(ProductStatus.Sold, line.Product!.Status));
+
+            var histories = await db.ProductStatusHistories.ToListAsync();
+            Assert.Single(histories);
+            Assert.Equal(ProductStatus.OnSale, histories[0].PreviousStatus);
+            Assert.Equal(ProductStatus.Sold, histories[0].NewStatus);
+
+            // Duplicate webhook should be idempotent
+            var secondProcess = await service.ProcessWebhookAsync(webhookPayload);
+            Assert.True(secondProcess.IsSuccess);
+            Assert.True(secondProcess.Data!.Processed);
+            Assert.True(secondProcess.Data.AlreadyPaid);
+        }
+    }
+
+    [Fact]
+    public async Task WebhookRejectsUnderpaidAmountAndKeepsInvoiceUnpaid()
+    {
+        var clock = new FakeClock(new DateTimeOffset(2026, 11, 8, 14, 0, 0, TimeSpan.Zero));
+        var (db, employeeId, invoice, service) = await CreateTestHarnessAsync(clock);
+        await using (db)
+        {
+            var initiated = await service.InitiateAsync(employeeId, new InitiateVietQrPaymentRequest(invoice.Id));
+            Assert.True(initiated.IsSuccess);
+
+            var underpaidPayload = new VietQrWebhookPayloadDto(
+                Gateway: "MBBank",
+                Code: initiated.Data!.PaymentReference,
+                Content: initiated.Data.PaymentReference,
+                TransferType: "in",
+                TransferAmount: 500000m,
+                ReferenceCode: "FT-UNDERPAID");
+
+            var result = await service.ProcessWebhookAsync(underpaidPayload);
+            Assert.False(result.IsSuccess);
+            Assert.Equal("POS.UNDERPAID_AMOUNT", result.Error!.Code);
+
+            var unchangedInvoice = await db.SaleInvoices.SingleAsync(x => x.Id == invoice.Id);
+            Assert.Equal(InvoicePaymentStatus.Unpaid, unchangedInvoice.PaymentStatus);
+        }
+    }
+
+    [Fact]
+    public async Task SimulateWebhookCompletesPaymentInDevelopmentEnvironment()
+    {
+        var clock = new FakeClock(new DateTimeOffset(2026, 11, 8, 14, 0, 0, TimeSpan.Zero));
+        var (db, employeeId, invoice, service) = await CreateTestHarnessAsync(clock);
+        await using (db)
+        {
+            var initiated = await service.InitiateAsync(employeeId, new InitiateVietQrPaymentRequest(invoice.Id));
+            Assert.True(initiated.IsSuccess);
+
+            var simulated = await service.SimulateWebhookAsync(initiated.Data!.TransactionId);
+            Assert.True(simulated.IsSuccess);
+            Assert.Equal("Success", simulated.Data!.Status);
+            Assert.Equal("Paid", simulated.Data.InvoicePaymentStatus);
+            Assert.False(simulated.Data.IsExpired);
+        }
+    }
+
     private static async Task<(AppDbContext Db, Guid EmployeeId, SaleInvoice Invoice, VietQrPaymentService Service)> CreateTestHarnessAsync(
         TimeProvider timeProvider)
     {
@@ -209,17 +307,37 @@ public sealed class VietQrPaymentTests
             Id = employeeId,
             Account = account
         };
+        var product = new Product
+        {
+            Id = Guid.NewGuid(),
+            Barcode = "SP-POS-TEST-001",
+            Name = "Áo khoác dạ Tweed",
+            Size = "M",
+            ConditionPercentage = 95,
+            ListedPrice = 650000m,
+            Status = ProductStatus.OnSale
+        };
         var invoice = new SaleInvoice
         {
             Id = Guid.NewGuid(),
             InvoiceNumber = "HD-POS-001",
             SoldByEmployeeId = employeeId,
             TotalAmount = 650000m,
-            PaymentStatus = InvoicePaymentStatus.Unpaid
+            PaymentStatus = InvoicePaymentStatus.Unpaid,
+            Lines =
+            [
+                new SaleInvoiceLine
+                {
+                    ProductId = product.Id,
+                    Product = product,
+                    SalePrice = 650000m
+                }
+            ]
         };
 
         db.Accounts.Add(account);
         db.EmployeeProfiles.Add(employee);
+        db.Products.Add(product);
         db.SaleInvoices.Add(invoice);
         await db.SaveChangesAsync();
 
@@ -230,13 +348,23 @@ public sealed class VietQrPaymentTests
             AccountHolderName = "CUA HANG KY GUI OCS",
             Template = "compact2",
             ExpiryMinutes = 10,
-            ReferencePrefix = "OCS"
+            ReferencePrefix = "OCS",
+            EnableWebhookSimulation = true
         });
 
         var adapter = new VietQrQuickLinkAdapter(vietQrOptions);
-        var service = new VietQrPaymentService(db, adapter, vietQrOptions, timeProvider);
+        var env = new FakeHostEnvironment { EnvironmentName = Environments.Development };
+        var service = new VietQrPaymentService(db, adapter, vietQrOptions, timeProvider, env);
 
         return (db, employeeId, invoice, service);
+    }
+
+    private sealed class FakeHostEnvironment : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = Environments.Development;
+        public string ApplicationName { get; set; } = "OCS.Api.Tests";
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class FakeClock(DateTimeOffset initialUtcNow) : TimeProvider

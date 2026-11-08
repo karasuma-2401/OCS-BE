@@ -62,6 +62,24 @@ public sealed class PosPaymentsController(IVietQrPaymentService vietQrPaymentSer
         return result.ToActionResult(this);
     }
 
+    [HttpPost("{transactionId:guid}/simulate-webhook")]
+    [ProducesResponseType(typeof(VietQrPaymentSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    public async Task<IActionResult> SimulateWebhook(
+        Guid transactionId,
+        CancellationToken cancellationToken)
+    {
+        if (Actor() is not Guid)
+        {
+            return Unauthorized();
+        }
+
+        var result = await vietQrPaymentService.SimulateWebhookAsync(transactionId, cancellationToken);
+        return result.ToActionResult(this);
+    }
+
     private Guid? Actor() =>
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id != Guid.Empty
             ? id
