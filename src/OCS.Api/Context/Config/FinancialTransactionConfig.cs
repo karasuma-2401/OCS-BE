@@ -24,6 +24,14 @@ public sealed class FinancialTransactionConfig : IEntityTypeConfiguration<Financ
         builder.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.PaymentMethod).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.PaymentReference).HasMaxLength(64);
+        builder.Property(x => x.ExpiresAt).HasColumnType("timestamp with time zone");
+        builder.Property(x => x.QrCodeUrl).HasMaxLength(2048);
+        builder.Property(x => x.QrPayload).HasMaxLength(1024);
+        builder.Property(x => x.ProviderName).HasMaxLength(50);
+        builder.Property(x => x.BankCode).HasMaxLength(50);
+        builder.Property(x => x.BankAccountNumber).HasMaxLength(50);
+        builder.Property(x => x.BankAccountHolderName).HasMaxLength(200);
         builder.Property(x => x.BankTransactionReference).HasMaxLength(100);
         builder.Property(x => x.ProofUrl).HasMaxLength(2048);
         builder.Property(x => x.OccurredAt).HasColumnType("timestamp with time zone");
@@ -36,5 +44,8 @@ public sealed class FinancialTransactionConfig : IEntityTypeConfiguration<Financ
         builder.HasOne(x => x.PerformedByEmployee).WithMany().HasForeignKey(x => x.PerformedByEmployeeId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(x => new { x.Status, x.OccurredAt });
+        builder.HasIndex(x => x.PaymentReference)
+            .IsUnique()
+            .HasFilter("\"PaymentReference\" IS NOT NULL");
     }
 }

@@ -122,6 +122,7 @@ public static class ServiceCollectionExtensions
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.SectionName));
         services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
+        services.Configure<VietQrOptions>(configuration.GetSection(VietQrOptions.SectionName));
 
         var emailProvider = configuration["Email:Provider"];
         if (string.Equals(emailProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
@@ -147,6 +148,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
+        services.AddScoped<IPaymentGatewayAdapter, VietQrQuickLinkAdapter>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
 

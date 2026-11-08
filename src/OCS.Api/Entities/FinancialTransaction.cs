@@ -21,6 +21,22 @@ public sealed class FinancialTransaction : BaseEntity
 
     public PaymentMethod PaymentMethod { get; set; }
 
+    public string? PaymentReference { get; set; }
+
+    public DateTimeOffset? ExpiresAt { get; set; }
+
+    public string? QrCodeUrl { get; set; }
+
+    public string? QrPayload { get; set; }
+
+    public string? ProviderName { get; set; }
+
+    public string? BankCode { get; set; }
+
+    public string? BankAccountNumber { get; set; }
+
+    public string? BankAccountHolderName { get; set; }
+
     public string? BankTransactionReference { get; set; }
 
     public string? ProofUrl { get; set; }
