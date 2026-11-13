@@ -21,7 +21,7 @@ public sealed class PermissionAuthorizationHandler(IAuthRepository authRepositor
             return;
         }
 
-        if (context.User.IsInRole("Admin") && PermissionCatalog.RequiredAdminCodes.Contains(requirement.Code))
+        if (context.User.IsInRole("Admin"))
         {
             context.Succeed(requirement);
             return;
