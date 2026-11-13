@@ -79,7 +79,9 @@ public sealed class CustomerConsignmentTests
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:DefaultConnection"] = "", ["Redis:ConnectionString"] = "", ["R2:ServiceUrl"] = ""
+                ["ConnectionStrings:DefaultConnection"] = "",
+                ["Redis:ConnectionString"] = "",
+                ["R2:ServiceUrl"] = ""
             }));
         });
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
@@ -94,8 +96,11 @@ public sealed class CustomerConsignmentTests
         var databaseName = Guid.NewGuid().ToString();
         var jwtSettings = new Dictionary<string, string?>
         {
-            ["ConnectionStrings:DefaultConnection"] = "", ["Redis:ConnectionString"] = "",
-            ["R2:ServiceUrl"] = "", ["Jwt:Issuer"] = "test", ["Jwt:Audience"] = "test",
+            ["ConnectionStrings:DefaultConnection"] = "",
+            ["Redis:ConnectionString"] = "",
+            ["R2:ServiceUrl"] = "",
+            ["Jwt:Issuer"] = "test",
+            ["Jwt:Audience"] = "test",
             ["Jwt:Key"] = "test-only-key-with-at-least-32-bytes"
         };
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
@@ -270,15 +275,21 @@ public sealed class CustomerConsignmentTests
 
     private static Account Customer(Guid id) => new()
     {
-        Id = id, AccountType = AccountType.Customer, Status = AccountStatus.Active,
-        EmailVerifiedAt = DateTimeOffset.UtcNow, CustomerProfile = new CustomerProfile { Id = id }
+        Id = id,
+        AccountType = AccountType.Customer,
+        Status = AccountStatus.Active,
+        EmailVerifiedAt = DateTimeOffset.UtcNow,
+        CustomerProfile = new CustomerProfile { Id = id }
     };
 
     private static CustomerConsignmentsController CreateController(AppDbContext db, Guid id) => new(new CustomerConsignmentService(db, new CustomerProfileRepository(db)))
     {
-        ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext
+        ControllerContext = new ControllerContext
         {
-            User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id.ToString())], "test"))
-        } }
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, id.ToString())], "test"))
+            }
+        }
     };
 }

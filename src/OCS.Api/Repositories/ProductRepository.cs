@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Common;
@@ -30,6 +31,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+    [SuppressMessage("Globalization", "CA1310", Justification = "EF Core translates this overload to SQL; the StringComparison overload is not supported.")]
     public async Task<PagedResponse<PublicProductResponse>> GetPublicProductsAsync(
         GetPublicProductsRequest request,
         CancellationToken cancellationToken = default)
@@ -140,6 +142,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             totalCount);
     }
 
+    [SuppressMessage("Globalization", "CA1310", Justification = "EF Core translates this overload to SQL; the StringComparison overload is not supported.")]
     public async Task<PublicProductDetailResponse?> GetPublicProductDetailAsync(
         Guid id,
         CancellationToken cancellationToken = default)
