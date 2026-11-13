@@ -11,6 +11,8 @@ public sealed class Product : BaseEntity
 
     public string Size { get; set; } = string.Empty;
 
+    public string? Material { get; set; }
+
     public string? Description { get; set; }
 
     public int ConditionPercentage { get; set; }
@@ -92,7 +94,7 @@ public sealed class Product : BaseEntity
         var rate = agreedCommissionRate ?? brand.DefaultCommissionRate;
         if (rate is < 0 or > 100 || decimal.Round(rate, 2) != rate)
         {
-            throw new ArgumentOutOfRangeException(nameof(brand), "The brand commission rate must be between 0 and 100.");
+            throw new ArgumentOutOfRangeException(nameof(agreedCommissionRate), "The commission rate must be between 0 and 100.");
         }
 
         ListedPrice = fixedListedPrice;
@@ -158,7 +160,6 @@ public sealed class Product : BaseEntity
         }
     }
 
-    /// <summary>Calculates the amount payable to the consignor if this item sells at its fixed listed price.</summary>
     public decimal CalculateEstimatedConsignorPayout()
     {
         if (SourceType != ProductSourceType.Consignment || AgreedCommissionRate is null)
@@ -168,7 +169,7 @@ public sealed class Product : BaseEntity
 
         return decimal.Round(
             ListedPrice * (100m - AgreedCommissionRate.Value) / 100m,
-            2,
+            0,
             MidpointRounding.AwayFromZero);
     }
 
@@ -181,7 +182,7 @@ public sealed class Product : BaseEntity
 
         return decimal.Round(
             ListedPrice * AgreedCommissionRate.Value / 100m,
-            2,
+            0,
             MidpointRounding.AwayFromZero);
     }
 }

@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using OCS.Api.Configuration;
@@ -6,6 +7,8 @@ namespace OCS.Api.IntegrationTests;
 
 public sealed class ProductionConfigurationTests
 {
+    private static readonly string ValidTestRsaPrivateKeyPem = RSA.Create(2048).ExportRSAPrivateKeyPem();
+
     private static (IConfiguration, IHostEnvironment) CreateEnv(
         string environmentName,
         Dictionary<string, string?> overrides)
@@ -21,7 +24,10 @@ public sealed class ProductionConfigurationTests
             ["Email:SmtpHost"] = "smtp.gmail.com",
             ["Email:Username"] = "user@example.com",
             ["Email:AppPassword"] = "app-secret-pwd",
-            ["Email:FromAddress"] = "user@example.com"
+            ["Email:FromAddress"] = "user@example.com",
+            ["Firebase:ProjectId"] = "ocs-demo-project",
+            ["Firebase:ClientEmail"] = "firebase-adminsdk-test@ocs-demo-project.iam.gserviceaccount.com",
+            ["Firebase:PrivateKey"] = ValidTestRsaPrivateKeyPem
         };
 
         foreach (var (k, v) in overrides)
@@ -62,6 +68,25 @@ public sealed class ProductionConfigurationTests
         var (config, env) = CreateEnv(Environments.Production, new() { [missingSetting] = "" });
         var ex = Assert.Throws<InvalidOperationException>(() => ProductionConfiguration.Validate(config, env));
         Assert.Contains(missingSetting, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Firebase:ProjectId")]
+    [InlineData("Firebase:ClientEmail")]
+    [InlineData("Firebase:PrivateKey")]
+    public void ProductionRequiresAllMandatoryFirebaseSettings(string missingSetting)
+    {
+        var (config, env) = CreateEnv(Environments.Production, new() { [missingSetting] = "" });
+        var ex = Assert.Throws<InvalidOperationException>(() => ProductionConfiguration.Validate(config, env));
+        Assert.Contains(missingSetting, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProductionRejectsInvalidFirebasePrivateKeyPem()
+    {
+        var (config, env) = CreateEnv(Environments.Production, new() { ["Firebase:PrivateKey"] = "not-a-valid-pem" });
+        var ex = Assert.Throws<InvalidOperationException>(() => ProductionConfiguration.Validate(config, env));
+        Assert.Contains("Firebase:PrivateKey format is invalid", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

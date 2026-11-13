@@ -6,7 +6,7 @@ namespace OCS.Api.Interfaces.Services;
 
 public interface IAppointmentService
 {
-    Task<Result<IReadOnlyList<TimeSlotDto>>> GetAvailableSlotsAsync(DateOnly date, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<TimeSlotDto>>> GetAvailableSlotsAsync(DateOnly appointmentDate, CancellationToken cancellationToken = default);
 
     Task<Result<AppointmentDto>> CreateAsync(Guid customerId, CreateAppointmentRequest request, CancellationToken cancellationToken = default);
 
@@ -17,7 +17,7 @@ public interface IAppointmentService
     Task<Result<AppointmentDto>> CancelByCustomerAsync(Guid id, Guid customerId, CancelAppointmentRequest request, CancellationToken cancellationToken = default);
 
     Task<Result<IReadOnlyList<AppointmentDto>>> GetStaffAppointmentsAsync(
-        DateOnly? date,
+        DateOnly? appointmentDate,
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,

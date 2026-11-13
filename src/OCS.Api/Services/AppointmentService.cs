@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using OCS.Api.Common;
 using OCS.Api.Consts;
+using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
 using OCS.Api.Interfaces.Services;
@@ -11,23 +14,32 @@ namespace OCS.Api.Services;
 
 public sealed class AppointmentService(
     IUnitOfWork unitOfWork,
-    INotificationService notificationService) : IAppointmentService
+    INotificationService notificationService,
+    AppDbContext dbContext,
+    ILogger<AppointmentService> logger) : IAppointmentService
 {
+    public AppointmentService(
+        IUnitOfWork unitOfWork,
+        INotificationService notificationService)
+        : this(unitOfWork, notificationService, null!, Microsoft.Extensions.Logging.Abstractions.NullLogger<AppointmentService>.Instance)
+    {
+    }
+
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SlotLocks = new();
 
     public async Task<Result<IReadOnlyList<TimeSlotDto>>> GetAvailableSlotsAsync(
-        DateOnly date,
+        DateOnly appointmentDate,
         CancellationToken cancellationToken = default)
     {
         var today = GetCurrentVietnamDate();
-        if (date < today)
+        if (appointmentDate < today)
         {
             return Result.Failure<IReadOnlyList<TimeSlotDto>>(
                 ApplicationError.Validation("INVALID_DATE", "Không thể tra cứu khung giờ cho ngày trong quá khứ."));
         }
 
         var slots = await unitOfWork.AppointmentRepository.GetActiveTimeSlotsAsync(cancellationToken);
-        var bookedCounts = await unitOfWork.AppointmentRepository.GetBookedCountsByDateAsync(date, cancellationToken);
+        var bookedCounts = await unitOfWork.AppointmentRepository.GetBookedCountsByDateAsync(appointmentDate, cancellationToken);
         var currentTime = GetCurrentVietnamTime();
 
         var result = new List<TimeSlotDto>();
@@ -35,13 +47,13 @@ public sealed class AppointmentService(
         {
             var booked = bookedCounts.GetValueOrDefault(slot.Id, 0);
             var available = Math.Max(0, slot.MaxCustomers - booked);
-            var isPastTime = date == today && slot.StartTime <= currentTime;
+            var isPastTime = appointmentDate == today && slot.StartTime <= currentTime;
 
             result.Add(new TimeSlotDto
             {
                 Id = slot.Id,
-                StartTime = slot.StartTime.ToString("HH:mm"),
-                EndTime = slot.EndTime.ToString("HH:mm"),
+                StartTime = slot.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                EndTime = slot.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
                 MaxCustomers = slot.MaxCustomers,
                 BookedCount = booked,
                 AvailableCount = isPastTime ? 0 : available,
@@ -150,6 +162,13 @@ public sealed class AppointmentService(
         }
 
         created.TimeSlot = slot;
+
+        await NotifyStoreStaffAsync(
+            customerId,
+            "Có lịch hẹn ký gửi mới",
+            customerDisplay => $"Khách hàng {customerDisplay} vừa đặt lịch hẹn ký gửi mã {created.TrackingNumber} vào ngày {created.AppointmentDate:dd/MM/yyyy} khung giờ {slot.StartTime:HH\\:mm} - {slot.EndTime:HH\\:mm} (Dự kiến {created.EstimatedItemCount} món).",
+            cancellationToken);
+
         return Result.Success(MapToDto(created));
     }
 
@@ -203,7 +222,6 @@ public sealed class AppointmentService(
                 ApplicationError.Conflict("CANNOT_CANCEL", $"Không thể hủy lịch hẹn đang ở trạng thái {appointment.Status}."));
         }
 
-        // Check cancellation deadline: must be at least 2 hours before the start time
         var aptDateTime = appointment.AppointmentDate.ToDateTime(appointment.TimeSlot.StartTime);
         var currentDateTime = DateTime.UtcNow.AddHours(7);
         if (aptDateTime - currentDateTime < TimeSpan.FromHours(2))
@@ -221,7 +239,6 @@ public sealed class AppointmentService(
         unitOfWork.AppointmentRepository.Update(appointment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Notify customer
         await notificationService.CreateAsync(new CreateNotificationDto
         {
             RecipientAccountId = customerId,
@@ -230,11 +247,17 @@ public sealed class AppointmentService(
             Type = NotificationType.System
         }, cancellationToken);
 
+        await NotifyStoreStaffAsync(
+            customerId,
+            "Khách đã hủy lịch hẹn ký gửi",
+            customerDisplay => $"Lịch hẹn ký gửi mã {appointment.TrackingNumber} ngày {appointment.AppointmentDate:dd/MM/yyyy} của khách {customerDisplay} đã bị hủy. Lý do: {appointment.CancellationReason}.",
+            cancellationToken);
+
         return Result.Success(MapToDto(appointment));
     }
 
     public async Task<Result<IReadOnlyList<AppointmentDto>>> GetStaffAppointmentsAsync(
-        DateOnly? date,
+        DateOnly? appointmentDate,
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
@@ -242,7 +265,7 @@ public sealed class AppointmentService(
         CancellationToken cancellationToken = default)
     {
         var list = await unitOfWork.AppointmentRepository.GetAppointmentsAsync(
-            date,
+            appointmentDate,
             timeSlotId,
             status,
             searchKeyword,
@@ -266,17 +289,24 @@ public sealed class AppointmentService(
                 ApplicationError.NotFound("APPOINTMENT_NOT_FOUND", "Không tìm thấy lịch hẹn."));
         }
 
-        // Validate state transitions
-        if (request.Status == AppointmentStatus.CheckedIn && appointment.Status != AppointmentStatus.Scheduled)
+        if (appointment.Status == AppointmentStatus.Completed)
+        {
+            return Result.Failure<AppointmentDto>(
+                ApplicationError.Conflict("INVALID_TRANSITION", "Lịch hẹn đã hoàn tất tiếp nhận không thể thay đổi trạng thái."));
+        }
+
+        if (request.Status == AppointmentStatus.Completed)
+        {
+            return Result.Failure<AppointmentDto>(
+                ApplicationError.Conflict("INVALID_TRANSITION", "Trạng thái hoàn tất được cập nhật tự động khi hoàn thành tiếp nhận ký gửi."));
+        }
+
+        if (request.Status == AppointmentStatus.CheckedIn &&
+            appointment.Status != AppointmentStatus.Scheduled &&
+            appointment.Status != AppointmentStatus.NoShow)
         {
             return Result.Failure<AppointmentDto>(
                 ApplicationError.Conflict("INVALID_TRANSITION", $"Không thể xác nhận đã đến cho lịch hẹn đang ở trạng thái {appointment.Status}."));
-        }
-
-        if (request.Status == AppointmentStatus.NoShow && appointment.Status != AppointmentStatus.Scheduled)
-        {
-            return Result.Failure<AppointmentDto>(
-                ApplicationError.Conflict("INVALID_TRANSITION", $"Không thể đánh dấu vắng mặt cho lịch hẹn đang ở trạng thái {appointment.Status}."));
         }
 
         appointment.Status = request.Status;
@@ -289,24 +319,32 @@ public sealed class AppointmentService(
         unitOfWork.AppointmentRepository.Update(appointment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // Notification message based on new status
+        var statusVi = GetStatusDisplayNameVi(request.Status);
         var statusMessage = request.Status switch
         {
             AppointmentStatus.CheckedIn => "Cửa hàng đã xác nhận quý khách đã có mặt tại quầy. Nhân viên đang chuẩn bị tiếp nhận đồ.",
-            AppointmentStatus.NoShow => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được đánh dấu vắng mặt do quá giờ hẹn.",
+            AppointmentStatus.NoShow => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được ghi nhận: Không đến theo giờ hẹn.",
             AppointmentStatus.Cancelled => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã bị hủy bởi cửa hàng. Lý do: {request.Reason ?? "Không có"}.",
             AppointmentStatus.Completed => "Quá trình tiếp nhận và lập hợp đồng ký gửi cho lịch hẹn của quý khách đã hoàn tất.",
-            _ => $"Trạng thái lịch hẹn ký gửi của bạn đã được cập nhật thành: {request.Status}."
+            AppointmentStatus.Scheduled => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được chuyển về trạng thái: Đã đặt lịch.",
+            _ => $"Trạng thái lịch hẹn ký gửi của bạn đã được cập nhật thành: {statusVi}."
         };
 
-        await notificationService.CreateAsync(new CreateNotificationDto
+        try
         {
-            RecipientAccountId = appointment.CustomerId,
-            SenderAccountId = staffId,
-            Title = "Cập nhật trạng thái lịch hẹn",
-            Content = statusMessage,
-            Type = NotificationType.System
-        }, cancellationToken);
+            await notificationService.CreateAsync(new CreateNotificationDto
+            {
+                RecipientAccountId = appointment.CustomerId,
+                SenderAccountId = staffId != Guid.Empty ? staffId : null,
+                Title = "Cập nhật trạng thái lịch hẹn",
+                Content = statusMessage,
+                Type = NotificationType.System
+            }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to send appointment status notification for appointment {AppointmentId}", appointment.Id);
+        }
 
         return Result.Success(MapToDto(appointment));
     }
@@ -329,15 +367,6 @@ public sealed class AppointmentService(
                 ApplicationError.Conflict("INVALID_STATUS", $"Lịch hẹn ở trạng thái '{appointment.Status}' không thể bắt đầu tiếp nhận."));
         }
 
-        // If not CheckedIn yet, auto check-in upon starting reception
-        if (appointment.Status == AppointmentStatus.Scheduled)
-        {
-            appointment.Status = AppointmentStatus.CheckedIn;
-            appointment.UpdatedAt = DateTimeOffset.UtcNow;
-            unitOfWork.AppointmentRepository.Update(appointment);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-        }
-
         var customerName = appointment.Customer?.Account?.FullName ?? "Khách ký gửi";
         var customerPhone = appointment.Customer?.Account?.PhoneNumber ?? string.Empty;
 
@@ -354,10 +383,88 @@ public sealed class AppointmentService(
         });
     }
 
+    private async Task NotifyStoreStaffAsync(
+        Guid customerId,
+        string title,
+        Func<string, string> contentFactory,
+        CancellationToken cancellationToken)
+    {
+        if (dbContext is null) return;
+
+        try
+        {
+            var customerAccount = await dbContext.Accounts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == customerId, cancellationToken);
+            var customerName = customerAccount?.FullName ?? "Khách hàng";
+            var customerPhone = customerAccount?.PhoneNumber;
+            var customerDisplay = !string.IsNullOrWhiteSpace(customerPhone)
+                ? $"{customerName} ({customerPhone})"
+                : customerName;
+
+            var staffRoleIds = new[] { Role.StaffRoleId, Role.ManagerRoleId, Role.AdminRoleId };
+
+            var roleStaffIds = await dbContext.AccountRoles
+                .AsNoTracking()
+                .Where(ar => staffRoleIds.Contains(ar.RoleId))
+                .Select(ar => ar.AccountId)
+                .ToListAsync(cancellationToken);
+
+            var internalStaffIds = await dbContext.Accounts
+                .AsNoTracking()
+                .Where(a => a.Status == AccountStatus.Active &&
+                            (a.AccountType == AccountType.Internal || a.EmployeeProfile != null))
+                .Select(a => a.Id)
+                .ToListAsync(cancellationToken);
+
+            var recipientIds = roleStaffIds
+                .Concat(internalStaffIds)
+                .Distinct()
+                .ToList();
+
+            if (recipientIds.Count == 0)
+            {
+                recipientIds = await dbContext.Accounts
+                    .AsNoTracking()
+                    .Where(a => a.Status == AccountStatus.Active)
+                    .Select(a => a.Id)
+                    .ToListAsync(cancellationToken);
+            }
+
+            var content = contentFactory(customerDisplay);
+
+            foreach (var staffAccountId in recipientIds)
+            {
+                await notificationService.CreateAsync(new CreateNotificationDto
+                {
+                    RecipientAccountId = staffAccountId,
+                    SenderAccountId = customerId != staffAccountId ? customerId : null,
+                    Title = title,
+                    Content = content,
+                    Type = NotificationType.System
+                }, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to notify store staff for customer appointment from customer {CustomerId}", customerId);
+        }
+    }
+
+    private static string GetStatusDisplayNameVi(AppointmentStatus status) => status switch
+    {
+        AppointmentStatus.Scheduled => "Đã đặt lịch",
+        AppointmentStatus.CheckedIn => "Đã đến quầy",
+        AppointmentStatus.Completed => "Đã tiếp nhận",
+        AppointmentStatus.Cancelled => "Đã hủy",
+        AppointmentStatus.NoShow => "Không đến",
+        _ => status.ToString()
+    };
+
     private static AppointmentDto MapToDto(Appointment a)
     {
-        var startTime = a.TimeSlot != null ? a.TimeSlot.StartTime.ToString("HH:mm") : string.Empty;
-        var endTime = a.TimeSlot != null ? a.TimeSlot.EndTime.ToString("HH:mm") : string.Empty;
+        var startTime = a.TimeSlot != null ? a.TimeSlot.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+        var endTime = a.TimeSlot != null ? a.TimeSlot.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
         var slotDisplay = !string.IsNullOrEmpty(startTime) ? $"{startTime} - {endTime}" : string.Empty;
         var canCancel = a.Status == AppointmentStatus.Scheduled;
 
@@ -368,7 +475,7 @@ public sealed class AppointmentService(
             CustomerId = a.CustomerId,
             CustomerName = a.Customer?.Account?.FullName ?? string.Empty,
             CustomerPhone = a.Customer?.Account?.PhoneNumber ?? string.Empty,
-            AppointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd"),
+            AppointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
             TimeSlotId = a.TimeSlotId,
             TimeSlotDisplay = slotDisplay,
             StartTime = startTime,

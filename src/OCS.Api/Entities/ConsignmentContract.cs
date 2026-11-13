@@ -30,6 +30,8 @@ public sealed class ConsignmentContract : BaseEntity
 
     public ConsignmentContractStatus Status { get; set; } = ConsignmentContractStatus.Active;
 
+    public int ActualItemCount { get; set; }
+
     public CustomerProfile? Customer { get; set; }
 
     public Appointment? Appointment { get; set; }

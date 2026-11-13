@@ -40,6 +40,8 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
             nameof(ConsignmentContract.AppointmentId), nameof(ConsignmentContract.CreatedByEmployeeId),
             nameof(ConsignmentContract.SignedAt), nameof(ConsignmentContract.EndsAt), nameof(ConsignmentContract.ExpiryHandling),
             nameof(ConsignmentContract.Status)],
+        [typeof(ConsignmentDocument)] = [nameof(ConsignmentDocument.ContractId), nameof(ConsignmentDocument.FileName),
+            nameof(ConsignmentDocument.ContentType), nameof(ConsignmentDocument.UploadedAt)],
         [typeof(Buyout)] = [nameof(Buyout.BuyoutNumber), nameof(Buyout.CustomerId), nameof(Buyout.CreatedByEmployeeId),
             nameof(Buyout.ApprovedByEmployeeId), nameof(Buyout.TotalPurchasePrice), nameof(Buyout.Status)],
         [typeof(Product)] = [nameof(Product.Barcode), nameof(Product.Name), nameof(Product.Size), nameof(Product.Description),

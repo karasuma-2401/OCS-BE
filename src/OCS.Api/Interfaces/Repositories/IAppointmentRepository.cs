@@ -12,7 +12,7 @@ public interface IAppointmentRepository
     Task<IReadOnlyList<Appointment>> GetByCustomerIdAsync(Guid customerId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Appointment>> GetAppointmentsAsync(
-        DateOnly? date,
+        DateOnly? appointmentDate,
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
@@ -25,12 +25,12 @@ public interface IAppointmentRepository
 
     Task<AppointmentTimeSlot?> GetTimeSlotForUpdateAsync(Guid timeSlotId, CancellationToken cancellationToken = default);
 
-    Task<int> GetBookedCountAsync(DateOnly date, Guid timeSlotId, CancellationToken cancellationToken = default);
+    Task<int> GetBookedCountAsync(DateOnly appointmentDate, Guid timeSlotId, CancellationToken cancellationToken = default);
 
-    Task<Dictionary<Guid, int>> GetBookedCountsByDateAsync(DateOnly date, CancellationToken cancellationToken = default);
+    Task<Dictionary<Guid, int>> GetBookedCountsByDateAsync(DateOnly appointmentDate, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<Appointment>> GetUpcomingAppointmentsForReminderAsync(
-        DateOnly date,
+        DateOnly appointmentDate,
         TimeOnly windowStart,
         TimeOnly windowEnd,
         CancellationToken cancellationToken = default);

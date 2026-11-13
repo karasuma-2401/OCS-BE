@@ -6,7 +6,9 @@ using OCS.Api.Models.Notifications;
 
 namespace OCS.Api.Services;
 
-public sealed class NotificationService(IUnitOfWork unitOfWork) : INotificationService
+public sealed class NotificationService(
+    IUnitOfWork unitOfWork,
+    IFcmService? fcmService = null) : INotificationService
 {
     public async Task<Result<NotificationDto>> CreateAsync(CreateNotificationDto dto, CancellationToken cancellationToken = default)
     {
@@ -14,7 +16,9 @@ public sealed class NotificationService(IUnitOfWork unitOfWork) : INotificationS
         {
             Id = Guid.NewGuid(),
             RecipientAccountId = dto.RecipientAccountId,
-            SenderAccountId = dto.SenderAccountId,
+            SenderAccountId = dto.SenderAccountId.HasValue && dto.SenderAccountId.Value != Guid.Empty
+                ? dto.SenderAccountId
+                : null,
             Title = dto.Title,
             Content = dto.Content,
             Type = dto.Type,
@@ -25,6 +29,26 @@ public sealed class NotificationService(IUnitOfWork unitOfWork) : INotificationS
 
         unitOfWork.NotificationRepository.Add(notification);
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (fcmService is not null)
+        {
+            try
+            {
+                await fcmService.SendPushToUserAsync(
+                    dto.RecipientAccountId,
+                    dto.Title,
+                    dto.Content,
+                    new Dictionary<string, string>
+                    {
+                        ["notificationId"] = notification.Id.ToString(),
+                        ["type"] = dto.Type.ToString()
+                    },
+                    cancellationToken);
+            }
+            catch
+            {
+            }
+        }
 
         return Result.Success(MapToDto(notification));
     }

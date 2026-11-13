@@ -652,3 +652,20 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
   - `POST /api/products`
   được cấu hình yêu cầu xác thực vai trò nội bộ: `[Authorize(Roles = "Admin,Manager,Staff")]`.
 - Người dùng chưa đăng nhập hoặc anonymous caller khi truy cập các route nội bộ trên sẽ nhận mã lỗi `401 UNAUTHORIZED`. `GET /api/products` là endpoint public duy nhất cho danh sách Landing Page.
+
+### Theo dõi ký gửi của khách hàng
+
+`GET /api/customers/me/consignments` yêu cầu phiên đăng nhập hợp lệ với vai trò Customer và hồ sơ khách hàng đang hoạt động. API chỉ trả hợp đồng của tài khoản hiện tại; không có tham số chọn khách hàng. Không có hợp đồng sẽ trả mảng rỗng. Phiên không hợp lệ trả 401; tài khoản không đủ quyền hoặc hồ sơ không hoạt động trả 403.
+
+Mỗi phần tử là một hợp đồng (một đợt ký gửi), gồm `contractId`, `contractNumber`, `appointmentId`, `signedAt`, `endsAt`, `status`, `expiryHandling`, `products`, `estimatedPayout` và `settledAmount`. Mỗi sản phẩm gồm `id`, `barcode`, `name`, `status`, `listedPrice`, `agreedCommissionRate` và `estimatedPayout`. Trạng thái là tên enum của hệ thống.
+
+Tiền dự kiến là tổng giá niêm yết trừ tỷ lệ hoa hồng đã thỏa thuận của từng sản phẩm, giả định tất cả bán đúng giá; không phải số tiền chắc chắn được trả và không trừ khoản đã quyết toán. Nếu một sản phẩm thiếu tỷ lệ hoa hồng, tiền dự kiến của sản phẩm và tổng hợp đồng là `null`. `settledAmount` là tổng `TotalAmount` của các khoản payout có trạng thái `Completed`; không tính `Pending` hoặc `Transferred`. Các khoản điều chỉnh được phản ánh theo tổng payout đã lưu.
+
+
+### Tệp hợp đồng và chi tiết sản phẩm ký gửi
+
+`GET /api/customers/me/consignments` trả `contractDocument` và `detailAvailable`. Các endpoint `GET /api/customers/me/consignments/{contractId}/document` và `GET /api/customers/me/consignments/{contractId}/products/{productId}` kiểm tra quyền sở hữu. Nhân viên có quyền `appointments.staff.reception` dùng `PUT /api/consignments/{contractId}/document` với multipart `file` và CSRF; tối đa 10 MiB.
+
+### Tìm kiếm hợp đồng của khách hàng
+
+`GET /api/customers/me/consignments/search` nhận `query`, `status` (`Active`, `Completed`, `Cancelled`), `signedFrom`, `signedTo`, `expiresFrom`, `expiresTo` (`YYYY-MM-DD`), `page` (mặc định 1) và `pageSize` (mặc định 5, tối đa 100). Khoảng ngày theo Asia/Ho_Chi_Minh và bao gồm cả hai đầu. Kết quả gồm `items`, `page`, `pageSize`, `totalCount`, `totalPages`, `overview`. Tổng quan tính trên tất cả hợp đồng của khách; tổng và trang tính sau lọc. Dữ liệu không hợp lệ trả 400 Validation Problem Details. Endpoint mảng cũ không thay đổi.

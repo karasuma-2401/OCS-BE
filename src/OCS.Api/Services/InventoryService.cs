@@ -13,6 +13,9 @@ public sealed class InventoryService(AppDbContext db)
     private IQueryable<Product> Products() => db.Products.Include(x => x.Brand).Include(x => x.Category)
         .Include(x => x.StorageLocation).Include(x => x.ConsignmentContract).Include(x => x.Buyout).Include(x => x.Images);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1304", Justification = "EF Core translates ToLower to database LOWER using the database collation.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1311", Justification = "EF Core translates ToLower to database LOWER using the database collation.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1862", Justification = "StringComparison overloads are not translated by EF Core PostgreSQL.")]
     public async Task<Result<PagedResponse<InventoryProductDto>>> ListAsync(InventoryQuery request, CancellationToken ct)
     {
         if (request.Page < 1 || request.PageSize is < 1 or > 100 || (long)(request.Page - 1) * request.PageSize > int.MaxValue)

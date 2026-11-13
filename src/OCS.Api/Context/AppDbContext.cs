@@ -44,6 +44,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ContractTemplate> ContractTemplates => Set<ContractTemplate>();
     public DbSet<WordDocumentTemplate> WordDocumentTemplates => Set<WordDocumentTemplate>();
     public DbSet<ContractTermsRequest> ContractTermsRequests => Set<ContractTermsRequest>();
+    public DbSet<ConsignmentDocument> ConsignmentDocuments => Set<ConsignmentDocument>();
 
     public DbSet<Buyout> Buyouts => Set<Buyout>();
 
@@ -104,6 +105,12 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
                 entry.Property(x => x.EmailVerifiedAt).CurrentValue = null;
             }
         }
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        base.OnConfiguring(optionsBuilder);
+        optionsBuilder.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
