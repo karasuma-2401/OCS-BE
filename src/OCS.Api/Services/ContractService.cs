@@ -27,7 +27,13 @@ public sealed class ContractService(AppDbContext db) : IContractService
         return result.IsSuccess ? Result.Success(result.Data!.Pdf) : Result.Failure<byte[]>(result.Error!);
     }
 
-    private sealed record PreparedContract(ContractResponse Contract, byte[] Pdf);
+    public async Task<Result<byte[]>> PreviewWordAsync(CreateContractRequest request, Guid employeeId, CancellationToken cancellationToken)
+    {
+        var result = await PrepareAsync(request, employeeId, true, cancellationToken);
+        return result.IsSuccess ? Result.Success(result.Data!.Word) : Result.Failure<byte[]>(result.Error!);
+    }
+
+    private sealed record PreparedContract(ContractResponse Contract, byte[] Pdf, byte[] Word);
 
     private async Task<Result<PreparedContract>> PrepareAsync(CreateContractRequest request, Guid employeeId, bool preview, CancellationToken cancellationToken)
     {
@@ -40,10 +46,13 @@ public sealed class ContractService(AppDbContext db) : IContractService
             return Result.Failure<PreparedContract>(ApplicationError.Forbidden("CONTRACT.EMPLOYEE_REQUIRED", "Tài khoản chưa có hồ sơ nhân viên."));
         var employeeAccount = await db.Accounts.AsNoTracking().SingleOrDefaultAsync(x => x.Id == employeeId, cancellationToken);
         var template = await db.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken) ?? new ContractTemplate();
-        if (request.TemplateVersion.HasValue && request.TemplateVersion.Value != template.Version)
+        var wordTemplate = await db.WordDocumentTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Kind == WordTemplateSamples.Contract, cancellationToken);
+        var templateBytes = wordTemplate?.Content ?? WordTemplateSamples.Create(WordTemplateSamples.Contract);
+        var templateVersion = wordTemplate?.Version ?? Guid.Empty;
+        if (request.TemplateVersion.HasValue && request.TemplateVersion.Value != Guid.Empty && templateVersion != Guid.Empty && request.TemplateVersion.Value != templateVersion)
             return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT_TEMPLATE.CHANGED", "Mẫu hợp đồng đã được cập nhật. Hãy tải lại mẫu và kiểm tra điều khoản trước khi tiếp tục."));
-        if (request.Terms?.Length > 6000)
-            return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_TERMS", "Điều khoản không được vượt quá 6000 ký tự."));
+        if (!string.IsNullOrWhiteSpace(request.Terms))
+            return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_TERMS", "Điều khoản được quản lý trong mẫu hợp đồng và không được sửa khi lập hợp đồng."));
 
         Guid? customerId;
         Guid numberId;
@@ -87,6 +96,17 @@ public sealed class ContractService(AppDbContext db) : IContractService
         else
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_CUSTOMER", "Chọn một lịch hẹn hoặc một hồ sơ khách đến trực tiếp."));
 
+        await using var draftTransaction = preview ? null : await ContractDraftLock.AcquireAsync(db, numberId, cancellationToken);
+        var termsRequest = await db.ContractTermsRequests.SingleOrDefaultAsync(x => x.DraftKey == numberId &&
+            (x.Status == "Pending" || x.Status == "Approved"), cancellationToken);
+        if (termsRequest?.Status == "Pending")
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.TERMS_PENDING", "Yêu cầu điều chỉnh điều khoản đang chờ quản lý xử lý."));
+        if (termsRequest?.Status == "Approved" && (request.TermsRequestId != termsRequest.Id || termsRequest.RequestedBy != employeeId) ||
+            request.TermsRequestId.HasValue && (termsRequest is null || request.TermsRequestId != termsRequest.Id))
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.TERMS_CHANGED", "Hãy tải lại yêu cầu điều khoản đã được quản lý xử lý."));
+        if (termsRequest?.Status == "Approved" && termsRequest.ApprovedTemplate is null)
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.TERMS_INVALID", "Mẫu điều khoản riêng không hợp lệ. Hãy liên hệ quản lý."));
+
         if (guest is null && request.SaveCustomer)
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CUSTOMER.INVALID_DATA", "Chỉ lưu hồ sơ mới cho khách vãng lai."));
 
@@ -120,6 +140,9 @@ public sealed class ContractService(AppDbContext db) : IContractService
         else if (request.CustomerDetails is not null)
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CUSTOMER.INVALID_DATA", "Thông tin bổ sung chỉ dùng cho khách đã có hồ sơ."));
 
+        if (termsRequest is not null && termsRequest.CustomerPhone != guest!.PhoneNumber?.Trim())
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.TERMS_CUSTOMER_CHANGED", "Khách hàng đã thay đổi. Hãy hủy yêu cầu điều khoản cũ và gửi yêu cầu mới."));
+
         var bankFields = new[] { guest!.BankCode, guest.BankAccountNumber, guest.BankAccountHolderName };
         if (guest.Email?.Length > 254 || guest.IdentityNumber?.Length > 20 || guest.Address?.Length > 500 ||
             guest.BankCode?.Length > 50 || guest.BankAccountNumber?.Length > 50 || guest.BankAccountHolderName?.Length > 200 ||
@@ -137,6 +160,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
             if (signatureBytes.Length > 512 * 1024 || !ContractPdfRenderer.IsValidSignature(signatureBytes, signature.ContentType))
                 return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_SIGNATURE", "Ảnh chữ ký không hợp lệ hoặc vượt quá giới hạn."));
         }
+        if (!preview && termsRequest?.Status == "Approved" && signatureBytes is null)
+            return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.SIGNATURE_REQUIRED", "Khách cần ký lại sau khi điều khoản riêng được duyệt."));
 
         if (request.Products is null || request.Products.Count > 100 || request.Products.Any(x => x is null))
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_PRODUCTS", "Danh sách sản phẩm không hợp lệ."));
@@ -145,8 +170,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
         var locationIds = request.Products.Where(x => x.StorageLocationId.HasValue).Select(x => x.StorageLocationId!.Value).Distinct().ToArray();
         var brands = await db.Brands.Where(x => x.IsActive && brandIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
         var categories = await db.Categories.Where(x => x.IsActive && categoryIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
-        var locations = await db.StorageLocations.CountAsync(x => x.IsActive && locationIds.Contains(x.Id), cancellationToken);
-        if (brands.Count != brandIds.Length || categories.Count != categoryIds.Length || locations != locationIds.Length || request.Products.Any(x =>
+        var locations = await db.StorageLocations.Where(x => x.IsActive && locationIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, cancellationToken);
+        if (brands.Count != brandIds.Length || categories.Count != categoryIds.Length || locations.Count != locationIds.Length || request.Products.Any(x =>
             string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 200 || string.IsNullOrWhiteSpace(x.Size) || x.Size.Length > 30 ||
             x.ConditionPercentage is < 0 or > 100 || x.ListedPrice < 0 || x.ListedPrice > 9999999999999999m || decimal.Round(x.ListedPrice, 2) != x.ListedPrice ||
             x.AgreedCommissionRate is null or < 0 or > 100 || decimal.Round(x.AgreedCommissionRate.Value, 2) != x.AgreedCommissionRate.Value ||
@@ -274,12 +299,32 @@ public sealed class ContractService(AppDbContext db) : IContractService
             }
             if (!preview) db.Products.Add(product);
         }
-        var terms = (request.Terms ?? template.DefaultTerms).Trim();
-        var pdf = ContractPdfRenderer.Render(contract, employeeAccount?.FullName ?? "", employee.JobTitle, employeeAccount?.PhoneNumber ?? "", pdfProducts, terms, signatureBytes, preview, template);
-        if (preview) return Result.Success(new PreparedContract(Map(contract), pdf));
+        var productRows = pdfProducts.Select((item, index) => WordTemplateData.Product(item.Product, item.Brand, item.Category,
+            item.Product.StorageLocationId is Guid locationId && locations.TryGetValue(locationId, out var location) ? location.Name : null, index + 1)).ToArray();
+        var storeAddress = await db.SystemParameters.AsNoTracking().Where(x => x.Key == "store.address").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
+        var values = WordTemplateData.Contract(contract, template, employeeAccount?.FullName ?? "", employee.JobTitle,
+            employeeAccount?.PhoneNumber ?? "", null, pdfProducts.Select(item => item.Product).ToArray(), preview, storeAddress);
+        var images = signatureBytes is null ? null : new Dictionary<string, byte[]> { ["customer.signature"] = signatureBytes };
+        var effectiveTemplate = termsRequest?.ApprovedTemplate ?? templateBytes;
+        var terms = ExtractTermsFromWord(effectiveTemplate);
+        if (string.IsNullOrWhiteSpace(terms)) terms = string.IsNullOrWhiteSpace(template.DefaultTerms) ? null : template.DefaultTerms;
+        var word = WordTemplateFiller.Fill(effectiveTemplate, WordTemplateSamples.Contract, values, productRows, images);
+        var pdf = ContractPdfRenderer.Render(contract, employeeAccount?.FullName ?? "", employee.JobTitle,
+            employeeAccount?.PhoneNumber ?? "", pdfProducts, terms, signatureBytes, preview, template);
+        if (preview) return Result.Success(new PreparedContract(Map(contract), pdf, word));
         db.ConsignmentContracts.Add(contract);
-        db.ContractDocuments.Add(new ContractDocument { ContractId = contract.Id, Content = pdf, Terms = terms, TemplateVersion = template.Version.ToString("N"), SignatureContent = signatureBytes, SignatureContentType = request.Signature?.ContentType });
+        db.ContractDocuments.Add(new ContractDocument
+        {
+            ContractId = contract.Id,
+            Content = pdf,
+            Terms = terms,
+            TemplateVersion = termsRequest is null ? templateVersion.ToString("N") : "terms-" + termsRequest.Id.ToString("N"),
+            SignatureContent = signatureBytes,
+            SignatureContentType = request.Signature?.ContentType
+        });
+        if (termsRequest is not null) { termsRequest.Status = "Used"; termsRequest.Version = Guid.NewGuid(); }
         try { await db.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.TERMS_CHANGED", "Yêu cầu điều khoản đã thay đổi. Hãy tải lại.")); }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_ConsignmentContracts_ContractNumber" })
         {
             return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.ALREADY_EXISTS", "Yêu cầu này đã tạo hợp đồng. Vui lòng kiểm tra lại trước khi thử tiếp."));
@@ -292,7 +337,40 @@ public sealed class ContractService(AppDbContext db) : IContractService
         {
             return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.DUPLICATE_DATA", "Mã sản phẩm hoặc thông tin hồ sơ đã tồn tại. Vui lòng kiểm tra lại."));
         }
-        return Result.Success(new PreparedContract(Map(contract), pdf));
+        if (draftTransaction is not null) await draftTransaction.CommitAsync(cancellationToken);
+        return Result.Success(new PreparedContract(Map(contract), pdf, word));
+    }
+
+    private static string? ExtractTermsFromWord(byte[] docxBytes)
+    {
+        try
+        {
+            using var stream = new MemoryStream(docxBytes);
+            using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(stream, false);
+            var body = doc.MainDocumentPart?.Document.Body;
+            if (body is null) return null;
+            var paragraphs = body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>().ToList();
+            var startIndex = paragraphs.FindIndex(p => p.InnerText.Contains("ĐIỀU KHOẢN", StringComparison.OrdinalIgnoreCase));
+            if (startIndex == -1) return null;
+            var lines = new List<string>();
+            for (var i = startIndex + 1; i < paragraphs.Count; i++)
+            {
+                var p = paragraphs[i];
+                var text = p.InnerText.Trim();
+                if (p.InnerText.Contains("CHỮ KÝ KHÁCH HÀNG", StringComparison.OrdinalIgnoreCase) ||
+                    p.InnerText.Contains("[Chữ ký khách hàng]", StringComparison.OrdinalIgnoreCase))
+                    break;
+                if (!string.IsNullOrEmpty(text) && !text.StartsWith("[", StringComparison.Ordinal) &&
+                    !text.Contains(WordTemplateSamples.TermsInstruction, StringComparison.Ordinal))
+                    lines.Add(text);
+            }
+            var result = string.Join("\n", lines);
+            return string.IsNullOrWhiteSpace(result) ? null : result;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public async Task<string> GenerateBarcodeAsync(CancellationToken cancellationToken)

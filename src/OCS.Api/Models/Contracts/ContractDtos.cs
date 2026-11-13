@@ -17,6 +17,7 @@ public sealed record CreateContractRequest
     [Required, MaxLength(20)] public string ExpiryHandling { get; init; } = string.Empty;
     [MaxLength(6000)] public string? Terms { get; init; }
     public Guid? TemplateVersion { get; init; }
+    public Guid? TermsRequestId { get; init; }
     public ContractImageRequest? Signature { get; init; }
 }
 

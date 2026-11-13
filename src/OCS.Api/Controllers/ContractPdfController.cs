@@ -22,7 +22,21 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
              !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
         var content = await contracts.GetPdfAsync(id, cancellationToken);
-        return content is null ? NotFound() : File(content, "application/pdf");
+        return content is null || !content.AsSpan().StartsWith("%PDF"u8) ? NotFound() : File(content, "application/pdf");
+    }
+
+    /// <summary>Lấy tài liệu Word mới hoặc PDF lịch sử của hợp đồng.</summary>
+    [HttpGet("{id:guid}/document")]
+    public async Task<IActionResult> Document(Guid id, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
+            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
+             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        var content = await contracts.GetPdfAsync(id, cancellationToken);
+        if (content is null) return NotFound();
+        if (content.AsSpan().StartsWith("%PDF"u8)) return File(content, "application/pdf");
+        if (content.AsSpan().StartsWith("PK"u8)) return File(content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        return NotFound();
     }
 
     /// <summary>Lấy sản phẩm của hợp đồng để xem trước và in nhãn.</summary>

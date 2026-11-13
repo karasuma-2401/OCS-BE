@@ -6,6 +6,9 @@ using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Contracts;
 using OCS.Api.Models.Products;
+using OCS.Api.Context;
+using OCS.Api.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace OCS.Api.Controllers;
 
@@ -36,25 +39,47 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
         return result.IsSuccess ? CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result.Data) : result.ToActionResult(this);
     }
 
-    /// <summary>Xem trước PDF từ thông tin đang nhập, không tạo hợp đồng hoặc hồ sơ khách.</summary>
+    /// <summary>Xem trước hợp đồng dưới dạng PDF từ thông tin đang nhập, không tạo hợp đồng hoặc hồ sơ khách.</summary>
     [HttpPost("preview")]
     [RequestSizeLimit(12_000_000)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "application/pdf")]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Preview(CreateContractRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Preview([FromBody] CreateContractRequest request, [FromQuery] string? format = null, CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var employeeId)) return Unauthorized();
         if (!(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
         if (request.Products?.Count > 0 && !(await authorization.AuthorizeAsync(User, PermissionCatalog.ProductsCreate)).Succeeded) return Forbid();
+        if (string.Equals(format, "word", StringComparison.OrdinalIgnoreCase))
+        {
+            var wordResult = await contracts.PreviewWordAsync(request, employeeId, cancellationToken);
+            return wordResult.IsSuccess ? File(wordResult.Data!, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "hop-dong-xem-truoc.docx") : wordResult.ToActionResult(this);
+        }
         var result = await contracts.PreviewAsync(request, employeeId, cancellationToken);
-        return result.IsSuccess ? File(result.Data!, "application/pdf") : result.ToActionResult(this);
+        return result.IsSuccess ? File(result.Data!, "application/pdf", "hop-dong-xem-truoc.pdf") : result.ToActionResult(this);
+    }
+
+    /// <summary>Xem trước hợp đồng dưới dạng tệp Word từ thông tin đang nhập.</summary>
+    [HttpPost("preview-word")]
+    [RequestSizeLimit(12_000_000)]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")]
+    public async Task<IActionResult> PreviewWord([FromBody] CreateContractRequest request, CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var employeeId)) return Unauthorized();
+        if (!(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
+        if (request.Products?.Count > 0 && !(await authorization.AuthorizeAsync(User, PermissionCatalog.ProductsCreate)).Succeeded) return Forbid();
+        var result = await contracts.PreviewWordAsync(request, employeeId, cancellationToken);
+        return result.IsSuccess ? File(result.Data!, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "hop-dong-xem-truoc.docx") : result.ToActionResult(this);
     }
 
     /// <summary>Lấy mẫu và điều khoản mặc định để lập hợp đồng.</summary>
     [HttpGet("template")]
-    public async Task<ActionResult<ContractTemplateResponse>> Template([FromServices] IContractTemplateService templates, CancellationToken cancellationToken) =>
-        Ok((await templates.GetAsync(cancellationToken)) with { PdfBase64 = null, FieldMappings = [] });
+    public async Task<ActionResult<ContractTemplateResponse>> Template([FromServices] IContractTemplateService templates, [FromServices] AppDbContext db, CancellationToken cancellationToken)
+    {
+        var version = await db.WordDocumentTemplates.AsNoTracking().Where(x => x.Kind == WordTemplateSamples.Contract)
+            .Select(x => (Guid?)x.Version).SingleOrDefaultAsync(cancellationToken);
+        return Ok((await templates.GetAsync(cancellationToken)) with { Version = version ?? Guid.Empty, DefaultTerms = "", PdfBase64 = null, FieldMappings = [] });
+    }
 
     /// <summary>Tra cứu hồ sơ khách theo số điện thoại chính xác.</summary>
     [HttpGet("customers/by-phone")]

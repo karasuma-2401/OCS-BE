@@ -42,6 +42,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
     public DbSet<ContractTemplate> ContractTemplates => Set<ContractTemplate>();
+    public DbSet<WordDocumentTemplate> WordDocumentTemplates => Set<WordDocumentTemplate>();
+    public DbSet<ContractTermsRequest> ContractTermsRequests => Set<ContractTermsRequest>();
 
     public DbSet<Buyout> Buyouts => Set<Buyout>();
 

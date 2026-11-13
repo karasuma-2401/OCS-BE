@@ -700,6 +700,62 @@ namespace OCS.Api.Context.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.ContractTermsRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("ApprovedTemplate")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerPhone")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("DraftKey")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftKey")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('Pending', 'Approved')");
+
+                    b.ToTable("ContractTermsRequests");
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.CustomerProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2221,6 +2277,31 @@ namespace OCS.Api.Context.Migrations
                     b.HasKey("Key");
 
                     b.ToTable("SystemParameters", (string)null);
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.WordDocumentTemplate", b =>
+                {
+                    b.Property<string>("Kind")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Kind");
+
+                    b.ToTable("WordDocumentTemplates");
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.Account", b =>

@@ -1,0 +1,20 @@
+@baseUrl = http://localhost:5000
+
+### Tải mẫu Word hợp đồng (yêu cầu phiên quản lý/admin)
+GET {{baseUrl}}/api/word-template-samples/contract
+
+### Tải mẫu Word phiếu sản phẩm (yêu cầu phiên quản lý/admin)
+GET {{baseUrl}}/api/word-template-samples/product
+
+### Kiểm tra mẫu đã chỉnh: gửi multipart/form-data với trường file chứa .docx
+POST {{baseUrl}}/api/word-template-samples/contract/validate
+Content-Type: multipart/form-data; boundary=word-template-boundary
+
+--word-template-boundary
+Content-Disposition: form-data; name="file"; filename="mau-hop-dong.docx"
+Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+
+< ./mau-hop-dong.docx
+--word-template-boundary--
+
+### Kiểm tra mẫu sản phẩm: thay contract bằng product ở URL trên.

@@ -34,9 +34,17 @@ public static class ContractPdfRenderer
 
     private static readonly object FontLock = new();
 
+    public static void EnsureFontResolver()
+    {
+        lock (FontLock)
+        {
+            GlobalFontSettings.FontResolver ??= new FontResolver();
+        }
+    }
+
     public static byte[] CreateSampleBackground()
     {
-        lock (FontLock) { GlobalFontSettings.FontResolver ??= new FontResolver(); }
+        EnsureFontResolver();
         using var pdf = new PdfDocument();
         var page = pdf.AddPage();
         using (var graphics = XGraphics.FromPdfPage(page))
@@ -80,10 +88,7 @@ public static class ContractPdfRenderer
     public static byte[] Render(ConsignmentContract contract, string employeeName, string employeeTitle, string employeePhone,
         IReadOnlyList<(Product Product, string Brand, string Category)> products, string? terms, byte[]? signature, bool preview = false, ContractTemplate? template = null)
     {
-        lock (FontLock)
-        {
-            GlobalFontSettings.FontResolver ??= new FontResolver();
-        }
+        EnsureFontResolver();
         if (template?.PdfBackground is not null)
             return RenderCustom(contract, employeeName, employeeTitle, employeePhone, products, terms, signature, preview, template);
         using var pdf = new PdfDocument();

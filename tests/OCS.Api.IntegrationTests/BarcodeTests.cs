@@ -17,6 +17,7 @@ public sealed class BarcodeTests
     public async Task DraftBarcodeIsCheckedAndPreservedWhenContractIsCreated()
     {
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 20 };
         var category = new Category { Name = "Áo" };

@@ -43,6 +43,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 20 };
         var category = new Category { Name = "Áo" };
@@ -62,9 +63,11 @@ public sealed class ContractServiceTests
         var service = new ContractService(db);
         var preview = await service.PreviewAsync(request, employee.Id, default);
         Assert.True(preview.IsSuccess, preview.Error?.Message);
-        Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(preview.Data!, 0, 5));
-        using (var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(preview.Data!), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
-            Assert.True(document.PageCount > 0);
+        Assert.True(preview.Data!.AsSpan().StartsWith("%PDF"u8));
+        var previewWord = await service.PreviewWordAsync(request, employee.Id, default);
+        Assert.True(previewWord.IsSuccess, previewWord.Error?.Message);
+        using (var document = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(new MemoryStream(previewWord.Data!), false))
+            Assert.Contains("Khách xem trước", document.MainDocumentPart!.Document.Body!.InnerText);
         Assert.DoesNotContain(db.ChangeTracker.Entries(), x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
         Assert.Empty(db.CustomerProfiles);
         Assert.Empty(db.ConsignmentContracts);
@@ -83,6 +86,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         db.EmployeeProfiles.Add(employee);
         await db.SaveChangesAsync();
@@ -94,10 +98,26 @@ public sealed class ContractServiceTests
     }
 
     [Fact]
+    public async Task EmployeeCannotOverrideTermsBySendingApiPayload()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options);
+        var employee = new EmployeeProfile { Id = Guid.NewGuid() };
+        db.AddRange(employee, new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync();
+        var now = DateTimeOffset.UtcNow;
+        var request = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(1), ExpiryHandling = "Return", Terms = "Thay đổi điều khoản", Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" } };
+        var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
+        Assert.Equal("CONTRACT.INVALID_TERMS", result.Error!.Code);
+        Assert.Empty(db.ContractDocuments);
+    }
+
+    [Fact]
     public async Task ChangingEmailRevokesSessionsAndRequiresReactivation()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var account = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, FullName = "Khách", PhoneNumber = "0901234567", Email = "old@example.com", EmailVerifiedAt = DateTimeOffset.UtcNow };
         var profile = new CustomerProfile { Id = account.Id, Account = account };
         var session = new AuthSession { AccountId = account.Id, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
@@ -115,6 +135,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var account = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, FullName = "Khách", PhoneNumber = "0901234567" };
         var profile = new CustomerProfile { Id = account.Id, Account = account, BankCode = "VCB", BankAccountNumber = "123", BankAccountHolderName = "Khách" };
         var contract = new ConsignmentContract { CustomerId = account.Id, SignedAt = DateTimeOffset.UtcNow, EndsAt = DateTimeOffset.UtcNow.AddDays(1) };
@@ -131,6 +152,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var account = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, FullName = "Tên gốc", PhoneNumber = "0901234567" };
         var profile = new CustomerProfile { Id = account.Id, Account = account };
         db.CustomerProfiles.Add(profile);
@@ -152,6 +174,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var account = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, FullName = "Khách trực tiếp", PhoneNumber = "0901234567" };
         var customer = new CustomerProfile { Id = account.Id, Account = account, Status = CustomerStatus.Active };
@@ -180,6 +203,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var customerAccount = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, FullName = "Khách", PhoneNumber = "0901234568" };
         var customerProfile = new CustomerProfile { Id = customerAccount.Id, Account = customerAccount };
@@ -211,6 +235,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 20 };
         var category = new Category { Name = "Áo" };
@@ -224,7 +249,6 @@ public sealed class ContractServiceTests
             EndsAt = now.AddDays(30),
             ExpiryHandling = "Return",
             SaveCustomer = saveCustomer,
-            Terms = "Nội dung do nhân viên nhập",
             Guest = new ContractGuestRequest { FullName = "Khách vãng lai", PhoneNumber = "0901234567", Address = "Địa chỉ", BankCode = "VCB", BankAccountNumber = "123456", BankAccountHolderName = "Khách" },
             Products = [new ContractProductRequest { Name = "Áo", Size = "M", ConditionPercentage = 90, ListedPrice = 100000, AgreedCommissionRate = 15.25m, BrandId = brand.Id, CategoryId = category.Id,
                 Images = [new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }, new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }] }]
@@ -243,8 +267,8 @@ public sealed class ContractServiceTests
         Assert.Equal(15.25m, product.AgreedCommissionRate);
         var document = await db.ContractDocuments.SingleAsync();
         Assert.Equal(contract.Id, document.ContractId);
-        Assert.Equal(request.Terms, document.Terms);
-        Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(document.Content, 0, 5));
+        Assert.Null(document.Terms);
+        Assert.True(document.Content.AsSpan().StartsWith("%PDF"u8));
         Assert.Equal(document.Content, await new ContractService(db).GetPdfAsync(contract.Id, default));
         Assert.Equal(ProductStatus.PendingProcessing, product.Status);
         var images = await db.ProductImages.OrderBy(x => x.SortOrder).ToListAsync();
@@ -272,6 +296,7 @@ public sealed class ContractServiceTests
         decimal? commission = value is null ? null : decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 20 };
         var category = new Category { Name = "Áo" };
@@ -298,6 +323,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid(), JobTitle = "Nhân viên" };
         var account = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, FullName = "Khách gốc", PhoneNumber = "0901234567" };
         var profile = new CustomerProfile { Id = account.Id, Account = account, Address = "Địa chỉ gốc" };
@@ -313,8 +339,7 @@ public sealed class ContractServiceTests
             EndsAt = now.AddDays(30),
             ExpiryHandling = "Return",
             CustomerDetails = new ContractCustomerDetailsRequest { Address = "Địa chỉ chỉ trên hợp đồng", BankCode = "VCB", BankAccountNumber = "123456", BankAccountHolderName = "Khách" },
-            Signature = signature,
-            Terms = string.Join('\n', Enumerable.Repeat("Điều khoản dự thảo có tiếng Việt.", 90))
+            Signature = signature
         };
         var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
         Assert.True(result.IsSuccess, result.Error?.Message);
@@ -325,9 +350,10 @@ public sealed class ContractServiceTests
         Assert.Equal("Địa chỉ gốc", profile.Address);
         var document = await db.ContractDocuments.SingleAsync();
         Assert.Equal(Convert.FromBase64String(signature.Data), document.SignatureContent);
+        Assert.True(document.Content.AsSpan().StartsWith("%PDF"u8));
         using var input = new MemoryStream(document.Content);
         using var pdf = PdfSharp.Pdf.IO.PdfReader.Open(input, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
-        Assert.True(pdf.PageCount > 1);
+        Assert.True(pdf.PageCount > 0);
     }
 
     [Fact]
@@ -335,6 +361,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         db.EmployeeProfiles.Add(employee);
         await db.SaveChangesAsync();
@@ -359,6 +386,7 @@ public sealed class ContractServiceTests
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
+        db.WordDocumentTemplates.Add(new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = Guid.Empty, UpdatedAt = DateTimeOffset.UtcNow });
         var employee = new EmployeeProfile { Id = Guid.NewGuid() };
         var appointment = new Appointment { CustomerId = Guid.NewGuid(), Status = AppointmentStatus.Scheduled };
         db.AddRange(employee, appointment);
