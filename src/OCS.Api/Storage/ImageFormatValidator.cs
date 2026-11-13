@@ -480,7 +480,7 @@ public static class ImageFormatValidator
 
         stream.Position = 4;
         var buf4 = new byte[4];
-        stream.Read(buf4, 0, 4);
+        stream.ReadExactly(buf4, 0, 4);
         var riffSize = (long)BitConverter.ToUInt32(buf4, 0);
 
         if (riffSize + 8 > streamLength + 2)

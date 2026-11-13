@@ -18,6 +18,13 @@ public sealed class AppointmentService(
     AppDbContext dbContext,
     ILogger<AppointmentService> logger) : IAppointmentService
 {
+    public AppointmentService(
+        IUnitOfWork unitOfWork,
+        INotificationService notificationService)
+        : this(unitOfWork, notificationService, null!, Microsoft.Extensions.Logging.Abstractions.NullLogger<AppointmentService>.Instance)
+    {
+    }
+
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SlotLocks = new();
 
     public async Task<Result<IReadOnlyList<TimeSlotDto>>> GetAvailableSlotsAsync(
@@ -377,6 +384,8 @@ public sealed class AppointmentService(
         Func<string, string> contentFactory,
         CancellationToken cancellationToken)
     {
+        if (dbContext is null) return;
+
         try
         {
             var customerAccount = await dbContext.Accounts
