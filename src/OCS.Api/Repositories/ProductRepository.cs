@@ -112,7 +112,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
                     p.Brand.Name
                 },
                 CoverImageUrl = p.Images
-                    .Where(img => img.ImageType == ProductImageType.Cover)
+                    .Where(img => img.ImageType == ProductImageType.Cover && !img.Url.StartsWith("r2://"))
                     .OrderBy(img => img.SortOrder)
                     .ThenBy(img => img.Id)
                     .Select(img => img.Url)
@@ -166,7 +166,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
                     p.Brand.Name
                 },
                 Images = p.Images
-                    .Where(img => img.ImageType == ProductImageType.Cover || img.ImageType == ProductImageType.Detail)
+                    .Where(img => (img.ImageType == ProductImageType.Cover || img.ImageType == ProductImageType.Detail) && !img.Url.StartsWith("r2://"))
                     .OrderBy(img => img.SortOrder)
                     .ThenBy(img => img.Id)
                     .Select(img => new

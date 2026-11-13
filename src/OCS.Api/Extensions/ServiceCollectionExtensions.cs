@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Text.Json;
 using System.Net;
@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAppointmentService, AppointmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
         services.AddScoped<CustomerConsignmentService>();
+        services.AddScoped<PrivateProductImageStore>();
         services.AddScoped<IPaymentGatewayAdapter, VietQrQuickLinkAdapter>();
         services.AddScoped<IVietQrPaymentService, VietQrPaymentService>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
