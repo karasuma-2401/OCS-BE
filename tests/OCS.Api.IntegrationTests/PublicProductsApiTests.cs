@@ -694,8 +694,19 @@ public sealed class PublicProductsApiTests
         var brandsCountFirst = await db.Brands.CountAsync();
         Assert.True(brandsCountFirst >= 4);
 
-        // Run seed second time (must be idempotent: no exceptions, no duplicate entries)
+        var configuredSlot = await db.AppointmentTimeSlots.SingleAsync(slot => slot.Id == Guid.Parse("11111111-0000-0000-0000-000000000001"));
+        configuredSlot.MaxCustomers = 7;
+        configuredSlot.IsActive = false;
+        var extraSlot = new AppointmentTimeSlot { StartTime = new TimeOnly(13, 0), EndTime = new TimeOnly(14, 0), MaxCustomers = 4, IsActive = true };
+        db.AppointmentTimeSlots.Add(extraSlot);
+        await db.SaveChangesAsync();
+
+        // Run seed second time (must be idempotent and preserve manager settings).
         await seeder.SeedAsync();
+
+        Assert.Equal(7, configuredSlot.MaxCustomers);
+        Assert.False(configuredSlot.IsActive);
+        Assert.True(extraSlot.IsActive);
 
         var onSaleCountSecond = await db.Products.CountAsync(p => p.Status == ProductStatus.OnSale);
         Assert.Equal(onSaleCountFirst, onSaleCountSecond);

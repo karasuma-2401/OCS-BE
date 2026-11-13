@@ -2,12 +2,15 @@ using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -17,6 +20,7 @@ using OCS.Api.Configuration;
 using OCS.Api.Consts;
 using OCS.Api.Controllers;
 using OCS.Api.Entities;
+using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Repositories;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Middleware;
@@ -469,6 +473,59 @@ public sealed class SessionValidationTests : IDisposable
         });
     }
 
+    [Fact]
+    public async Task JwtSessionLookupStopsWhenRequestIsAborted()
+    {
+        var started = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _authRepository.SessionLookup = async (_, token) =>
+        {
+            started.SetResult(token);
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return null;
+        };
+        using var requestCancellation = new CancellationTokenSource();
+        await using var provider = CreateJwtEventServices();
+        var context = CreateTokenValidatedContext(provider, requestCancellation.Token);
+        var validation = context.Options.Events.OnTokenValidated(context);
+        Assert.Equal(requestCancellation.Token, await started.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        requestCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => validation);
+        Assert.Null(context.Result);
+    }
+
+    [Fact]
+    public async Task JwtSessionLookupDoesNotHideUnexpectedDatabaseErrors()
+    {
+        _authRepository.SessionLookup = (_, _) => Task.FromException<AuthSession?>(new InvalidOperationException("database unavailable"));
+        await using var provider = CreateJwtEventServices();
+        var context = CreateTokenValidatedContext(provider, CancellationToken.None);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => context.Options.Events.OnTokenValidated(context));
+        Assert.Equal("database unavailable", exception.Message);
+        Assert.False(context.HttpContext.RequestAborted.IsCancellationRequested);
+        Assert.Null(context.Result);
+    }
+
+    private ServiceProvider CreateJwtEventServices()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IUnitOfWork>(_unitOfWork);
+        services.AddSingleton<TimeProvider>(_timeProvider);
+        services.AddJwtAuthentication(_configuration);
+        return services.BuildServiceProvider();
+    }
+
+    private static TokenValidatedContext CreateTokenValidatedContext(ServiceProvider provider, CancellationToken token)
+    {
+        var options = provider.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>().Get(JwtBearerDefaults.AuthenticationScheme);
+        var http = new DefaultHttpContext { RequestServices = provider, RequestAborted = token };
+        var scheme = new AuthenticationScheme(JwtBearerDefaults.AuthenticationScheme, null, typeof(JwtBearerHandler));
+        return new TokenValidatedContext(http, scheme, options)
+        {
+            Principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim("sid", Guid.NewGuid().ToString())], "test"))
+        };
+    }
+
     private sealed class TestAntiforgery : IAntiforgery
     {
         public AntiforgeryTokenSet GetAndStoreTokens(HttpContext httpContext)
@@ -521,6 +578,7 @@ public sealed class SessionValidationTests : IDisposable
 
     private sealed class TestAuthRepository : IAuthRepository
     {
+        public Func<Guid, CancellationToken, Task<AuthSession?>>? SessionLookup { get; set; }
         public Task<PagedResponse<Account>> GetPagedAccountsAsync(
             PagedRequest paging, string? search, AccountType? accountType, AccountStatus? status, bool staffOnly, Guid? roleId,
             CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -587,7 +645,7 @@ public sealed class SessionValidationTests : IDisposable
         public void AddOtpChallenge(OtpChallenge challenge) => Challenges.Add(challenge);
 
         public Task<AuthSession?> GetSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken = default)
-            => Task.FromResult(Sessions.FirstOrDefault(s => s.Id == sessionId));
+            => SessionLookup is null ? Task.FromResult(Sessions.FirstOrDefault(s => s.Id == sessionId)) : SessionLookup(sessionId, cancellationToken);
 
         public void AddSession(AuthSession session) => Sessions.Add(session);
     }
