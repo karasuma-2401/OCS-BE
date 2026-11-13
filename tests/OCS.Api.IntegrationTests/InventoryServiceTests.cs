@@ -74,6 +74,35 @@ public sealed class InventoryServiceTests
     }
 
     [Fact]
+    public async Task ActiveProductDetailsCanBeEditedWithVersionAndAuditButSoldProductCannot()
+    {
+        var (db, product, service) = await SetupConsignment();
+        await using (db)
+        {
+            var actor = Guid.NewGuid();
+            var approved = await service.ReviewAsync(product.Id, actor, new(product.InventoryVersion, true, null, 150000, "Hợp đồng 01"), default);
+            Assert.True(approved.IsSuccess);
+            var offered = await service.OfferAsync(product.Id, actor, new(approved.Data!.Version), default);
+            Assert.True(offered.IsSuccess);
+            var outdated = await service.ChangeInfoAsync(product.Id, actor, new(approved.Data.Version, "Tên cũ", "M", null, 90), default);
+            Assert.False(outdated.IsSuccess);
+            var updated = await service.ChangeInfoAsync(product.Id, actor, new(offered.Data!.Version, "Áo mới", "L", "Tình trạng tốt", 90), default);
+            Assert.True(updated.IsSuccess);
+            Assert.Equal("Áo mới", updated.Data!.Name);
+            Assert.Equal("OnSale", updated.Data.Status);
+            Assert.Equal(150000, updated.Data.ListedPrice);
+            Assert.NotEqual(offered.Data.Version, updated.Data.Version);
+            Assert.Contains(await db.InventoryEvents.ToListAsync(), entry => entry.Action == "Details" && entry.ActorAccountId == actor);
+            var tracked = await db.Products.SingleAsync(x => x.Id == product.Id);
+            tracked.Status = ProductStatus.Sold;
+            await db.SaveChangesAsync();
+            var denied = await service.ChangeInfoAsync(product.Id, actor, new(updated.Data.Version, "Không được sửa", "L", null, 90), default);
+            Assert.False(denied.IsSuccess);
+            Assert.Equal("Áo mới", tracked.Name);
+        }
+    }
+
+    [Fact]
     public async Task RejectionIsNotSupportedAndLegacyRejectedProductsCanBeResubmitted()
     {
         var (db, product, service) = await SetupConsignment();
