@@ -1,0 +1,27 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using OCS.Api.Authorization;
+using OCS.Api.Interfaces.Services;
+
+namespace OCS.Api.Controllers;
+
+/// <summary>Xem tài liệu hợp đồng của quản lý hoặc nhân viên tiếp nhận.</summary>
+[ApiController]
+[Route("api/contracts")]
+[Authorize(Roles = "Admin,Manager,Staff")]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class ContractPdfController(IContractService contracts, IAuthorizationService authorization) : ControllerBase
+{
+    /// <summary>Lấy PDF đã lưu.</summary>
+    [HttpGet("{id:guid}/pdf")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "application/pdf")]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Pdf(Guid id, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
+            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
+             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        var content = await contracts.GetPdfAsync(id, cancellationToken);
+        return content is null ? NotFound() : File(content, "application/pdf");
+    }
+}

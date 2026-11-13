@@ -111,12 +111,13 @@ public sealed class AppointmentsController(IAppointmentService appointmentServic
     [Authorize(Policy = PermissionCatalog.AppointmentsStaffRead)]
     public async Task<IActionResult> GetAppointments(
         [FromQuery] DateOnly? date,
+        [FromQuery] DateOnly? fromDate,
         [FromQuery] Guid? timeSlotId,
         [FromQuery] AppointmentStatus? status,
         [FromQuery] string? search,
         CancellationToken cancellationToken)
     {
-        var result = await appointmentService.GetStaffAppointmentsAsync(date, timeSlotId, status, search, cancellationToken);
+        var result = await appointmentService.GetStaffAppointmentsAsync(date, timeSlotId, status, search, fromDate, cancellationToken);
         return result.ToActionResult();
     }
 

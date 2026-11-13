@@ -16,11 +16,14 @@ public interface IAppointmentRepository
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
+        DateOnly? fromDate,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AppointmentTimeSlot>> GetActiveTimeSlotsAsync(CancellationToken cancellationToken = default);
 
     Task<AppointmentTimeSlot?> GetTimeSlotByIdAsync(Guid timeSlotId, CancellationToken cancellationToken = default);
+
+    Task<AppointmentTimeSlot?> GetTimeSlotForUpdateAsync(Guid timeSlotId, CancellationToken cancellationToken = default);
 
     Task<int> GetBookedCountAsync(DateOnly date, Guid timeSlotId, CancellationToken cancellationToken = default);
 

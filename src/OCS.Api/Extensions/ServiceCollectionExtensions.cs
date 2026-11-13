@@ -147,6 +147,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<InventoryService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
+        services.AddScoped<IManagedTimeSlotService, ManagedTimeSlotService>();
+        services.AddScoped<IContractService, ContractService>();
+        services.AddScoped<IContractTemplateService, ContractTemplateService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
         services.AddScoped<IPaymentGatewayAdapter, VietQrQuickLinkAdapter>();
         services.AddScoped<IVietQrPaymentService, VietQrPaymentService>();

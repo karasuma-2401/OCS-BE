@@ -9,6 +9,10 @@ public sealed class ProductImage : BaseEntity
 
     public string Url { get; set; } = string.Empty;
 
+    public byte[]? Content { get; set; }
+
+    public string? ContentType { get; set; }
+
     public ProductImageType ImageType { get; set; } = ProductImageType.Detail;
 
     public int SortOrder { get; set; }

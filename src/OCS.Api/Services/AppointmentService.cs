@@ -76,28 +76,30 @@ public sealed class AppointmentService(
                 ApplicationError.Validation("INVALID_ITEM_COUNT", "Số lượng quần áo dự kiến phải từ 1 đến 50 món."));
         }
 
-        var slot = await unitOfWork.AppointmentRepository.GetTimeSlotByIdAsync(request.TimeSlotId, cancellationToken);
-        if (slot is null || !slot.IsActive)
-        {
-            return Result.Failure<AppointmentDto>(
-                ApplicationError.NotFound("TIME_SLOT_NOT_FOUND", "Khung giờ hẹn không tồn tại hoặc đã ngừng áp dụng."));
-        }
-
-        if (request.AppointmentDate == today && slot.StartTime <= GetCurrentVietnamTime())
-        {
-            return Result.Failure<AppointmentDto>(
-                ApplicationError.Validation("SLOT_EXPIRED", "Khung giờ này trong ngày hôm nay đã qua, vui lòng chọn khung giờ khác."));
-        }
-
         // Concurrency Lock per Date + TimeSlot to prevent race conditions when multiple customers book simultaneously
         var lockKey = $"{request.AppointmentDate:yyyy-MM-dd}_{request.TimeSlotId}";
         var slotLock = SlotLocks.GetOrAdd(lockKey, _ => new SemaphoreSlim(1, 1));
 
         await slotLock.WaitAsync(cancellationToken);
         Appointment created;
+        AppointmentTimeSlot? slot;
         try
         {
             await unitOfWork.BeginTransactionAsync(cancellationToken);
+
+            // Lock the slot row as well as the date-specific lock: management and
+            // bookings from other application instances must see the same capacity.
+            slot = await unitOfWork.AppointmentRepository.GetTimeSlotForUpdateAsync(request.TimeSlotId, cancellationToken);
+            if (slot is null || !slot.IsActive)
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<AppointmentDto>(ApplicationError.NotFound("TIME_SLOT_NOT_FOUND", "Khung giờ hẹn không tồn tại hoặc đã ngừng áp dụng."));
+            }
+            if (request.AppointmentDate == today && slot.StartTime <= GetCurrentVietnamTime())
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<AppointmentDto>(ApplicationError.Validation("SLOT_EXPIRED", "Khung giờ này trong ngày hôm nay đã qua, vui lòng chọn khung giờ khác."));
+            }
 
             var currentBookings = await unitOfWork.AppointmentRepository.GetBookedCountAsync(
                 request.AppointmentDate,
@@ -236,6 +238,7 @@ public sealed class AppointmentService(
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
+        DateOnly? fromDate,
         CancellationToken cancellationToken = default)
     {
         var list = await unitOfWork.AppointmentRepository.GetAppointmentsAsync(
@@ -243,6 +246,7 @@ public sealed class AppointmentService(
             timeSlotId,
             status,
             searchKeyword,
+            fromDate,
             cancellationToken);
 
         var dtos = list.Select(MapToDto).ToList();

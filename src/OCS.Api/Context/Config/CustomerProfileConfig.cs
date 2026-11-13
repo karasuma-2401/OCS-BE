@@ -12,6 +12,8 @@ public sealed class CustomerProfileConfig : IEntityTypeConfiguration<CustomerPro
 
         builder.HasKey(x => x.Id);
 
+        builder.Property(x => x.Version).IsRowVersion();
+
         builder.Property(x => x.Id)
             .ValueGeneratedNever();
 

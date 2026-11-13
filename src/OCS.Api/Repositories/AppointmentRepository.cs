@@ -37,6 +37,7 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
+        DateOnly? fromDate,
         CancellationToken cancellationToken = default)
     {
         var query = dbContext.Appointments
@@ -49,6 +50,11 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
         if (date.HasValue)
         {
             query = query.Where(a => a.AppointmentDate == date.Value);
+        }
+
+        if (fromDate.HasValue)
+        {
+            query = query.Where(a => a.AppointmentDate >= fromDate.Value);
         }
 
         if (timeSlotId.HasValue)
@@ -88,6 +94,14 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
     public Task<AppointmentTimeSlot?> GetTimeSlotByIdAsync(Guid timeSlotId, CancellationToken cancellationToken = default) =>
         dbContext.AppointmentTimeSlots
             .SingleOrDefaultAsync(s => s.Id == timeSlotId, cancellationToken);
+
+    public async Task<AppointmentTimeSlot?> GetTimeSlotForUpdateAsync(Guid timeSlotId, CancellationToken cancellationToken = default)
+    {
+        if (!dbContext.Database.IsNpgsql()) return await GetTimeSlotByIdAsync(timeSlotId, cancellationToken);
+        var rows = await dbContext.AppointmentTimeSlots.FromSqlInterpolated($"SELECT * FROM \"AppointmentTimeSlots\" WHERE \"Id\" = {timeSlotId} FOR UPDATE")
+            .AsNoTracking().ToListAsync(cancellationToken);
+        return rows.SingleOrDefault();
+    }
 
     public Task<int> GetBookedCountAsync(DateOnly date, Guid timeSlotId, CancellationToken cancellationToken = default) =>
         dbContext.Appointments

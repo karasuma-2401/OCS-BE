@@ -39,6 +39,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<ConsignmentContract> ConsignmentContracts => Set<ConsignmentContract>();
 
+    public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
+    public DbSet<ContractTemplate> ContractTemplates => Set<ContractTemplate>();
+
     public DbSet<Buyout> Buyouts => Set<Buyout>();
 
     public DbSet<Product> Products => Set<Product>();
