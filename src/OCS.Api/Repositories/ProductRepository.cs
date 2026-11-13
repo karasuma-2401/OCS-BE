@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Common;
@@ -30,6 +31,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             .AsNoTracking()
             .ToListAsync(cancellationToken);
 
+    [SuppressMessage("Globalization", "CA1310", Justification = "EF Core translates this overload to SQL; the StringComparison overload is not supported.")]
     public async Task<PagedResponse<PublicProductResponse>> GetPublicProductsAsync(
         GetPublicProductsRequest request,
         CancellationToken cancellationToken = default)
@@ -112,7 +114,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
                     p.Brand.Name
                 },
                 CoverImageUrl = p.Images
-                    .Where(img => img.ImageType == ProductImageType.Cover)
+                    .Where(img => img.ImageType == ProductImageType.Cover && !img.Url.StartsWith("r2://"))
                     .OrderBy(img => img.SortOrder)
                     .ThenBy(img => img.Id)
                     .Select(img => img.Url)
@@ -140,6 +142,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             totalCount);
     }
 
+    [SuppressMessage("Globalization", "CA1310", Justification = "EF Core translates this overload to SQL; the StringComparison overload is not supported.")]
     public async Task<PublicProductDetailResponse?> GetPublicProductDetailAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -166,7 +169,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
                     p.Brand.Name
                 },
                 Images = p.Images
-                    .Where(img => img.ImageType == ProductImageType.Cover || img.ImageType == ProductImageType.Detail)
+                    .Where(img => (img.ImageType == ProductImageType.Cover || img.ImageType == ProductImageType.Detail) && !img.Url.StartsWith("r2://"))
                     .OrderBy(img => img.SortOrder)
                     .ThenBy(img => img.Id)
                     .Select(img => new

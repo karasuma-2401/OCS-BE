@@ -548,6 +548,33 @@ namespace OCS.Api.Context.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.ConsignmentDocument", b =>
+                {
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset>("UploadedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("ContractId");
+
+                    b.ToTable("ConsignmentDocuments", (string)null);
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.CustomerProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2160,6 +2187,17 @@ namespace OCS.Api.Context.Migrations
                     b.Navigation("CreatedByEmployee");
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.ConsignmentDocument", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.ConsignmentContract", "Contract")
+                        .WithOne()
+                        .HasForeignKey("OCS.Api.Entities.ConsignmentDocument", "ContractId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.CustomerProfile", b =>
