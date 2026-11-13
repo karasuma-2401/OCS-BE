@@ -122,6 +122,8 @@ public static class ServiceCollectionExtensions
         services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.Configure<OtpOptions>(configuration.GetSection(OtpOptions.SectionName));
         services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
+        services.Configure<FirebaseOptions>(configuration.GetSection(FirebaseOptions.SectionName));
+        services.AddHttpClient("FcmClient");
 
         var emailProvider = configuration["Email:Provider"];
         if (string.Equals(emailProvider, "TestSink", StringComparison.OrdinalIgnoreCase))
@@ -144,8 +146,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAccountManagementService, AccountManagementService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<InventoryService>();
+        services.AddScoped<IFcmService, FcmNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
+        services.AddScoped<IConsignmentService, ConsignmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
@@ -370,21 +374,21 @@ public static class ServiceCollectionExtensions
         var options = section.Get<R2Options>() ?? new R2Options();
         services.Configure<R2Options>(section);
 
-        if (string.IsNullOrWhiteSpace(options.ServiceUrl) ||
-            string.IsNullOrWhiteSpace(options.AccessKeyId) ||
-            string.IsNullOrWhiteSpace(options.SecretAccessKey))
+        if (!string.IsNullOrWhiteSpace(options.ServiceUrl) &&
+            !string.IsNullOrWhiteSpace(options.AccessKeyId) &&
+            !string.IsNullOrWhiteSpace(options.SecretAccessKey))
         {
-            return services;
+            services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client(
+                new BasicAWSCredentials(options.AccessKeyId, options.SecretAccessKey),
+                new AmazonS3Config
+                {
+                    ServiceURL = options.ServiceUrl,
+                    AuthenticationRegion = "auto",
+                    ForcePathStyle = true
+                }));
         }
 
-        services.AddSingleton<IAmazonS3>(_ => new AmazonS3Client(
-            new BasicAWSCredentials(options.AccessKeyId, options.SecretAccessKey),
-            new AmazonS3Config
-            {
-                ServiceURL = options.ServiceUrl,
-                AuthenticationRegion = "auto",
-                ForcePathStyle = true
-            }));
+        services.AddScoped<IStorageService, R2StorageService>();
 
         return services;
     }
@@ -419,6 +423,7 @@ public static class ServiceCollectionExtensions
         }
 
         app.UseCors(CorsPolicyName);
+        app.UseStaticFiles();
 
         if (!app.Environment.IsDevelopment())
         {

@@ -18,7 +18,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         auditContext.Initialize("DemoSeed");
 
-        // 1. Internal Accounts (Staff, Manager, Admin)
         var defaultStaffPasswordHash = BCrypt.Net.BCrypt.HashPassword("DevStaff@123");
         (Guid Id, string Name, string Phone, string? Username, Guid Role)[] staffAccounts =
         [
@@ -62,7 +61,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.AccountRoles.Add(accountRole);
         }
 
-        // 2. Customer Accounts (Khách hàng mẫu theo Figma)
         (Guid Id, string Name, string Phone)[] customerAccounts =
         [
             (Guid.Parse("10000000-0000-0000-0000-000000000004"), "Khách Hàng Ký Gửi", "0901234567"),
@@ -106,7 +104,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.AccountRoles.Add(accountRole);
         }
 
-        // 3. Appointment Time Slots
         (Guid Id, TimeOnly Start, TimeOnly End, int Max)[] timeSlots =
         [
             (Guid.Parse("11111111-0000-0000-0000-000000000001"), new TimeOnly(9, 0), new TimeOnly(10, 0), 3),
@@ -151,7 +148,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // 4. Demo Appointments matching Figma
         (Guid Id, string Tracking, Guid CustomerId, Guid SlotId, DateOnly Date, int Items, AppointmentStatus Status, string Note)[] demoAppointments =
         [
             (
@@ -214,7 +210,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // 5. Demo Categories
         (Guid Id, string Name, bool IsActive)[] demoCategories =
         [
             (Guid.Parse("30000000-0000-0000-0000-000000000001"), "Áo khoác", true),
@@ -244,15 +239,21 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             categoryMap[id] = category;
         }
 
-        // 6. Demo Brands
         (Guid Id, string Name, BrandTier Tier, decimal Rate, bool IsActive)[] demoBrands =
         [
+            (Guid.Parse("40000000-0000-0000-0000-000000000099"), "Khác", BrandTier.NoBrand, 10m, true),
             (Guid.Parse("40000000-0000-0000-0000-000000000001"), "Zara", BrandTier.Commercial, 15m, true),
             (Guid.Parse("40000000-0000-0000-0000-000000000002"), "Uniqlo", BrandTier.Commercial, 15m, true),
             (Guid.Parse("40000000-0000-0000-0000-000000000003"), "Routine", BrandTier.LocalBrand, 12m, true),
             (Guid.Parse("40000000-0000-0000-0000-000000000004"), "Chanel", BrandTier.Luxury, 20m, true),
             (Guid.Parse("40000000-0000-0000-0000-000000000005"), "OldBrand Inactive", BrandTier.NoBrand, 10m, false)
         ];
+
+        var legacyNoBrand = await dbContext.Brands.FirstOrDefaultAsync(b => b.Name == "Không có thương hiệu", cancellationToken);
+        if (legacyNoBrand != null)
+        {
+            legacyNoBrand.IsActive = false;
+        }
 
         var brandMap = new Dictionary<Guid, Brand>();
         foreach (var (id, name, tier, rate, isActive) in demoBrands)
@@ -278,7 +279,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // 7. Demo Consignment Contract & Buyout
         var contractId = Guid.Parse("50000000-0000-0000-0000-000000000001");
         if (!await dbContext.ConsignmentContracts.AnyAsync(c => c.Id == contractId, cancellationToken))
         {
@@ -312,7 +312,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // 8. Demo Catalog Products (At least 25 OnSale across >= 3 categories, >= 4 brands, >= 4 sizes)
         var zara = brandMap[Guid.Parse("40000000-0000-0000-0000-000000000001")];
         var uniqlo = brandMap[Guid.Parse("40000000-0000-0000-0000-000000000002")];
         var routine = brandMap[Guid.Parse("40000000-0000-0000-0000-000000000003")];
@@ -479,7 +478,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             var sideUrl = curatedDetailsSide[i % curatedDetailsSide.Length];
             var backUrl = curatedDetailsBack[i % curatedDetailsBack.Length];
 
-            // Cover Image (SortOrder = 0)
             var coverImageId = Guid.Parse($"71000000-0000-0000-0000-{i + 1:D12}");
             var existingCover = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == coverImageId, cancellationToken);
             if (existingCover == null)
@@ -498,13 +496,11 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 existingCover.Url = coverUrl;
             }
 
-            // Products i = 20 & 21: Edge case - ONLY Cover image (skip detail images)
             if (i == 20 || i == 21)
             {
                 continue;
             }
 
-            // Detail Image 1 (SortOrder = 1 - Multi-angle side/profile)
             var detail1ImageId = Guid.Parse($"72000000-0000-0000-0000-{i + 1:D12}");
             var existingDetail1 = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == detail1ImageId, cancellationToken);
             if (existingDetail1 == null)
@@ -523,7 +519,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 existingDetail1.Url = sideUrl;
             }
 
-            // Product i = 22: Edge case - Cover + Detail + Incident image (to verify Incident is excluded in public detail)
             if (i == 22)
             {
                 var incidentImageId = Guid.Parse($"74000000-0000-0000-0000-{i + 1:D12}");
@@ -542,7 +537,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 continue;
             }
 
-            // Detail Image 2 (SortOrder = 2 - Multi-angle back/texture)
             var detail2ImageId = Guid.Parse($"73000000-0000-0000-0000-{i + 1:D12}");
             var existingDetail2 = await dbContext.ProductImages.FirstOrDefaultAsync(img => img.Id == detail2ImageId, cancellationToken);
             if (existingDetail2 == null)
@@ -562,8 +556,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             }
         }
 
-        // 9. Counterexamples: ensure they exist but never appear in public catalog
-        // 9a. PendingProcessing product (appraised but not offered for sale)
         var pendingId = Guid.Parse("70000000-0000-0000-0000-000000000026");
         if (!await dbContext.Products.AnyAsync(p => p.Id == pendingId, cancellationToken))
         {
@@ -583,7 +575,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.Products.Add(p);
         }
 
-        // 9b. Sold product
         var soldId = Guid.Parse("70000000-0000-0000-0000-000000000027");
         if (!await dbContext.Products.AnyAsync(p => p.Id == soldId, cancellationToken))
         {
@@ -605,7 +596,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.Products.Add(p);
         }
 
-        // 9c. Expired product
         var expiredId = Guid.Parse("70000000-0000-0000-0000-000000000028");
         if (!await dbContext.Products.AnyAsync(p => p.Id == expiredId, cancellationToken))
         {
@@ -627,7 +617,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.Products.Add(p);
         }
 
-        // 9d. Inactive Brand product
         var inactiveBrandProdId = Guid.Parse("70000000-0000-0000-0000-000000000029");
         if (!await dbContext.Products.AnyAsync(p => p.Id == inactiveBrandProdId, cancellationToken))
         {
@@ -648,7 +637,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.Products.Add(p);
         }
 
-        // 9e. Inactive Category product
         var inactiveCatProdId = Guid.Parse("70000000-0000-0000-0000-000000000030");
         if (!await dbContext.Products.AnyAsync(p => p.Id == inactiveCatProdId, cancellationToken))
         {
@@ -669,7 +657,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             dbContext.Products.Add(p);
         }
 
-        // 9f. Product OnSale with ONLY Detail image (no Cover image) -> CoverImageUrl should be null in public response
         var noCoverProdId = Guid.Parse("70000000-0000-0000-0000-000000000031");
         var existingNoCoverProd = await dbContext.Products.FirstOrDefaultAsync(p => p.Id == noCoverProdId, cancellationToken);
         if (existingNoCoverProd == null)
@@ -714,7 +701,6 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             existingNoCoverDetail.Url = whiteTeeDetailUrl;
         }
 
-        // 9g. Consignment product with active customer profile to verify zero data leak
         var consignorProdId = Guid.Parse("70000000-0000-0000-0000-000000000032");
         if (!await dbContext.Products.AnyAsync(p => p.Id == consignorProdId, cancellationToken))
         {

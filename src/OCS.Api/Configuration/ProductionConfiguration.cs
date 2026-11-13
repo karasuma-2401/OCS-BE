@@ -48,5 +48,43 @@ public static class ProductionConfiguration
 
         if (string.IsNullOrWhiteSpace(configuration["Redis:ConnectionString"]))
             throw new InvalidOperationException("Production requires Redis:ConnectionString for distributed rate limits.");
+
+        // Firebase Cloud Messaging configuration validation in Production
+        var firebaseProjectId = configuration["Firebase:ProjectId"];
+        var firebaseClientEmail = configuration["Firebase:ClientEmail"];
+        var firebasePrivateKey = configuration["Firebase:PrivateKey"];
+
+        if (string.IsNullOrWhiteSpace(firebaseProjectId))
+        {
+            throw new InvalidOperationException("Production requires 'Firebase:ProjectId' for Firebase Cloud Messaging.");
+        }
+
+        if (string.IsNullOrWhiteSpace(firebaseClientEmail))
+        {
+            throw new InvalidOperationException("Production requires 'Firebase:ClientEmail' for FCM HTTP v1 Service Account authentication.");
+        }
+
+        if (string.IsNullOrWhiteSpace(firebasePrivateKey))
+        {
+            throw new InvalidOperationException("Production requires 'Firebase:PrivateKey' containing the RSA private key PEM.");
+        }
+
+        // Validate RSA PEM parsing at startup to fail-fast before serving requests
+        try
+        {
+            var pem = firebasePrivateKey.Trim();
+            if (pem.StartsWith('"') && pem.EndsWith('"') && pem.Length > 1)
+            {
+                pem = pem[1..^1];
+            }
+            pem = pem.Replace("\\n", "\n", StringComparison.Ordinal).Trim();
+
+            using var rsa = System.Security.Cryptography.RSA.Create();
+            rsa.ImportFromPem(pem);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Firebase:PrivateKey format is invalid or cannot be parsed as an RSA private key PEM: {ex.Message}", ex);
+        }
     }
 }

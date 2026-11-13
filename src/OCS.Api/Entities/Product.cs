@@ -74,11 +74,7 @@ public sealed class Product : BaseEntity
 
     public SaleInvoiceLine? SaleInvoiceLine { get; set; }
 
-    /// <summary>
-    /// Captures the commission tier and rate at appraisal time, so future edits to a brand's default rate
-    /// cannot change the agreed terms or the fixed listed price of this consignment item.
-    /// </summary>
-    public void AssignConsignmentTerms(Guid contractId, decimal fixedListedPrice, Brand brand)
+    public void AssignConsignmentTerms(Guid contractId, decimal fixedListedPrice, Brand brand, decimal? agreedCommissionRate = null)
     {
         EnsureUnassigned();
         if (contractId == Guid.Empty)
@@ -89,9 +85,10 @@ public sealed class Product : BaseEntity
 
         ArgumentOutOfRangeException.ThrowIfNegative(fixedListedPrice);
 
-        if (brand.DefaultCommissionRate is < 0 or > 100)
+        var commissionRate = agreedCommissionRate ?? brand.DefaultCommissionRate;
+        if (commissionRate is < 0 or > 100)
         {
-            throw new ArgumentOutOfRangeException(nameof(brand), "The brand commission rate must be between 0 and 100.");
+            throw new ArgumentOutOfRangeException(nameof(agreedCommissionRate), "The commission rate must be between 0 and 100.");
         }
 
         ListedPrice = fixedListedPrice;
@@ -100,7 +97,7 @@ public sealed class Product : BaseEntity
         ConsignmentContractId = contractId;
         BrandId = brand.Id;
         AgreedBrandTier = brand.Tier;
-        AgreedCommissionRate = brand.DefaultCommissionRate;
+        AgreedCommissionRate = commissionRate;
     }
 
     public void AssignBuyoutTerms(Guid buyoutId, decimal listedPrice, decimal purchasePrice)
@@ -157,7 +154,6 @@ public sealed class Product : BaseEntity
         }
     }
 
-    /// <summary>Calculates the amount payable to the consignor if this item sells at its fixed listed price.</summary>
     public decimal CalculateEstimatedConsignorPayout()
     {
         if (SourceType != ProductSourceType.Consignment || AgreedCommissionRate is null)
@@ -167,7 +163,7 @@ public sealed class Product : BaseEntity
 
         return decimal.Round(
             ListedPrice * (100m - AgreedCommissionRate.Value) / 100m,
-            2,
+            0,
             MidpointRounding.AwayFromZero);
     }
 
@@ -180,7 +176,7 @@ public sealed class Product : BaseEntity
 
         return decimal.Round(
             ListedPrice * AgreedCommissionRate.Value / 100m,
-            2,
+            0,
             MidpointRounding.AwayFromZero);
     }
 }
