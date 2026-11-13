@@ -652,3 +652,11 @@ Các endpoint thay đổi dữ liệu yêu cầu cookie phiên hợp lệ và CS
   - `POST /api/products`
   được cấu hình yêu cầu xác thực vai trò nội bộ: `[Authorize(Roles = "Admin,Manager,Staff")]`.
 - Người dùng chưa đăng nhập hoặc anonymous caller khi truy cập các route nội bộ trên sẽ nhận mã lỗi `401 UNAUTHORIZED`. `GET /api/products` là endpoint public duy nhất cho danh sách Landing Page.
+
+### Theo dõi ký gửi của khách hàng
+
+`GET /api/customers/me/consignments` yêu cầu phiên đăng nhập hợp lệ với vai trò Customer và hồ sơ khách hàng đang hoạt động. API chỉ trả hợp đồng của tài khoản hiện tại; không có tham số chọn khách hàng. Không có hợp đồng sẽ trả mảng rỗng. Phiên không hợp lệ trả 401; tài khoản không đủ quyền hoặc hồ sơ không hoạt động trả 403.
+
+Mỗi phần tử là một hợp đồng (một đợt ký gửi), gồm `contractId`, `contractNumber`, `appointmentId`, `signedAt`, `endsAt`, `status`, `expiryHandling`, `products`, `estimatedPayout` và `settledAmount`. Mỗi sản phẩm gồm `id`, `barcode`, `name`, `status`, `listedPrice`, `agreedCommissionRate` và `estimatedPayout`. Trạng thái là tên enum của hệ thống.
+
+Tiền dự kiến là tổng giá niêm yết trừ tỷ lệ hoa hồng đã thỏa thuận của từng sản phẩm, giả định tất cả bán đúng giá; không phải số tiền chắc chắn được trả và không trừ khoản đã quyết toán. Nếu một sản phẩm thiếu tỷ lệ hoa hồng, tiền dự kiến của sản phẩm và tổng hợp đồng là `null`. `settledAmount` là tổng `TotalAmount` của các khoản payout có trạng thái `Completed`; không tính `Pending` hoặc `Transferred`. Các khoản điều chỉnh được phản ánh theo tổng payout đã lưu.
