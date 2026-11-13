@@ -18,6 +18,11 @@ public sealed class Buyout : BaseEntity
 
     public decimal TotalPurchasePrice { get; set; }
 
+    public Guid Version { get; set; } = Guid.NewGuid();
+    public DateTimeOffset? PaidAt { get; set; }
+    public Guid? PaidByEmployeeId { get; set; }
+    public string? RejectionReason { get; set; }
+
     public BuyoutStatus Status { get; set; }
         = BuyoutStatus.Pending;
 

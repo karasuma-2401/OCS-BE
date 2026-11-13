@@ -43,6 +43,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<Buyout> Buyouts => Set<Buyout>();
 
+    public DbSet<BuyoutInspection> BuyoutInspections => Set<BuyoutInspection>();
+
+    public DbSet<BuyoutProposalItem> BuyoutProposalItems => Set<BuyoutProposalItem>();
+
     public DbSet<Product> Products => Set<Product>();
 
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();

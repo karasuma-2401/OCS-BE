@@ -426,6 +426,16 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid>("CustomerId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PaidByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -438,6 +448,10 @@ namespace OCS.Api.Context.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovedByEmployeeId");
@@ -449,6 +463,8 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("PaidByEmployeeId");
+
                     b.ToTable("Buyouts", null, t =>
                         {
                             t.HasCheckConstraint("CK_Buyouts_Approver", "\"Status\" <> 'Approved'\r\nOR \"ApprovedByEmployeeId\" IS NOT NULL");
@@ -456,6 +472,94 @@ namespace OCS.Api.Context.Migrations
                             t.HasCheckConstraint("CK_Buyouts_Status", "\"Status\" IN ('Pending', 'Approved', 'Rejected')");
 
                             t.HasCheckConstraint("CK_Buyouts_Total", "\"TotalPurchasePrice\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.BuyoutInspection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BrandId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("ConditionPercentage")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("InspectedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("InspectionNotes")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Size")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BrandId");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("CustomerId");
+
+                    b.HasIndex("InspectedByEmployeeId");
+
+                    b.ToTable("BuyoutInspections", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BuyoutInspections_Condition", "\"ConditionPercentage\" BETWEEN 0 AND 100");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.BuyoutProposalItem", b =>
+                {
+                    b.Property<Guid>("BuyoutId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InspectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<decimal>("ListedPrice")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.HasKey("BuyoutId");
+
+                    b.HasIndex("InspectionId")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\" = TRUE");
+
+                    b.ToTable("BuyoutProposalItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BuyoutProposalItems_Price", "\"ListedPrice\" >= 0");
                         });
                 });
 
@@ -2156,11 +2260,70 @@ namespace OCS.Api.Context.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", null)
+                        .WithMany()
+                        .HasForeignKey("PaidByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("ApprovedByEmployee");
 
                     b.Navigation("CreatedByEmployee");
 
                     b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.BuyoutInspection", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.Brand", "Brand")
+                        .WithMany()
+                        .HasForeignKey("BrandId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.CustomerProfile", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", "InspectedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("InspectedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Brand");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Customer");
+
+                    b.Navigation("InspectedByEmployee");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.BuyoutProposalItem", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.Buyout", "Buyout")
+                        .WithOne()
+                        .HasForeignKey("OCS.Api.Entities.BuyoutProposalItem", "BuyoutId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.BuyoutInspection", "Inspection")
+                        .WithMany()
+                        .HasForeignKey("InspectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Buyout");
+
+                    b.Navigation("Inspection");
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.ConsignmentContract", b =>
