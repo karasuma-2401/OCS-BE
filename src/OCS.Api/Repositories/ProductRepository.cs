@@ -32,6 +32,9 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
             .ToListAsync(cancellationToken);
 
     [SuppressMessage("Globalization", "CA1310", Justification = "EF Core translates this overload to SQL; the StringComparison overload is not supported.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1304", Justification = "EF Core translates ToLower to database LOWER using the database collation.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1311", Justification = "EF Core translates ToLower to database LOWER using the database collation.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1862", Justification = "StringComparison overloads are not translated by EF Core PostgreSQL.")]
     public async Task<PagedResponse<PublicProductResponse>> GetPublicProductsAsync(
         GetPublicProductsRequest request,
         CancellationToken cancellationToken = default)

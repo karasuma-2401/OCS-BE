@@ -106,7 +106,7 @@ public sealed class CustomerSelfProfileRealIntegrationTests
         {
             Id = employeeId,
             FullName = "Employee Tester",
-            PhoneNumber = "098" + Random.Shared.Next(1000000, 9999999).ToString("D7"),
+            PhoneNumber = "098" + Random.Shared.Next(1000000, 9999999).ToString("D7", System.Globalization.CultureInfo.InvariantCulture),
             Username = "emp_" + employeeId.ToString("N")[..8],
             Email = $"emp_{employeeId:N}@example.com",
             PasswordHash = "$2a$11$LVrkKmxPZJm4JnKXZsgMjuGNMXKczO5VF71yH10t42unyeBUM6Kb.",

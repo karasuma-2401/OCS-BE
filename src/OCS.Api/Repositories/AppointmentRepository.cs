@@ -32,8 +32,11 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
         return items;
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1304", Justification = "EF Core translates ToLower to database LOWER using the database collation.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1311", Justification = "EF Core translates ToLower to database LOWER using the database collation.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1862", Justification = "StringComparison overloads are not translated by EF Core PostgreSQL.")]
     public async Task<IReadOnlyList<Appointment>> GetAppointmentsAsync(
-        DateOnly? date,
+        DateOnly? appointmentDate,
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
@@ -46,9 +49,9 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
             .AsNoTracking()
             .AsQueryable();
 
-        if (date.HasValue)
+        if (appointmentDate.HasValue)
         {
-            query = query.Where(a => a.AppointmentDate == date.Value);
+            query = query.Where(a => a.AppointmentDate == appointmentDate.Value);
         }
 
         if (timeSlotId.HasValue)
@@ -89,18 +92,18 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
         dbContext.AppointmentTimeSlots
             .SingleOrDefaultAsync(s => s.Id == timeSlotId, cancellationToken);
 
-    public Task<int> GetBookedCountAsync(DateOnly date, Guid timeSlotId, CancellationToken cancellationToken = default) =>
+    public Task<int> GetBookedCountAsync(DateOnly appointmentDate, Guid timeSlotId, CancellationToken cancellationToken = default) =>
         dbContext.Appointments
-            .CountAsync(a => a.AppointmentDate == date &&
+            .CountAsync(a => a.AppointmentDate == appointmentDate &&
                              a.TimeSlotId == timeSlotId &&
                              a.Status != AppointmentStatus.Cancelled &&
                              a.Status != AppointmentStatus.NoShow,
                         cancellationToken);
 
-    public async Task<Dictionary<Guid, int>> GetBookedCountsByDateAsync(DateOnly date, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<Guid, int>> GetBookedCountsByDateAsync(DateOnly appointmentDate, CancellationToken cancellationToken = default)
     {
         var list = await dbContext.Appointments
-            .Where(a => a.AppointmentDate == date &&
+            .Where(a => a.AppointmentDate == appointmentDate &&
                         a.Status != AppointmentStatus.Cancelled &&
                         a.Status != AppointmentStatus.NoShow)
             .GroupBy(a => a.TimeSlotId)
@@ -111,7 +114,7 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
     }
 
     public async Task<IReadOnlyList<Appointment>> GetUpcomingAppointmentsForReminderAsync(
-        DateOnly date,
+        DateOnly appointmentDate,
         TimeOnly windowStart,
         TimeOnly windowEnd,
         CancellationToken cancellationToken = default)
@@ -120,7 +123,7 @@ public sealed class AppointmentRepository(AppDbContext dbContext) : IAppointment
             .Include(a => a.TimeSlot)
             .Include(a => a.Customer)
                 .ThenInclude(c => c.Account)
-            .Where(a => a.AppointmentDate == date &&
+            .Where(a => a.AppointmentDate == appointmentDate &&
                         a.Status == AppointmentStatus.Scheduled &&
                         a.ReminderSentAt == null &&
                         a.TimeSlot.StartTime >= windowStart &&

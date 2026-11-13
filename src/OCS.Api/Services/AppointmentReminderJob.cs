@@ -42,8 +42,8 @@ public sealed partial class AppointmentReminderJob(
                 continue;
             }
 
-            var startTimeStr = appointment.TimeSlot.StartTime.ToString("HH:mm");
-            var endTimeStr = appointment.TimeSlot.EndTime.ToString("HH:mm");
+            var startTimeStr = appointment.TimeSlot.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+            var endTimeStr = appointment.TimeSlot.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
 
             await notificationService.CreateAsync(new CreateNotificationDto
             {

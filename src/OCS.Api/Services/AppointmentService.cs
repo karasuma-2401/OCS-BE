@@ -16,18 +16,18 @@ public sealed class AppointmentService(
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SlotLocks = new();
 
     public async Task<Result<IReadOnlyList<TimeSlotDto>>> GetAvailableSlotsAsync(
-        DateOnly date,
+        DateOnly appointmentDate,
         CancellationToken cancellationToken = default)
     {
         var today = GetCurrentVietnamDate();
-        if (date < today)
+        if (appointmentDate < today)
         {
             return Result.Failure<IReadOnlyList<TimeSlotDto>>(
                 ApplicationError.Validation("INVALID_DATE", "Không thể tra cứu khung giờ cho ngày trong quá khứ."));
         }
 
         var slots = await unitOfWork.AppointmentRepository.GetActiveTimeSlotsAsync(cancellationToken);
-        var bookedCounts = await unitOfWork.AppointmentRepository.GetBookedCountsByDateAsync(date, cancellationToken);
+        var bookedCounts = await unitOfWork.AppointmentRepository.GetBookedCountsByDateAsync(appointmentDate, cancellationToken);
         var currentTime = GetCurrentVietnamTime();
 
         var result = new List<TimeSlotDto>();
@@ -35,13 +35,13 @@ public sealed class AppointmentService(
         {
             var booked = bookedCounts.GetValueOrDefault(slot.Id, 0);
             var available = Math.Max(0, slot.MaxCustomers - booked);
-            var isPastTime = date == today && slot.StartTime <= currentTime;
+            var isPastTime = appointmentDate == today && slot.StartTime <= currentTime;
 
             result.Add(new TimeSlotDto
             {
                 Id = slot.Id,
-                StartTime = slot.StartTime.ToString("HH:mm"),
-                EndTime = slot.EndTime.ToString("HH:mm"),
+                StartTime = slot.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                EndTime = slot.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture),
                 MaxCustomers = slot.MaxCustomers,
                 BookedCount = booked,
                 AvailableCount = isPastTime ? 0 : available,
@@ -232,14 +232,14 @@ public sealed class AppointmentService(
     }
 
     public async Task<Result<IReadOnlyList<AppointmentDto>>> GetStaffAppointmentsAsync(
-        DateOnly? date,
+        DateOnly? appointmentDate,
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
         CancellationToken cancellationToken = default)
     {
         var list = await unitOfWork.AppointmentRepository.GetAppointmentsAsync(
-            date,
+            appointmentDate,
             timeSlotId,
             status,
             searchKeyword,
@@ -352,8 +352,8 @@ public sealed class AppointmentService(
 
     private static AppointmentDto MapToDto(Appointment a)
     {
-        var startTime = a.TimeSlot != null ? a.TimeSlot.StartTime.ToString("HH:mm") : string.Empty;
-        var endTime = a.TimeSlot != null ? a.TimeSlot.EndTime.ToString("HH:mm") : string.Empty;
+        var startTime = a.TimeSlot != null ? a.TimeSlot.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
+        var endTime = a.TimeSlot != null ? a.TimeSlot.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : string.Empty;
         var slotDisplay = !string.IsNullOrEmpty(startTime) ? $"{startTime} - {endTime}" : string.Empty;
         var canCancel = a.Status == AppointmentStatus.Scheduled;
 
@@ -364,7 +364,7 @@ public sealed class AppointmentService(
             CustomerId = a.CustomerId,
             CustomerName = a.Customer?.Account?.FullName ?? string.Empty,
             CustomerPhone = a.Customer?.Account?.PhoneNumber ?? string.Empty,
-            AppointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd"),
+            AppointmentDate = a.AppointmentDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
             TimeSlotId = a.TimeSlotId,
             TimeSlotDisplay = slotDisplay,
             StartTime = startTime,
