@@ -63,8 +63,16 @@ public sealed class BarcodeTests
         {
             var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 20 };
             var category = new Category { Name = "Áo" };
-            context.Products.AddRange(new Product { Name = "Cũ", Size = "M", Barcode = "EXISTING-1", Brand = brand, Category = category },
-                new Product { Name = "Thiếu mã", Size = "M", Barcode = "", Brand = brand, Category = category });
+            var customerAccount = new Account { AccountType = AccountType.Customer, FullName = "Khách thử", PhoneNumber = "0900000001" };
+            var employeeAccount = new Account { AccountType = AccountType.Internal, FullName = "Nhân viên thử", PhoneNumber = "0900000002", Username = "barcode-test" };
+            var customer = new CustomerProfile { Id = customerAccount.Id, Account = customerAccount };
+            var employee = new EmployeeProfile { Id = employeeAccount.Id, Account = employeeAccount, JobTitle = "Manager", HiredOn = DateOnly.FromDateTime(DateTime.UtcNow) };
+            var buyout = new Buyout { BuyoutNumber = "BARCODE-TEST", CustomerId = customer.Id, CreatedByEmployeeId = employee.Id };
+            var existing = new Product { Name = "Cũ", Size = "M", Barcode = "EXISTING-1", Brand = brand, Category = category };
+            var missing = new Product { Name = "Thiếu mã", Size = "M", Barcode = "", Brand = brand, Category = category };
+            existing.AssignBuyoutTerms(buyout.Id, 100000, 50000);
+            missing.AssignBuyoutTerms(buyout.Id, 100000, 50000);
+            context.AddRange(customer, employee, buyout, existing, missing);
             await context.SaveChangesAsync();
         }
         await database.MigrateAsync();
