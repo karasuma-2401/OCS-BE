@@ -1,0 +1,35 @@
+@baseUrl = http://localhost:5204
+@csrf = replace-with-csrf-token
+@slotId = 00000000-0000-0000-0000-000000000001
+
+### Danh sách (đăng nhập Admin/Manager)
+GET {{baseUrl}}/api/appointment-slots
+
+### Một khung giờ
+GET {{baseUrl}}/api/appointment-slots/{{slotId}}
+
+### Tạo khung giờ
+POST {{baseUrl}}/api/appointment-slots
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "startTime": "13:00:00",
+  "endTime": "14:00:00",
+  "maxCustomers": 5,
+  "isActive": true,
+  "expectedUpdatedAt": null
+}
+
+### Cập nhật sức chứa/trạng thái (dùng updatedAt lấy từ danh sách)
+PUT {{baseUrl}}/api/appointment-slots/{{slotId}}
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "startTime": "13:00:00",
+  "endTime": "14:00:00",
+  "maxCustomers": 6,
+  "isActive": true,
+  "expectedUpdatedAt": null
+}
