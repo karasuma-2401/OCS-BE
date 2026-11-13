@@ -59,7 +59,7 @@ public sealed class InventoryService(AppDbContext db)
         var images = product.Images.Where(x => x.ImageType is ProductImageType.Cover or ProductImageType.Detail)
             .OrderBy(x => x.SortOrder).Select(x => new InventoryImageDto(x.Id, x.Url, x.ImageType.ToString(), x.SortOrder)).ToArray();
         return Result.Success(new InventoryDetailDto(Map(product), product.AgreementEvidence, product.AgreedListedPrice, images,
-            events.OrderByDescending(x => x.OccurredAt).ToArray()));
+            events.OrderByDescending(x => x.OccurredAt).ToArray(), product.PurchasePrice));
     }
 
     public Task<List<InventoryLocationDto>> LocationsAsync(CancellationToken ct) => db.StorageLocations.AsNoTracking()

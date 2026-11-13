@@ -45,6 +45,10 @@ public sealed class BuyoutConfig : IEntityTypeConfiguration<Buyout>
         builder.Property(x => x.TotalPurchasePrice)
             .HasPrecision(18, 2);
 
+        builder.Property(x => x.Version).IsConcurrencyToken();
+        builder.Property(x => x.RejectionReason).HasMaxLength(1000);
+        builder.HasOne<EmployeeProfile>().WithMany().HasForeignKey(x => x.PaidByEmployeeId).OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(x => x.Status)
             .HasConversion<string>()
             .HasMaxLength(20);
