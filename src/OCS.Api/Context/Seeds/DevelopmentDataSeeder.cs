@@ -189,7 +189,7 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 continue;
             }
 
-            var effectiveSlotId = slotMap.Values.Contains(slotId) ? slotId
+            var effectiveSlotId = slotMap.ContainsValue(slotId) ? slotId
                 : (slotMap.TryGetValue(slotId == Guid.Parse("11111111-0000-0000-0000-000000000001") ? new TimeOnly(9, 0)
                     : slotId == Guid.Parse("11111111-0000-0000-0000-000000000002") ? new TimeOnly(10, 0)
                     : new TimeOnly(11, 0), out var mappedId) ? mappedId : slotId);
