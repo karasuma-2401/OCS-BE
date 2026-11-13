@@ -1,0 +1,137 @@
+@baseUrl = http://localhost:5204
+# Các request cần cookie phiên nội bộ và CSRF token hợp lệ.
+@appointmentId = 00000000-0000-0000-0000-000000000000
+@contractId = 00000000-0000-0000-0000-000000000000
+@customerId = 00000000-0000-0000-0000-000000000000
+@imageId = 00000000-0000-0000-0000-000000000000
+@csrf = replace-me
+@templateVersion = 00000000-0000-0000-0000-000000000000
+
+### Mẫu hiện hành cho nhân viên lập hợp đồng
+GET {{baseUrl}}/api/contracts/template
+
+### Quản lý và admin lấy mẫu để chỉnh sửa
+GET {{baseUrl}}/api/contract-template
+
+### Quản lý xem thử mẫu chưa lưu (không thay đổi database)
+POST {{baseUrl}}/api/contract-template/preview
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "title": "HỢP ĐỒNG KÝ GỬI",
+  "organizationName": "Cửa hàng ví dụ",
+  "headerText": "Nội dung đầu hợp đồng",
+  "footerText": "Nội dung cuối hợp đồng",
+  "defaultTerms": "[Điều khoản được phê duyệt]",
+  "version": "{{templateVersion}}"
+}
+
+### Quản lý lưu mẫu (lấy version hiện tại từ GET trước khi gửi)
+PUT {{baseUrl}}/api/contract-template
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "title": "HỢP ĐỒNG KÝ GỬI",
+  "organizationName": "Cửa hàng ví dụ",
+  "headerText": "Nội dung đầu hợp đồng",
+  "footerText": "Nội dung cuối hợp đồng",
+  "defaultTerms": "[Điều khoản được phê duyệt]",
+  "version": "{{templateVersion}}"
+}
+
+### Đọc ảnh sản phẩm đã lưu; cần quyền kho nếu sản phẩm chưa công khai
+GET {{baseUrl}}/api/product-images/{{imageId}}
+
+### Hồ sơ nhân viên đang tiếp nhận
+GET {{baseUrl}}/api/contracts/employee/me
+
+### Cập nhật thông tin được phép của khách (dùng version từ endpoint tra cứu)
+PUT {{baseUrl}}/api/contracts/customers/{{customerId}}
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "email": "khach@example.com",
+  "identityNumber": "123456789",
+  "address": "Địa chỉ ví dụ",
+  "bankCode": "VCB",
+  "bankAccountNumber": "123456",
+  "bankAccountHolderName": "KHACH VI DU",
+  "version": 0,
+  "profileVersion": 0
+}
+
+### Danh mục đang hoạt động cho form sản phẩm
+GET {{baseUrl}}/api/contracts/options
+
+### Thông tin khách đã có hồ sơ
+GET {{baseUrl}}/api/contracts/customers/{{customerId}}
+
+### Khách vãng lai, không tạo hồ sơ riêng
+POST {{baseUrl}}/api/contracts
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "requestId": "00000000-0000-0000-0000-000000000002",
+  "signedAt": "2026-11-13T02:00:00Z",
+  "endsAt": "2027-02-13T02:00:00Z",
+  "expiryHandling": "Return",
+  "saveCustomer": false,
+  "guest": { "fullName": "Khách ví dụ", "phoneNumber": "0901234567", "address": "Địa chỉ ví dụ", "bankCode": "VCB", "bankAccountNumber": "123456", "bankAccountHolderName": "KHACH VI DU" },
+  "products": []
+}
+
+### Tra cứu khách trực tiếp theo số điện thoại
+GET {{baseUrl}}/api/contracts/customers/by-phone?phone=0901234567
+
+### Tạo hợp đồng cho khách trực tiếp đã có hồ sơ
+POST {{baseUrl}}/api/contracts
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "customerId": "{{customerId}}",
+  "requestId": "00000000-0000-0000-0000-000000000001",
+  "signedAt": "2026-11-13T02:00:00Z",
+  "endsAt": "2027-02-13T02:00:00Z",
+  "expiryHandling": "Return"
+}
+
+### Tạo hợp đồng cho lịch đã tiếp nhận
+POST {{baseUrl}}/api/contracts
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "appointmentId": "{{appointmentId}}",
+  "signedAt": "2026-11-13T02:00:00Z",
+  "endsAt": "2027-02-13T02:00:00Z",
+  "expiryHandling": "Return"
+}
+
+### Lấy thông tin cơ bản
+GET {{baseUrl}}/api/contracts/{{contractId}}
+
+### Quản lý: tải PDF nền tham khảo (cần vai trò Admin hoặc Manager)
+GET {{baseUrl}}/api/contract-template/sample-background
+
+### Quản lý: danh sách hợp đồng (nhân viên nhận 403)
+GET {{baseUrl}}/api/contracts?page=1
+
+### Nhân viên: lịch hẹn từ một ngày trở đi
+GET {{baseUrl}}/api/appointments?fromDate=2026-11-13
+
+### Lịch không tồn tại: 404
+POST {{baseUrl}}/api/contracts
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf}}
+
+{
+  "appointmentId": "00000000-0000-0000-0000-000000000001",
+  "signedAt": "2026-11-13T02:00:00Z",
+  "endsAt": "2027-02-13T02:00:00Z",
+  "expiryHandling": "Return"
+}

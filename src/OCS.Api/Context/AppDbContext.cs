@@ -34,11 +34,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<StorageLocation> StorageLocations => Set<StorageLocation>();
 
     public DbSet<AppointmentTimeSlot> AppointmentTimeSlots => Set<AppointmentTimeSlot>();
+    public DbSet<BarcodeLabelTemplate> BarcodeLabelTemplates => Set<BarcodeLabelTemplate>();
 
     public DbSet<Appointment> Appointments => Set<Appointment>();
 
     public DbSet<ConsignmentContract> ConsignmentContracts => Set<ConsignmentContract>();
 
+    public DbSet<ContractDocument> ContractDocuments => Set<ContractDocument>();
+    public DbSet<ContractTemplate> ContractTemplates => Set<ContractTemplate>();
+    public DbSet<WordDocumentTemplate> WordDocumentTemplates => Set<WordDocumentTemplate>();
+    public DbSet<ContractTermsRequest> ContractTermsRequests => Set<ContractTermsRequest>();
     public DbSet<ConsignmentDocument> ConsignmentDocuments => Set<ConsignmentDocument>();
 
     public DbSet<Buyout> Buyouts => Set<Buyout>();

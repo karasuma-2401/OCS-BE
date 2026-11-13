@@ -7,7 +7,16 @@ public sealed class ConsignmentContract : BaseEntity
 {
     public string ContractNumber { get; set; } = string.Empty;
 
-    public Guid CustomerId { get; set; }
+    public Guid? CustomerId { get; set; }
+
+    public string? CustomerNameSnapshot { get; set; }
+    public string? CustomerPhoneSnapshot { get; set; }
+    public string? CustomerEmailSnapshot { get; set; }
+    public string? CustomerIdentitySnapshot { get; set; }
+    public string? CustomerAddressSnapshot { get; set; }
+    public string? BankCodeSnapshot { get; set; }
+    public string? BankAccountNumberSnapshot { get; set; }
+    public string? BankAccountHolderSnapshot { get; set; }
 
     public Guid? AppointmentId { get; set; }
 
@@ -23,7 +32,7 @@ public sealed class ConsignmentContract : BaseEntity
 
     public int ActualItemCount { get; set; }
 
-    public CustomerProfile Customer { get; set; } = null!;
+    public CustomerProfile? Customer { get; set; }
 
     public Appointment? Appointment { get; set; }
 

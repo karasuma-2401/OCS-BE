@@ -119,7 +119,7 @@ public sealed class ConsignmentContractSummaryResponse
 {
     public Guid Id { get; set; }
     public string ContractNumber { get; set; } = string.Empty;
-    public Guid CustomerId { get; set; }
+    public Guid? CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public Guid? AppointmentId { get; set; }

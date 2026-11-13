@@ -28,6 +28,17 @@ builder.Services.AddOcsApi(builder.Configuration);
 
 var app = builder.Build();
 
+if (args.Contains("--check-barcodes", StringComparer.Ordinal))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var missing = await db.Products.CountAsync(p => p.Barcode == null || p.Barcode.Trim() == "");
+    var duplicateGroups = await db.Products.Where(p => p.Barcode != null && p.Barcode.Trim() != "")
+        .GroupBy(p => p.Barcode!.Trim().ToUpper()).CountAsync(g => g.Count() > 1);
+    Console.WriteLine($"Products without barcode: {missing}; duplicate barcode groups: {duplicateGroups}.");
+    return;
+}
+
 if (args.Contains("--check-migrations", StringComparer.Ordinal))
 {
     await using var scope = app.Services.CreateAsyncScope();

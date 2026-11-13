@@ -153,6 +153,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFcmService, FcmNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();
+        services.AddScoped<IManagedTimeSlotService, ManagedTimeSlotService>();
+        services.AddScoped<IBarcodeLabelTemplateService, BarcodeLabelTemplateService>();
+        services.AddScoped<IContractService, ContractService>();
+        services.AddScoped<IContractTemplateService, ContractTemplateService>();
         services.AddScoped<IConsignmentService, ConsignmentService>();
         services.AddScoped<ICustomerProfileService, CustomerProfileService>();
         services.AddScoped<CustomerConsignmentService>();

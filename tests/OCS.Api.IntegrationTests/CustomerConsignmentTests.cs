@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.AspNetCore.Hosting;
 using OCS.Api.Consts;
 using OCS.Api.Context;
@@ -112,6 +114,9 @@ public sealed class CustomerConsignmentTests
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(jwtSettings));
             builder.ConfigureServices(services =>
             {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.RemoveAll<AppDbContext>();
                 services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(databaseName));
                 services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
                 {

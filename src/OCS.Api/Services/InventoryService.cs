@@ -175,8 +175,8 @@ public sealed class InventoryService(AppDbContext db)
         var product = await Products().SingleOrDefaultAsync(x => x.Id == id, ct);
         if (product is null) return Missing<InventoryProductDto>();
         if (request.ExpectedVersion == Guid.Empty || product.InventoryVersion != request.ExpectedVersion) return Conflict();
-        if (product.Status != ProductStatus.PendingProcessing || product.ApprovalStatus == ProductApprovalStatus.Approved)
-            return Invalid("Chỉ sửa thông tin sản phẩm chưa được duyệt và chưa mở bán.");
+        if (product.Status is not (ProductStatus.PendingProcessing or ProductStatus.OnSale))
+            return Invalid("Chỉ sửa thông tin sản phẩm đang xử lý hoặc đang bán.");
         var name = request.Name?.Trim(); var size = request.Size?.Trim(); var description = request.Description?.Trim();
         if (string.IsNullOrWhiteSpace(name) || name.Length > 200 || string.IsNullOrWhiteSpace(size) || size.Length > 30 ||
             description?.Length > 2000 || request.ConditionPercentage is < 0 or > 100)
