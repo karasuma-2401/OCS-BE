@@ -68,6 +68,7 @@ public sealed class CustomerConsignmentTests
         db.Accounts.Add(account);
         await db.SaveChangesAsync();
         Assert.IsType<ForbidResult>(await CreateController(db, id).Get(default));
+        Assert.IsType<ForbidResult>(await CreateController(db, id).Search(new ConsignmentSearchRequest(), default));
     }
 
     [Fact]
@@ -86,6 +87,7 @@ public sealed class CustomerConsignmentTests
         });
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/customers/me/consignments")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/customers/me/consignments/search")).StatusCode);
         var authorization = Assert.Single(typeof(CustomerConsignmentsController).GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>());
         Assert.Equal("Customer", authorization.Roles);
     }
@@ -164,6 +166,17 @@ public sealed class CustomerConsignmentTests
         Assert.Equal(800m, item.EstimatedPayout);
         Assert.Equal(300m, item.SettledAmount);
         Assert.Equal("Sold", Assert.Single(item.Products).Status);
+        using var searchResponse = await client.GetAsync("/api/customers/me/consignments/search?query=shirt&pageSize=5");
+        Assert.Equal(HttpStatusCode.OK, searchResponse.StatusCode);
+        var search = await searchResponse.Content.ReadFromJsonAsync<ConsignmentSearchResponse>();
+        Assert.Equal("HTTP-OWN", Assert.Single(search!.Items).ContractNumber);
+        Assert.Equal(1, search.Overview.TotalContracts);
+        foreach (var invalid in new[] { "signedFrom=2026-02-30", "signedFrom=2026-12-01&signedTo=2026-11-01", "status=Unknown", "page=0", "pageSize=101", "expiresFrom=not-a-date" })
+        {
+            using var bad = await client.GetAsync($"/api/customers/me/consignments/search?{invalid}");
+            Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+            Assert.Equal("application/problem+json", bad.Content.Headers.ContentType?.MediaType);
+        }
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/customers/me/consignments/{ownedContractId}/products/{ownedProductId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/customers/me/consignments/{foreignContractId}/products/{ownedProductId}")).StatusCode);
         using var documentResponse = await client.GetAsync($"/api/customers/me/consignments/{ownedContractId}/document");

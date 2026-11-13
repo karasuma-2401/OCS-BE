@@ -662,8 +662,10 @@ Mỗi phần tử là một hợp đồng (một đợt ký gửi), gồm `contr
 Tiền dự kiến là tổng giá niêm yết trừ tỷ lệ hoa hồng đã thỏa thuận của từng sản phẩm, giả định tất cả bán đúng giá; không phải số tiền chắc chắn được trả và không trừ khoản đã quyết toán. Nếu một sản phẩm thiếu tỷ lệ hoa hồng, tiền dự kiến của sản phẩm và tổng hợp đồng là `null`. `settledAmount` là tổng `TotalAmount` của các khoản payout có trạng thái `Completed`; không tính `Pending` hoặc `Transferred`. Các khoản điều chỉnh được phản ánh theo tổng payout đã lưu.
 
 
-### T?p h?p ??ng v? chi ti?t s?n ph?m k? g?i
+### Tệp hợp đồng và chi tiết sản phẩm ký gửi
 
-`GET /api/customers/me/consignments` b? sung `contractDocument` (metadata ho?c null) v? `detailAvailable` cho s?n ph?m. `GET /api/customers/me/consignments/{contractId}/document` tr? t?p c?a ch?nh kh?ch h?ng; `GET /api/customers/me/consignments/{contractId}/products/{productId}` tr? chi ti?t; ???ng d?n ?nh trong chi ti?t ch? ph?c v? object R2 h?p l? sau ki?m tra quy?n s? h?u. Kh?ng t?n t?i ho?c kh?ng thu?c ch? t?i kho?n tr? 404.
+`GET /api/customers/me/consignments` trả `contractDocument` và `detailAvailable`. Các endpoint `GET /api/customers/me/consignments/{contractId}/document` và `GET /api/customers/me/consignments/{contractId}/products/{productId}` kiểm tra quyền sở hữu. Nhân viên có quyền `appointments.staff.reception` dùng `PUT /api/consignments/{contractId}/document` với multipart `file` và CSRF; tối đa 10 MiB.
 
-Nh?n vi?n c? quy?n `appointments.staff.reception` d?ng `PUT /api/consignments/{contractId}/document`, multipart tr??ng `file`, ?? g?n ho?c thay t?p. Gi?i h?n 10 MiB, PDF/JPEG/PNG/WebP, ki?m tra MIME v? ch? k? ??u t?p; c?n CSRF. T?p ???c l?u trong database; migration `AddConsignmentDocuments` c?n ???c ?p d?ng tr??c khi ch?y.
+### Tìm kiếm hợp đồng của khách hàng
+
+`GET /api/customers/me/consignments/search` nhận `query`, `status` (`Active`, `Completed`, `Cancelled`), `signedFrom`, `signedTo`, `expiresFrom`, `expiresTo` (`YYYY-MM-DD`), `page` (mặc định 1) và `pageSize` (mặc định 5, tối đa 100). Khoảng ngày theo Asia/Ho_Chi_Minh và bao gồm cả hai đầu. Kết quả gồm `items`, `page`, `pageSize`, `totalCount`, `totalPages`, `overview`. Tổng quan tính trên tất cả hợp đồng của khách; tổng và trang tính sau lọc. Dữ liệu không hợp lệ trả 400 Validation Problem Details. Endpoint mảng cũ không thay đổi.

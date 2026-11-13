@@ -36,6 +36,19 @@ public sealed class CustomerConsignmentsController(CustomerConsignmentService co
         Response.Headers.CacheControl = "no-store";
         return Ok(response);
     }
+    /// <summary>Tim, loc va phan trang hop dong cua khach hang dang dang nhap.</summary>
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(ConsignmentSearchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Search([FromQuery] ConsignmentSearchRequest request, CancellationToken cancellationToken)
+    {
+        if (!TryGetCustomerId(out var customerId)) return Unauthorized();
+        var response = await consignments.SearchAsync(customerId, request, cancellationToken);
+        if (response is null) return Forbid();
+        Response.Headers.CacheControl = "no-store";
+        return Ok(response);
+    }
+
     /// <summary>Lay tep hop dong da ky cua chinh khach hang.</summary>
     [HttpGet("{contractId:guid}/document")]
     public async Task<IActionResult> GetDocument(Guid contractId, CancellationToken ct)
