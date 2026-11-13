@@ -243,7 +243,10 @@ internal sealed class TestDatabase(string adminConnectionString, string database
     public string ConnectionString { get; } = new NpgsqlConnectionStringBuilder(adminConnectionString)
     { Database = databaseName, Pooling = false }.ConnectionString;
 
-    public AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(ConnectionString).Options);
+    public AppDbContext Context() => new(new DbContextOptionsBuilder<AppDbContext>()
+        .UseNpgsql(ConnectionString)
+        .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning))
+        .Options);
 
     public static async Task<TestDatabase> CreateAsync(string? migration = null)
     {

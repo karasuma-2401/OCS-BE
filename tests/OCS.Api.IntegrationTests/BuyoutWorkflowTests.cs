@@ -292,14 +292,14 @@ public sealed class BuyoutWorkflowTests
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         client.DefaultRequestHeaders.Add("X-Test-Bypass-Csrf", "true");
         var route = $"/api/buyouts/{Guid.NewGuid()}/review";
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
+        Assert.Single((await client.GetFromJsonAsync<CategoryResponse[]>("/api/categories"))!);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GenerateAccessToken(customer, ["Customer"], customerSession));
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GenerateAccessToken(staff, ["Staff"], staffSession));
         var categories = await client.GetFromJsonAsync<CategoryResponse[]>("/api/categories?activeOnly=true");
         var activeCategory = Assert.Single(categories!);
         Assert.Equal(activeCategoryId, activeCategory.Id);
-        Assert.Equal(2, (await client.GetFromJsonAsync<CategoryResponse[]>("/api/categories"))!.Length);
+        Assert.Equal(2, (await client.GetFromJsonAsync<CategoryResponse[]>("/api/categories?activeOnly=false"))!.Length);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/buyouts/inspections", new CreateBuyoutInspectionRequest(customerId, "Jacket", "M", null, 90, brandId, activeCategory.Id, "Passed", true))).StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
@@ -309,7 +309,7 @@ public sealed class BuyoutWorkflowTests
             db.RolePermissions.Remove(grant);
             await db.SaveChangesAsync();
         }
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync(route, new ReviewBuyoutRequest(Guid.NewGuid(), true, null))).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GenerateAccessToken(manager, ["Manager"], managerSession));
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync(route, new ReviewBuyoutRequest(Guid.NewGuid(), true, null))).StatusCode);

@@ -51,6 +51,9 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
             .HasConversion<string>()
             .HasMaxLength(20);
 
+        builder.Property(x => x.ActualItemCount)
+            .HasDefaultValue(0);
+
         builder.HasOne(x => x.Customer)
             .WithMany()
             .HasForeignKey(x => x.CustomerId)
