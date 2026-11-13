@@ -19,8 +19,14 @@ public sealed class ContractServiceTests
         var brand = new Brand { Name = "Thương hiệu", DefaultCommissionRate = 20 };
         var products = Enumerable.Range(1, 12).Select(index =>
         {
-            var product = new Product { Name = $"Sản phẩm {index}", Barcode = $"OCS-{index}", Size = "M", ConditionPercentage = 90,
-                Description = string.Join(" ", Enumerable.Repeat("Chi tiết tình trạng sản phẩm tiếng Việt", 35)) };
+            var product = new Product
+            {
+                Name = $"Sản phẩm {index}",
+                Barcode = $"OCS-{index}",
+                Size = "M",
+                ConditionPercentage = 90,
+                Description = string.Join(" ", Enumerable.Repeat("Chi tiết tình trạng sản phẩm tiếng Việt", 35))
+            };
             product.AssignConsignmentTerms(contract.Id, 1234567.5m, brand, 17.5m);
             return (product, brand.Name, "Danh mục");
         }).ToList();
@@ -45,7 +51,11 @@ public sealed class ContractServiceTests
         var now = DateTimeOffset.UtcNow;
         var request = new CreateContractRequest
         {
-            RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return", SaveCustomer = true,
+            RequestId = Guid.NewGuid(),
+            SignedAt = now,
+            EndsAt = now.AddDays(30),
+            ExpiryHandling = "Return",
+            SaveCustomer = true,
             Guest = new ContractGuestRequest { FullName = "Khách xem trước", PhoneNumber = "0901234567" },
             Products = [new ContractProductRequest { Name = "Áo", Size = "M", BrandId = brand.Id, CategoryId = category.Id, AgreedCommissionRate = 15, ListedPrice = 120000 }]
         };
@@ -55,7 +65,7 @@ public sealed class ContractServiceTests
         Assert.StartsWith("%PDF-", System.Text.Encoding.ASCII.GetString(preview.Data!, 0, 5));
         using (var document = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(preview.Data!), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
             Assert.True(document.PageCount > 0);
-        Assert.Empty(db.ChangeTracker.Entries().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted));
+        Assert.DoesNotContain(db.ChangeTracker.Entries(), x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
         Assert.Empty(db.CustomerProfiles);
         Assert.Empty(db.ConsignmentContracts);
         Assert.Empty(db.ContractDocuments);
@@ -207,10 +217,18 @@ public sealed class ContractServiceTests
         db.AddRange(employee, brand, category);
         await db.SaveChangesAsync();
         var now = DateTimeOffset.UtcNow;
-        var request = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return", SaveCustomer = saveCustomer, Terms = "Nội dung do nhân viên nhập",
+        var request = new CreateContractRequest
+        {
+            RequestId = Guid.NewGuid(),
+            SignedAt = now,
+            EndsAt = now.AddDays(30),
+            ExpiryHandling = "Return",
+            SaveCustomer = saveCustomer,
+            Terms = "Nội dung do nhân viên nhập",
             Guest = new ContractGuestRequest { FullName = "Khách vãng lai", PhoneNumber = "0901234567", Address = "Địa chỉ", BankCode = "VCB", BankAccountNumber = "123456", BankAccountHolderName = "Khách" },
             Products = [new ContractProductRequest { Name = "Áo", Size = "M", ConditionPercentage = 90, ListedPrice = 100000, AgreedCommissionRate = 15.25m, BrandId = brand.Id, CategoryId = category.Id,
-                Images = [new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }, new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }] }] };
+                Images = [new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }, new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }] }]
+        };
         var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
         Assert.True(result.IsSuccess, result.Error?.Message);
         var contract = await db.ConsignmentContracts.SingleAsync();
@@ -260,9 +278,15 @@ public sealed class ContractServiceTests
         db.AddRange(employee, brand, category);
         await db.SaveChangesAsync();
         var now = DateTimeOffset.UtcNow;
-        var request = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(1), ExpiryHandling = "Return",
+        var request = new CreateContractRequest
+        {
+            RequestId = Guid.NewGuid(),
+            SignedAt = now,
+            EndsAt = now.AddDays(1),
+            ExpiryHandling = "Return",
             Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" },
-            Products = [new ContractProductRequest { Name = "Áo", Size = "M", BrandId = brand.Id, CategoryId = category.Id, AgreedCommissionRate = commission }] };
+            Products = [new ContractProductRequest { Name = "Áo", Size = "M", BrandId = brand.Id, CategoryId = category.Id, AgreedCommissionRate = commission }]
+        };
         var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
         Assert.Equal("CONTRACT.INVALID_PRODUCTS", result.Error!.Code);
         Assert.Empty(db.ConsignmentContracts);
@@ -281,9 +305,17 @@ public sealed class ContractServiceTests
         await db.SaveChangesAsync();
         var now = DateTimeOffset.UtcNow;
         var signature = new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" };
-        var request = new CreateContractRequest { CustomerId = profile.Id, RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return",
+        var request = new CreateContractRequest
+        {
+            CustomerId = profile.Id,
+            RequestId = Guid.NewGuid(),
+            SignedAt = now,
+            EndsAt = now.AddDays(30),
+            ExpiryHandling = "Return",
             CustomerDetails = new ContractCustomerDetailsRequest { Address = "Địa chỉ chỉ trên hợp đồng", BankCode = "VCB", BankAccountNumber = "123456", BankAccountHolderName = "Khách" },
-            Signature = signature, Terms = string.Join('\n', Enumerable.Repeat("Điều khoản dự thảo có tiếng Việt.", 90)) };
+            Signature = signature,
+            Terms = string.Join('\n', Enumerable.Repeat("Điều khoản dự thảo có tiếng Việt.", 90))
+        };
         var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
         Assert.True(result.IsSuccess, result.Error?.Message);
         var saved = await db.ConsignmentContracts.SingleAsync();
@@ -307,9 +339,15 @@ public sealed class ContractServiceTests
         db.EmployeeProfiles.Add(employee);
         await db.SaveChangesAsync();
         var now = DateTimeOffset.UtcNow;
-        var request = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(1), ExpiryHandling = "Return",
+        var request = new CreateContractRequest
+        {
+            RequestId = Guid.NewGuid(),
+            SignedAt = now,
+            EndsAt = now.AddDays(1),
+            ExpiryHandling = "Return",
             Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" },
-            Signature = new ContractImageRequest { ContentType = "image/png", Data = "not-base64" } };
+            Signature = new ContractImageRequest { ContentType = "image/png", Data = "not-base64" }
+        };
         var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
         Assert.Equal("CONTRACT.INVALID_SIGNATURE", result.Error!.Code);
         Assert.Empty(db.ConsignmentContracts);

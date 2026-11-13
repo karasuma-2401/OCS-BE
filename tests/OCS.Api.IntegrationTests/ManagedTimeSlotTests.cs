@@ -69,7 +69,7 @@ public sealed class ManagedTimeSlotTests
         var request = new CreateAppointmentRequest { AppointmentDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1), TimeSlotId = slot.Id, EstimatedItemCount = 1 };
         var results = await Task.WhenAll(new AppointmentService(firstUnit, new NotificationService(firstUnit)).CreateAsync(accounts[0].Id, request),
             new AppointmentService(secondUnit, new NotificationService(secondUnit)).CreateAsync(accounts[1].Id, request));
-        Assert.Single(results.Where(result => result.IsSuccess));
-        Assert.Single(results.Where(result => result.Error?.Code == "SLOT_FULL"));
+        Assert.Single(results, result => result.IsSuccess);
+        Assert.Single(results, result => result.Error?.Code == "SLOT_FULL");
     }
 }

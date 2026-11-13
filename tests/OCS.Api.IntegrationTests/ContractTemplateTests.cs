@@ -22,7 +22,8 @@ public sealed class ContractTemplateTests
         var service = new ContractTemplateService(db);
         var request = new UpdateContractTemplateRequest
         {
-            Title = "Mẫu PDF", PdfBase64 = Convert.ToBase64String(ContractPdfRenderer.CreateSampleBackground()),
+            Title = "Mẫu PDF",
+            PdfBase64 = Convert.ToBase64String(ContractPdfRenderer.CreateSampleBackground()),
             FieldMappings = [new("customerName", 1, 35, 42, 50, 4), new("signature", 1, 60, 75, 30, 12)]
         };
         var preview = service.Preview(request);
@@ -78,8 +79,15 @@ public sealed class ContractTemplateTests
         var request = new UpdateContractTemplateRequest { Title = "Hợp đồng A", DefaultTerms = "Điều khoản A" };
         var first = (await templates.UpdateAsync(request, Guid.NewGuid(), default)).Data!;
         var now = DateTimeOffset.UtcNow;
-        var contractRequest = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return", TemplateVersion = first.Version,
-            Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" } };
+        var contractRequest = new CreateContractRequest
+        {
+            RequestId = Guid.NewGuid(),
+            SignedAt = now,
+            EndsAt = now.AddDays(30),
+            ExpiryHandling = "Return",
+            TemplateVersion = first.Version,
+            Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" }
+        };
         var contracts = new ContractService(db);
         Assert.True((await contracts.CreateAsync(contractRequest, employee.Id, default)).IsSuccess);
         var document = await db.ContractDocuments.SingleAsync();

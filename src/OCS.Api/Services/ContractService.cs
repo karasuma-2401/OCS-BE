@@ -95,12 +95,27 @@ public sealed class ContractService(AppDbContext db) : IContractService
             var existing = await GetCustomerAsync(customerId.Value, cancellationToken);
             if (!existing.IsSuccess) return Result.Failure<PreparedContract>(existing.Error!);
             var customer = existing.Data!;
-            guest = new ContractGuestRequest { FullName = customer.FullName, PhoneNumber = customer.PhoneNumber, Email = customer.Email,
-                IdentityNumber = customer.IdentityNumber, Address = customer.Address, BankCode = customer.BankCode,
-                BankAccountNumber = customer.BankAccountNumber, BankAccountHolderName = customer.BankAccountHolderName };
+            guest = new ContractGuestRequest
+            {
+                FullName = customer.FullName,
+                PhoneNumber = customer.PhoneNumber,
+                Email = customer.Email,
+                IdentityNumber = customer.IdentityNumber,
+                Address = customer.Address,
+                BankCode = customer.BankCode,
+                BankAccountNumber = customer.BankAccountNumber,
+                BankAccountHolderName = customer.BankAccountHolderName
+            };
             if (request.CustomerDetails is { } details)
-                guest = guest with { Email = details.Email, IdentityNumber = details.IdentityNumber, Address = details.Address,
-                    BankCode = details.BankCode, BankAccountNumber = details.BankAccountNumber, BankAccountHolderName = details.BankAccountHolderName };
+                guest = guest with
+                {
+                    Email = details.Email,
+                    IdentityNumber = details.IdentityNumber,
+                    Address = details.Address,
+                    BankCode = details.BankCode,
+                    BankAccountNumber = details.BankAccountNumber,
+                    BankAccountHolderName = details.BankAccountHolderName
+                };
         }
         else if (request.CustomerDetails is not null)
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CUSTOMER.INVALID_DATA", "Thông tin bổ sung chỉ dùng cho khách đã có hồ sơ."));
@@ -201,10 +216,25 @@ public sealed class ContractService(AppDbContext db) : IContractService
             if ((email is not null && await db.Accounts.AnyAsync(x => x.NormalizedEmail == EmailIdentity.Normalize(email), cancellationToken)) ||
                 (identity is not null && await db.Accounts.AnyAsync(x => x.AccountType == AccountType.Customer && x.IdentityNumber == identity, cancellationToken)))
                 return Result.Failure<PreparedContract>(ApplicationError.Conflict("CUSTOMER.ALREADY_EXISTS", "Email hoặc giấy tờ đã có hồ sơ khách."));
-            var account = new Account { AccountType = AccountType.Customer, Status = AccountStatus.PendingActivation,
-                FullName = guest.FullName.Trim(), PhoneNumber = guest.PhoneNumber.Trim(), Email = email, IdentityNumber = identity, CreatedByAccountId = employeeId };
-            var profile = new CustomerProfile { Id = account.Id, Account = account, Address = guest.Address?.Trim(), BankCode = guest.BankCode?.Trim(),
-                BankAccountNumber = guest.BankAccountNumber?.Trim(), BankAccountHolderName = guest.BankAccountHolderName?.Trim() };
+            var account = new Account
+            {
+                AccountType = AccountType.Customer,
+                Status = AccountStatus.PendingActivation,
+                FullName = guest.FullName.Trim(),
+                PhoneNumber = guest.PhoneNumber.Trim(),
+                Email = email,
+                IdentityNumber = identity,
+                CreatedByAccountId = employeeId
+            };
+            var profile = new CustomerProfile
+            {
+                Id = account.Id,
+                Account = account,
+                Address = guest.Address?.Trim(),
+                BankCode = guest.BankCode?.Trim(),
+                BankAccountNumber = guest.BankAccountNumber?.Trim(),
+                BankAccountHolderName = guest.BankAccountHolderName?.Trim()
+            };
             if (!preview)
             {
                 db.CustomerProfiles.Add(profile);
@@ -216,16 +246,29 @@ public sealed class ContractService(AppDbContext db) : IContractService
         for (var productIndex = 0; productIndex < request.Products.Count; productIndex++)
         {
             var item = request.Products[productIndex];
-            var product = new Product { Name = item.Name.Trim(), Size = item.Size.Trim(), Description = item.Description?.Trim(),
-                ConditionPercentage = item.ConditionPercentage, CategoryId = item.CategoryId, StorageLocationId = item.StorageLocationId };
+            var product = new Product
+            {
+                Name = item.Name.Trim(),
+                Size = item.Size.Trim(),
+                Description = item.Description?.Trim(),
+                ConditionPercentage = item.ConditionPercentage,
+                CategoryId = item.CategoryId,
+                StorageLocationId = item.StorageLocationId
+            };
             product.Barcode = barcodes[productIndex];
             product.AssignConsignmentTerms(contract.Id, item.ListedPrice, brands[item.BrandId], item.AgreedCommissionRate);
             pdfProducts.Add((product, brands[item.BrandId].Name, categories[item.CategoryId].Name));
             for (var imageIndex = 0; imageIndex < decodedImages[productIndex].Length; imageIndex++)
             {
                 var file = decodedImages[productIndex][imageIndex];
-                var image = new ProductImage { ProductId = product.Id, Content = file.Content, ContentType = file.ContentType,
-                    ImageType = imageIndex == 0 ? ProductImageType.Cover : ProductImageType.Detail, SortOrder = imageIndex };
+                var image = new ProductImage
+                {
+                    ProductId = product.Id,
+                    Content = file.Content,
+                    ContentType = file.ContentType,
+                    ImageType = imageIndex == 0 ? ProductImageType.Cover : ProductImageType.Detail,
+                    SortOrder = imageIndex
+                };
                 image.Url = $"/api/product-images/{image.Id:D}";
                 product.Images.Add(image);
             }

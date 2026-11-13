@@ -40,8 +40,15 @@ public sealed class ContractTemplateService(AppDbContext db) : IContractTemplate
         var error = Validate(request);
         if (error is not null) return Result.Failure<byte[]>(error);
         var template = new ContractTemplate(); Apply(template, request);
-        var contract = new ConsignmentContract { ContractNumber = "HD-MAU-001", CustomerNameSnapshot = "Khách hàng mẫu", CustomerPhoneSnapshot = "0900000000",
-            SignedAt = DateTimeOffset.UtcNow, EndsAt = DateTimeOffset.UtcNow.AddMonths(3), ExpiryHandling = ExpiryHandling.Return };
+        var contract = new ConsignmentContract
+        {
+            ContractNumber = "HD-MAU-001",
+            CustomerNameSnapshot = "Khách hàng mẫu",
+            CustomerPhoneSnapshot = "0900000000",
+            SignedAt = DateTimeOffset.UtcNow,
+            EndsAt = DateTimeOffset.UtcNow.AddMonths(3),
+            ExpiryHandling = ExpiryHandling.Return
+        };
         var brand = new Brand { Name = "Thương hiệu mẫu", DefaultCommissionRate = 20 };
         var product = new Product { Name = "Sản phẩm mẫu", Barcode = "MÃ SẢN PHẨM", Size = "M", ConditionPercentage = 90 };
         product.AssignConsignmentTerms(contract.Id, 250000, brand, 20);

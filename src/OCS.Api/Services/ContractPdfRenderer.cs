@@ -257,13 +257,21 @@ public static class ContractPdfRenderer
         static string Date(DateTimeOffset value) => value.ToOffset(TimeSpan.FromHours(7)).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
         var values = new Dictionary<string, string>
         {
-            ["contractNumber"] = contract.ContractNumber, ["signedAt"] = Date(contract.SignedAt), ["endsAt"] = Date(contract.EndsAt),
+            ["contractNumber"] = contract.ContractNumber,
+            ["signedAt"] = Date(contract.SignedAt),
+            ["endsAt"] = Date(contract.EndsAt),
             ["expiryHandling"] = contract.ExpiryHandling == OCS.Api.Consts.ExpiryHandling.Return ? "Trả lại khách hàng" : "Quyên góp",
-            ["employeeName"] = Value(employeeName), ["employeeTitle"] = Value(employeeTitle), ["employeePhone"] = Value(employeePhone),
-            ["customerName"] = Value(contract.CustomerNameSnapshot), ["customerPhone"] = Value(contract.CustomerPhoneSnapshot),
-            ["customerEmail"] = Value(contract.CustomerEmailSnapshot), ["identityNumber"] = Value(contract.CustomerIdentitySnapshot),
-            ["address"] = Value(contract.CustomerAddressSnapshot), ["bankCode"] = Value(contract.BankCodeSnapshot),
-            ["bankAccountNumber"] = Value(contract.BankAccountNumberSnapshot), ["bankAccountHolder"] = Value(contract.BankAccountHolderSnapshot),
+            ["employeeName"] = Value(employeeName),
+            ["employeeTitle"] = Value(employeeTitle),
+            ["employeePhone"] = Value(employeePhone),
+            ["customerName"] = Value(contract.CustomerNameSnapshot),
+            ["customerPhone"] = Value(contract.CustomerPhoneSnapshot),
+            ["customerEmail"] = Value(contract.CustomerEmailSnapshot),
+            ["identityNumber"] = Value(contract.CustomerIdentitySnapshot),
+            ["address"] = Value(contract.CustomerAddressSnapshot),
+            ["bankCode"] = Value(contract.BankCodeSnapshot),
+            ["bankAccountNumber"] = Value(contract.BankAccountNumberSnapshot),
+            ["bankAccountHolder"] = Value(contract.BankAccountHolderSnapshot),
             ["terms"] = Value(terms),
             ["products"] = products.Count == 0 ? "Chưa có sản phẩm." : string.Join("\n", products.Select((item, index) =>
                 $"{index + 1}. {item.Product.Name} | Mã: {item.Product.Barcode} | {item.Brand} | {item.Category} | Size: {item.Product.Size} | Độ mới: {item.Product.ConditionPercentage}% | Giá: {item.Product.ListedPrice.ToString("N2", CultureInfo.GetCultureInfo("vi-VN"))} đ | Hoa hồng: {item.Product.AgreedCommissionRate:0.##}% | {Value(item.Product.Description)}"))
@@ -322,8 +330,14 @@ public static class ContractPdfRenderer
             }
         }
         // Bản chi tiết luôn được đính kèm để vùng điền ngắn không làm mất dữ liệu hoặc chữ ký.
-        var appendixTemplate = new ContractTemplate { Title = "PHỤ LỤC THÔNG TIN HỢP ĐỒNG", OrganizationName = template.OrganizationName,
-            HeaderText = template.HeaderText, FooterText = template.FooterText, DefaultTerms = template.DefaultTerms };
+        var appendixTemplate = new ContractTemplate
+        {
+            Title = "PHỤ LỤC THÔNG TIN HỢP ĐỒNG",
+            OrganizationName = template.OrganizationName,
+            HeaderText = template.HeaderText,
+            FooterText = template.FooterText,
+            DefaultTerms = template.DefaultTerms
+        };
         var appendix = Render(contract, employeeName, employeeTitle, employeePhone, products, terms, signature, preview, appendixTemplate);
         using var appendixPdf = PdfReader.Open(new MemoryStream(appendix), PdfDocumentOpenMode.Import);
         foreach (var page in appendixPdf.Pages) pdf.AddPage(page);
