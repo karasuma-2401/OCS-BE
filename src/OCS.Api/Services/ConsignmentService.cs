@@ -410,6 +410,7 @@ public sealed class ConsignmentService(
                     Barcode = barcode,
                     Name = item.Name.Trim(),
                     Size = string.IsNullOrWhiteSpace(item.Size) ? "FreeSize" : item.Size.Trim(),
+                    Material = item.Material?.Trim(),
                     Description = descBuilder.ToString().Trim(),
                     ConditionPercentage = Math.Clamp(item.ConditionPercentage, 0, 100),
                     BrandId = brand.Id,

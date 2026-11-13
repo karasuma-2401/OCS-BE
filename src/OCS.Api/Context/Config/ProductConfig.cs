@@ -93,6 +93,9 @@ public sealed class ProductConfig : IEntityTypeConfiguration<Product>
             .HasMaxLength(30)
             .IsRequired();
 
+        builder.Property(x => x.Material)
+            .HasMaxLength(100);
+
         builder.Property(x => x.Description)
             .HasMaxLength(2000);
 

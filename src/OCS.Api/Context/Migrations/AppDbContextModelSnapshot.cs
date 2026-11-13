@@ -491,6 +491,11 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("ActualItemCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
+
                     b.Property<Guid?>("AppointmentId")
                         .HasColumnType("uuid");
 
@@ -1498,6 +1503,10 @@ namespace OCS.Api.Context.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Material")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("SourceType")
                         .IsRequired()

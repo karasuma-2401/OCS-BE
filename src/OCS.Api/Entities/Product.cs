@@ -11,6 +11,8 @@ public sealed class Product : BaseEntity
 
     public string Size { get; set; } = string.Empty;
 
+    public string? Material { get; set; }
+
     public string? Description { get; set; }
 
     public int ConditionPercentage { get; set; }

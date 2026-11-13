@@ -95,6 +95,8 @@ public static class ServiceCollectionExtensions
                 options.UseNpgsql(connectionString);
             }
 
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+
             options.AddInterceptors(
                 provider.GetRequiredService<TimestampSaveChangesInterceptor>(),
                 provider.GetRequiredService<AuditSaveChangesInterceptor>());
