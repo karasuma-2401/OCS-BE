@@ -1,5 +1,6 @@
 using OCS.Api.Common;
 using OCS.Api.Models.Contracts;
+using OCS.Api.Models.Products;
 
 namespace OCS.Api.Interfaces.Services;
 
@@ -16,4 +17,6 @@ public interface IContractService
     Task<Result<ContractEmployeeResponse>> GetEmployeeAsync(Guid id, CancellationToken cancellationToken);
     Task<Result<ContractCustomerResponse>> UpdateCustomerAsync(Guid id, UpdateContractCustomerRequest request, CancellationToken cancellationToken);
     Task<ContractImageContent?> GetImageAsync(Guid id, CancellationToken cancellationToken);
+    Task<string> GenerateBarcodeAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyList<BarcodeLabelProduct>?> GetBarcodeProductsAsync(Guid id, CancellationToken cancellationToken);
 }

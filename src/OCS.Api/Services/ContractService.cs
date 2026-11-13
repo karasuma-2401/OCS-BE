@@ -6,6 +6,10 @@ using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Contracts;
+using OCS.Api.Models.Products;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace OCS.Api.Services;
 
@@ -131,8 +135,14 @@ public sealed class ContractService(AppDbContext db) : IContractService
             string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 200 || string.IsNullOrWhiteSpace(x.Size) || x.Size.Length > 30 ||
             x.ConditionPercentage is < 0 or > 100 || x.ListedPrice < 0 || x.ListedPrice > 9999999999999999m || decimal.Round(x.ListedPrice, 2) != x.ListedPrice ||
             x.AgreedCommissionRate is null or < 0 or > 100 || decimal.Round(x.AgreedCommissionRate.Value, 2) != x.AgreedCommissionRate.Value ||
-            x.Description?.Length > 2000 || !string.IsNullOrWhiteSpace(x.Barcode)))
+            x.Description?.Length > 2000 || (x.Barcode is not null && !Regex.IsMatch(x.Barcode, "^OCS-[0-9A-F]{16}$", RegexOptions.CultureInvariant))))
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_PRODUCTS", "Thông tin sản phẩm hoặc danh mục không hợp lệ."));
+        // Legacy callers without a barcode receive a stable value for the same draft.
+        var barcodes = request.Products.Select((item, index) => item.Barcode ??
+            "OCS-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{numberId:N}:{index}")))[..16]).ToArray();
+        if (barcodes.Distinct(StringComparer.OrdinalIgnoreCase).Count() != barcodes.Length ||
+            await db.Products.AnyAsync(product => product.Barcode != null && barcodes.Contains(product.Barcode.Trim().ToUpper()), cancellationToken))
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict("PRODUCT.DUPLICATE_BARCODE", "Mã barcode đã tồn tại. Hãy tạo lại mã cho sản phẩm trước khi tiếp tục."));
         var decodedImages = new List<(string ContentType, byte[] Content)[]>();
         long totalImageBytes = 0;
         foreach (var item in request.Products)
@@ -208,7 +218,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
             var item = request.Products[productIndex];
             var product = new Product { Name = item.Name.Trim(), Size = item.Size.Trim(), Description = item.Description?.Trim(),
                 ConditionPercentage = item.ConditionPercentage, CategoryId = item.CategoryId, StorageLocationId = item.StorageLocationId };
-            product.Barcode = preview ? "Tự tạo khi lưu hợp đồng" : $"OCS-{product.Id:N}";
+            product.Barcode = barcodes[productIndex];
             product.AssignConsignmentTerms(contract.Id, item.ListedPrice, brands[item.BrandId], item.AgreedCommissionRate);
             pdfProducts.Add((product, brands[item.BrandId].Name, categories[item.CategoryId].Name));
             for (var imageIndex = 0; imageIndex < decodedImages[productIndex].Length; imageIndex++)
@@ -231,11 +241,31 @@ public sealed class ContractService(AppDbContext db) : IContractService
         {
             return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.ALREADY_EXISTS", "Yêu cầu này đã tạo hợp đồng. Vui lòng kiểm tra lại trước khi thử tiếp."));
         }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_Products_Barcode" or "IX_Products_Barcode_Normalized" })
+        {
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict("PRODUCT.DUPLICATE_BARCODE", "Mã sản phẩm đã được sử dụng. Hãy chọn ‘Tạo mã khác’ cho sản phẩm bị trùng và xem trước lại hợp đồng."));
+        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
             return Result.Failure<PreparedContract>(ApplicationError.Conflict("CONTRACT.DUPLICATE_DATA", "Mã sản phẩm hoặc thông tin hồ sơ đã tồn tại. Vui lòng kiểm tra lại."));
         }
         return Result.Success(new PreparedContract(Map(contract), pdf));
+    }
+
+    public async Task<string> GenerateBarcodeAsync(CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var barcode = "OCS-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
+            if (!await db.Products.AnyAsync(product => product.Barcode != null && product.Barcode.Trim().ToUpper() == barcode, cancellationToken)) return barcode;
+        }
+    }
+
+    public async Task<IReadOnlyList<BarcodeLabelProduct>?> GetBarcodeProductsAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (!await db.ConsignmentContracts.AsNoTracking().AnyAsync(contract => contract.Id == id, cancellationToken)) return null;
+        return await db.Products.AsNoTracking().Where(product => product.ConsignmentContractId == id).OrderBy(product => product.Name)
+            .Select(product => new BarcodeLabelProduct(product.Id, product.Name, product.Barcode, product.ListedPrice)).ToListAsync(cancellationToken);
     }
 
     public async Task<ContractImageContent?> GetImageAsync(Guid id, CancellationToken cancellationToken) =>

@@ -34,6 +34,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<StorageLocation> StorageLocations => Set<StorageLocation>();
 
     public DbSet<AppointmentTimeSlot> AppointmentTimeSlots => Set<AppointmentTimeSlot>();
+    public DbSet<BarcodeLabelTemplate> BarcodeLabelTemplates => Set<BarcodeLabelTemplate>();
 
     public DbSet<Appointment> Appointments => Set<Appointment>();
 

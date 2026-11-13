@@ -24,4 +24,15 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
         var content = await contracts.GetPdfAsync(id, cancellationToken);
         return content is null ? NotFound() : File(content, "application/pdf");
     }
+
+    /// <summary>Lấy sản phẩm của hợp đồng để xem trước và in nhãn.</summary>
+    [HttpGet("{id:guid}/barcode-products")]
+    public async Task<IActionResult> BarcodeProducts(Guid id, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
+            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
+             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        var products = await contracts.GetBarcodeProductsAsync(id, cancellationToken);
+        return products is null ? NotFound() : Ok(products);
+    }
 }

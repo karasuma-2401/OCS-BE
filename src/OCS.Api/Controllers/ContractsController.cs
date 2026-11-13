@@ -5,6 +5,7 @@ using OCS.Api.Authorization;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Contracts;
+using OCS.Api.Models.Products;
 
 namespace OCS.Api.Controllers;
 
@@ -15,6 +16,11 @@ namespace OCS.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ContractsController(IContractService contracts, IAuthorizationService authorization) : ControllerBase
 {
+    /// <summary>Tạo mã barcode cho sản phẩm đang được thêm vào hợp đồng.</summary>
+    [HttpGet("barcode/new")]
+    [Authorize(Policy = PermissionCatalog.ProductsCreate)]
+    public async Task<ActionResult<GeneratedBarcodeResponse>> GenerateBarcode(CancellationToken cancellationToken) =>
+        Ok(new GeneratedBarcodeResponse(await contracts.GenerateBarcodeAsync(cancellationToken)));
     /// <summary>Lập hợp đồng cơ bản từ lịch hẹn hoặc khách đến trực tiếp.</summary>
     [HttpPost]
     [RequestSizeLimit(12_000_000)]

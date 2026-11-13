@@ -363,6 +363,38 @@ namespace OCS.Api.Context.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.BarcodeLabelTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Columns")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FontSizePt")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HeightMm")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("WidthMm")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BarcodeLabelTemplates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BarcodeLabelTemplates_Singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.Brand", b =>
                 {
                     b.Property<Guid>("Id")
