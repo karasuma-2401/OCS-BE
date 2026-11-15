@@ -626,10 +626,40 @@ public sealed class ContractService(AppDbContext db) : IContractService
         return pdf;
     }
 
-    public async Task<IReadOnlyList<ContractListItem>> ListAsync(int page, CancellationToken cancellationToken) =>
-        await db.ConsignmentContracts.AsNoTracking().OrderByDescending(x => x.SignedAt).ThenBy(x => x.Id)
+    public async Task<IReadOnlyList<ContractListItem>> ListAsync(
+        int page,
+        string? query = null,
+        string? status = null,
+        DateTimeOffset? fromDate = null,
+        DateTimeOffset? toDate = null,
+        CancellationToken cancellationToken = default)
+    {
+        var q = db.ConsignmentContracts.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var trimmed = query.Trim().ToUpper();
+            q = q.Where(x => x.ContractNumber.ToUpper().Contains(trimmed) ||
+                             (x.CustomerNameSnapshot != null && x.CustomerNameSnapshot.ToUpper().Contains(trimmed)) ||
+                             (x.CustomerPhoneSnapshot != null && x.CustomerPhoneSnapshot.Contains(trimmed)));
+        }
+        if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConsignmentContractStatus>(status, true, out var parsedStatus))
+        {
+            q = q.Where(x => x.Status == parsedStatus);
+        }
+        if (fromDate.HasValue)
+        {
+            q = q.Where(x => x.SignedAt >= fromDate.Value);
+        }
+        if (toDate.HasValue)
+        {
+            q = q.Where(x => x.SignedAt <= toDate.Value);
+        }
+
+        return await q.OrderByDescending(x => x.SignedAt).ThenBy(x => x.Id)
             .Skip((Math.Clamp(page, 1, 10000) - 1) * 20).Take(20)
-            .Select(x => new ContractListItem(x.Id, x.ContractNumber, x.CustomerNameSnapshot, x.SignedAt, true)).ToListAsync(cancellationToken);
+            .Select(x => new ContractListItem(x.Id, x.ContractNumber, x.CustomerNameSnapshot, x.SignedAt, true, x.Status.ToString()))
+            .ToListAsync(cancellationToken);
+    }
 
     private static ContractResponse Map(ConsignmentContract contract) => new(
         contract.Id, contract.ContractNumber, contract.CustomerId, contract.AppointmentId,

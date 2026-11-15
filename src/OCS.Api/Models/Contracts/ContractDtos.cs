@@ -102,7 +102,7 @@ public sealed record ContractResponse(
     Guid CreatedByEmployeeId, DateTimeOffset SignedAt, DateTimeOffset EndsAt,
     string ExpiryHandling, string Status);
 
-public sealed record ContractListItem(Guid Id, string ContractNumber, string? CustomerName, DateTimeOffset SignedAt, bool HasPdf);
+public sealed record ContractListItem(Guid Id, string ContractNumber, string? CustomerName, DateTimeOffset SignedAt, bool HasPdf, string? Status = null);
 
 /// <summary>Sản phẩm chi tiết trong hợp đồng ký gửi.</summary>
 public sealed record ContractDetailProductDto(

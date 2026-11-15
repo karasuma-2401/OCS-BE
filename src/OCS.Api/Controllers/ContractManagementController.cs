@@ -11,8 +11,14 @@ namespace OCS.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ContractManagementController(IContractService contracts) : ControllerBase
 {
-    /// <summary>Tra cứu hợp đồng theo trang.</summary>
+    /// <summary>Tra cứu hợp đồng theo trang và bộ lọc.</summary>
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] int page = 1, CancellationToken cancellationToken = default) =>
-        Ok(await contracts.ListAsync(page, cancellationToken));
+    public async Task<IActionResult> List(
+        [FromQuery] int page = 1,
+        [FromQuery] string? query = null,
+        [FromQuery] string? status = null,
+        [FromQuery] DateTimeOffset? fromDate = null,
+        [FromQuery] DateTimeOffset? toDate = null,
+        CancellationToken cancellationToken = default) =>
+        Ok(await contracts.ListAsync(page, query, status, fromDate, toDate, cancellationToken));
 }
