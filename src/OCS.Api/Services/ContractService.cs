@@ -213,6 +213,11 @@ public sealed class ContractService(AppDbContext db) : IContractService
             decodedImages.Add(files.ToArray());
         }
 
+        var approvedTemplate = termsRequest?.ApprovedTemplate;
+        var terms = approvedTemplate is null ? (string.IsNullOrWhiteSpace(template.DefaultTerms) ? null : template.DefaultTerms) : ExtractTermsFromWord(approvedTemplate);
+        if (approvedTemplate is not null && string.IsNullOrWhiteSpace(terms))
+            return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.TERMS_INVALID", "Không thể đọc điều khoản đã duyệt."));
+
         // Số cố định theo lịch hẹn hoặc mã yêu cầu, kết hợp unique index để chặn yêu cầu lặp.
         var contractNumber = $"HD-{numberId:N}";
         if (await db.ConsignmentContracts.AnyAsync(x => x.ContractNumber == contractNumber, cancellationToken))
@@ -236,6 +241,16 @@ public sealed class ContractService(AppDbContext db) : IContractService
         contract.BankCodeSnapshot = guest.BankCode?.Trim();
         contract.BankAccountNumberSnapshot = guest.BankAccountNumber?.Trim();
         contract.BankAccountHolderSnapshot = guest.BankAccountHolderName?.Trim();
+
+        contract.TermsSnapshot = terms;
+        contract.TemplateTitleSnapshot = template.Title;
+        contract.OrganizationNameSnapshot = template.OrganizationName;
+        contract.HeaderTextSnapshot = template.HeaderText;
+        contract.FooterTextSnapshot = template.FooterText;
+        contract.EmployeeNameSnapshot = employeeAccount?.FullName;
+        contract.EmployeeTitleSnapshot = employee.JobTitle;
+        contract.EmployeePhoneSnapshot = employeeAccount?.PhoneNumber;
+
         if (request.SaveCustomer)
         {
             var email = string.IsNullOrWhiteSpace(guest.Email) ? null : guest.Email.Trim();
@@ -303,10 +318,6 @@ public sealed class ContractService(AppDbContext db) : IContractService
             }
             if (!preview) db.Products.Add(product);
         }
-        var approvedTemplate = termsRequest?.ApprovedTemplate;
-        var terms = approvedTemplate is null ? (string.IsNullOrWhiteSpace(template.DefaultTerms) ? null : template.DefaultTerms) : ExtractTermsFromWord(approvedTemplate);
-        if (approvedTemplate is not null && string.IsNullOrWhiteSpace(terms))
-            return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.TERMS_INVALID", "Không thể đọc điều khoản đã duyệt."));
         byte[] word = [], pdf = [];
         if (renderLegacy)
         {
@@ -588,12 +599,25 @@ public sealed class ContractService(AppDbContext db) : IContractService
             catch (System.Text.Json.JsonException) { }
         }
 
-        title = string.IsNullOrWhiteSpace(title) ? template.Title : title;
-        organizationName = string.IsNullOrWhiteSpace(organizationName) ? template.OrganizationName : organizationName;
-        headerText = string.IsNullOrWhiteSpace(headerText) ? template.HeaderText : headerText;
-        footerText = string.IsNullOrWhiteSpace(footerText) ? template.FooterText : footerText;
+        title = !string.IsNullOrWhiteSpace(contract.TemplateTitleSnapshot)
+            ? contract.TemplateTitleSnapshot
+            : (string.IsNullOrWhiteSpace(title) ? template.Title : title);
 
-        var terms = document?.Terms ?? template.DefaultTerms;
+        organizationName = !string.IsNullOrWhiteSpace(contract.OrganizationNameSnapshot)
+            ? contract.OrganizationNameSnapshot
+            : (string.IsNullOrWhiteSpace(organizationName) ? template.OrganizationName : organizationName);
+
+        headerText = !string.IsNullOrWhiteSpace(contract.HeaderTextSnapshot)
+            ? contract.HeaderTextSnapshot
+            : (string.IsNullOrWhiteSpace(headerText) ? template.HeaderText : headerText);
+
+        footerText = !string.IsNullOrWhiteSpace(contract.FooterTextSnapshot)
+            ? contract.FooterTextSnapshot
+            : (string.IsNullOrWhiteSpace(footerText) ? template.FooterText : footerText);
+
+        var terms = !string.IsNullOrWhiteSpace(contract.TermsSnapshot)
+            ? contract.TermsSnapshot
+            : (document?.Terms ?? template.DefaultTerms);
         var products = contract.Products
             .Where(x => x.ApprovalStatus != Consts.ProductApprovalStatus.Rejected)
             .OrderBy(x => x.CreatedAt)
@@ -683,13 +707,21 @@ public sealed class ContractService(AppDbContext db) : IContractService
             ? contract.BankAccountHolderSnapshot
             : (directCustomerProfile?.BankAccountHolderName ?? contract.Customer?.BankAccountHolderName ?? contract.Appointment?.Customer?.BankAccountHolderName);
 
-        var employeeName = !string.IsNullOrWhiteSpace(directEmployeeAccount?.FullName)
-            ? directEmployeeAccount!.FullName
-            : (!string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
-                ? contract.CreatedByEmployee.Account.FullName
-                : "Nhân viên tiếp nhận");
-        var employeeTitle = directEmployeeProfile?.JobTitle ?? contract.CreatedByEmployee?.JobTitle;
-        var employeePhone = directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber;
+        var employeeName = !string.IsNullOrWhiteSpace(contract.EmployeeNameSnapshot)
+            ? contract.EmployeeNameSnapshot
+            : (!string.IsNullOrWhiteSpace(directEmployeeAccount?.FullName)
+                ? directEmployeeAccount!.FullName
+                : (!string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
+                    ? contract.CreatedByEmployee.Account.FullName
+                    : "Nhân viên tiếp nhận"));
+
+        var employeeTitle = !string.IsNullOrWhiteSpace(contract.EmployeeTitleSnapshot)
+            ? contract.EmployeeTitleSnapshot
+            : (directEmployeeProfile?.JobTitle ?? contract.CreatedByEmployee?.JobTitle);
+
+        var employeePhone = !string.IsNullOrWhiteSpace(contract.EmployeePhoneSnapshot)
+            ? contract.EmployeePhoneSnapshot
+            : (directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber);
 
         var detail = new ContractDetailDto(
             contract.Id,

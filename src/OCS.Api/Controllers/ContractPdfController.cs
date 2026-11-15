@@ -65,18 +65,18 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             try { template = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(content); }
             catch (System.Text.Json.JsonException) { /* Tài liệu lịch sử có thể không phải ảnh chụp mẫu web. */ }
         }
-        string? title = null;
-        string? organizationName = null;
-        string? headerText = null;
-        string? footerText = null;
+        string? title = contract.TemplateTitleSnapshot;
+        string? organizationName = contract.OrganizationNameSnapshot;
+        string? headerText = contract.HeaderTextSnapshot;
+        string? footerText = contract.FooterTextSnapshot;
         string? snapCustName = null;
         string? snapCustPhone = null;
         if (template is { } t)
         {
-            if (t.TryGetProperty("title", out var p1) || t.TryGetProperty("Title", out p1)) title = p1.GetString();
-            if (t.TryGetProperty("organizationName", out var p2) || t.TryGetProperty("OrganizationName", out p2)) organizationName = p2.GetString();
-            if (t.TryGetProperty("headerText", out var p3) || t.TryGetProperty("HeaderText", out p3)) headerText = p3.GetString();
-            if (t.TryGetProperty("footerText", out var p4) || t.TryGetProperty("FooterText", out p4)) footerText = p4.GetString();
+            if (string.IsNullOrWhiteSpace(title) && (t.TryGetProperty("title", out var p1) || t.TryGetProperty("Title", out p1))) title = p1.GetString();
+            if (string.IsNullOrWhiteSpace(organizationName) && (t.TryGetProperty("organizationName", out var p2) || t.TryGetProperty("OrganizationName", out p2))) organizationName = p2.GetString();
+            if (string.IsNullOrWhiteSpace(headerText) && (t.TryGetProperty("headerText", out var p3) || t.TryGetProperty("HeaderText", out p3))) headerText = p3.GetString();
+            if (string.IsNullOrWhiteSpace(footerText) && (t.TryGetProperty("footerText", out var p4) || t.TryGetProperty("FooterText", out p4))) footerText = p4.GetString();
             if (t.TryGetProperty("customerName", out var p5) || t.TryGetProperty("CustomerName", out p5)) snapCustName = p5.GetString();
             if (t.TryGetProperty("customerPhone", out var p6) || t.TryGetProperty("CustomerPhone", out p6)) snapCustPhone = p6.GetString();
         }
@@ -125,13 +125,19 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             ? contract.BankAccountHolderSnapshot
             : (directCustomerProfile?.BankAccountHolderName ?? contract.Customer?.BankAccountHolderName ?? contract.Appointment?.Customer?.BankAccountHolderName);
 
-        var employeeName = !string.IsNullOrWhiteSpace(directEmployeeAccount?.FullName)
-            ? directEmployeeAccount!.FullName
-            : (!string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
-                ? contract.CreatedByEmployee.Account.FullName
-                : "Nhân viên tiếp nhận");
-        var employeeTitle = directEmployeeProfile?.JobTitle ?? contract.CreatedByEmployee?.JobTitle;
-        var employeePhone = directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber;
+        var employeeName = !string.IsNullOrWhiteSpace(contract.EmployeeNameSnapshot)
+            ? contract.EmployeeNameSnapshot
+            : (!string.IsNullOrWhiteSpace(directEmployeeAccount?.FullName)
+                ? directEmployeeAccount!.FullName
+                : (!string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
+                    ? contract.CreatedByEmployee.Account.FullName
+                    : "Nhân viên tiếp nhận"));
+        var employeeTitle = !string.IsNullOrWhiteSpace(contract.EmployeeTitleSnapshot)
+            ? contract.EmployeeTitleSnapshot
+            : (directEmployeeProfile?.JobTitle ?? contract.CreatedByEmployee?.JobTitle);
+        var employeePhone = !string.IsNullOrWhiteSpace(contract.EmployeePhoneSnapshot)
+            ? contract.EmployeePhoneSnapshot
+            : (directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber);
 
         return Ok(new {
             id = contract.Id,
@@ -151,7 +157,7 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             employeeName = employeeName,
             employeeTitle = employeeTitle,
             employeePhone = employeePhone,
-            terms = document?.Terms,
+            terms = !string.IsNullOrWhiteSpace(contract.TermsSnapshot) ? contract.TermsSnapshot : document?.Terms,
             title = title,
             organizationName = organizationName,
             headerText = headerText,

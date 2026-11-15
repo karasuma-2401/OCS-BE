@@ -18,6 +18,16 @@ public sealed class ConsignmentContract : BaseEntity
     public string? BankAccountNumberSnapshot { get; set; }
     public string? BankAccountHolderSnapshot { get; set; }
 
+    public string? TermsSnapshot { get; set; }
+    public string? TemplateTitleSnapshot { get; set; }
+    public string? OrganizationNameSnapshot { get; set; }
+    public string? HeaderTextSnapshot { get; set; }
+    public string? FooterTextSnapshot { get; set; }
+
+    public string? EmployeeNameSnapshot { get; set; }
+    public string? EmployeeTitleSnapshot { get; set; }
+    public string? EmployeePhoneSnapshot { get; set; }
+
     public Guid? AppointmentId { get; set; }
 
     public Guid CreatedByEmployeeId { get; set; }

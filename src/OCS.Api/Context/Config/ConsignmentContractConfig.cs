@@ -43,6 +43,15 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
         builder.Property(x => x.BankAccountNumberSnapshot).HasMaxLength(50);
         builder.Property(x => x.BankAccountHolderSnapshot).HasMaxLength(200);
 
+        builder.Property(x => x.TermsSnapshot).HasMaxLength(6000);
+        builder.Property(x => x.TemplateTitleSnapshot).HasMaxLength(200);
+        builder.Property(x => x.OrganizationNameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.HeaderTextSnapshot).HasMaxLength(1000);
+        builder.Property(x => x.FooterTextSnapshot).HasMaxLength(1000);
+        builder.Property(x => x.EmployeeNameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.EmployeeTitleSnapshot).HasMaxLength(100);
+        builder.Property(x => x.EmployeePhoneSnapshot).HasMaxLength(20);
+
         builder.HasIndex(x => x.ContractNumber)
             .IsUnique();
 

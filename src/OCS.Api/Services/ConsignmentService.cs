@@ -501,6 +501,19 @@ public sealed class ConsignmentService(
                 var template = await dbContext.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(t => t.Id == 1, cancellationToken) ?? new ContractTemplate();
                 if (request.TemplateVersion != template.Version)
                     return Result.Failure<ReceptionContractResponse>(ApplicationError.Conflict("CONTRACT_TEMPLATE.CHANGED", "Mẫu hợp đồng đã thay đổi. Hãy tải lại, xem và ký lại."));
+
+                var staff = await dbContext.Accounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == staffId, cancellationToken);
+                var staffProf = await dbContext.EmployeeProfiles.AsNoTracking().FirstOrDefaultAsync(ep => ep.Id == staffId, cancellationToken);
+
+                contract.TermsSnapshot = template.DefaultTerms;
+                contract.TemplateTitleSnapshot = template.Title;
+                contract.OrganizationNameSnapshot = template.OrganizationName;
+                contract.HeaderTextSnapshot = template.HeaderText;
+                contract.FooterTextSnapshot = template.FooterText;
+                contract.EmployeeNameSnapshot = staff?.FullName;
+                contract.EmployeeTitleSnapshot = staffProf?.JobTitle;
+                contract.EmployeePhoneSnapshot = staff?.PhoneNumber;
+
                 var snapshot = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new {
                     template.Title, template.OrganizationName, template.HeaderText, template.FooterText, Note = request.Note?.Trim(),
                     CustomerName = contract.CustomerNameSnapshot,
