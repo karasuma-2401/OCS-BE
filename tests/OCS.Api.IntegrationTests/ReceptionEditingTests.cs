@@ -56,7 +56,8 @@ public sealed class ReceptionEditingTests
         var changed = await db.Products.SingleAsync(p => p.Name == "A");
         changed.Name = "Tên đã đổi trong kho";
         await db.SaveChangesAsync();
-        var controller = new ContractPdfController(new ContractService(db), null!, db) {
+        var controller = new ContractPdfController(new ContractService(db), null!, db)
+        {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Role, "Admin")], "test")) } }
         };
         var response = Assert.IsType<OkObjectResult>(await controller.Web(result.Data.ContractId, default));
@@ -120,8 +121,11 @@ public sealed class ReceptionEditingTests
         var category = new Category { Name = "Category" };
         db.AddRange(brand, category);
         await db.SaveChangesAsync();
-        var request = new CreateReceptionRequest {
-            Signature = Signature(), TemplateVersion = Guid.Empty, ActualItemCount = 1,
+        var request = new CreateReceptionRequest
+        {
+            Signature = Signature(),
+            TemplateVersion = Guid.Empty,
+            ActualItemCount = 1,
             CustomerInfo = new ReceptionCustomerInfoDto { FullName = "Khách mới", PhoneNumber = "0901234567", Email = "guest@example.test", IdentityNumber = "12345", Address = "Địa chỉ", BankCode = "VCB", BankAccountNumber = "123", BankAccountHolderName = "Khách mới" },
             Items = [new CreateReceptionItemDto { Name = "Áo", BrandId = brand.Id, CategoryId = category.Id, Size = "M", ListedPrice = 50000, CommissionRate = 20 }]
         };

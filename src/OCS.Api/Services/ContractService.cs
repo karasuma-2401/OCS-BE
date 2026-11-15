@@ -339,13 +339,29 @@ public sealed class ContractService(AppDbContext db) : IContractService
         db.ContractDocuments.Add(new ContractDocument
         {
             ContractId = contract.Id,
-            Content = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new {
-                template.Title, template.OrganizationName, template.HeaderText, template.FooterText,
+            Content = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                template.Title,
+                template.OrganizationName,
+                template.HeaderText,
+                template.FooterText,
                 CustomerName = contract.CustomerNameSnapshot,
                 CustomerPhone = contract.CustomerPhoneSnapshot,
-                Products = pdfProducts.Select(item => new { item.Product.Id, item.Product.Name, item.Product.Barcode, item.Product.Size, item.Brand, item.Category, item.Product.Material, item.Product.Description, item.Product.ConditionPercentage,
-                    ListedPrice = item.Product.AgreedListedPrice ?? item.Product.ListedPrice, CommissionRate = item.Product.AgreedCommissionRate ?? 0,
-                    Images = item.Product.Images.OrderBy(i => i.SortOrder).Select(i => i.Content != null && i.ContentType != null ? $"data:{i.ContentType};base64,{Convert.ToBase64String(i.Content)}" : i.Url).ToArray() }).ToArray()
+                Products = pdfProducts.Select(item => new
+                {
+                    item.Product.Id,
+                    item.Product.Name,
+                    item.Product.Barcode,
+                    item.Product.Size,
+                    item.Brand,
+                    item.Category,
+                    item.Product.Material,
+                    item.Product.Description,
+                    item.Product.ConditionPercentage,
+                    ListedPrice = item.Product.AgreedListedPrice ?? item.Product.ListedPrice,
+                    CommissionRate = item.Product.AgreedCommissionRate ?? 0,
+                    Images = item.Product.Images.OrderBy(i => i.SortOrder).Select(i => i.Content != null && i.ContentType != null ? $"data:{i.ContentType};base64,{Convert.ToBase64String(i.Content)}" : i.Url).ToArray()
+                }).ToArray()
             }, System.Text.Json.JsonSerializerOptions.Web),
             Terms = terms,
             TemplateVersion = termsRequest is null ? templateVersion.ToString("N") : "terms-" + termsRequest.Id.ToString("N"),
@@ -391,7 +407,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
                 if (p.InnerText.Contains("CHỮ KÝ KHÁCH HÀNG", StringComparison.OrdinalIgnoreCase) ||
                     p.InnerText.Contains("[Chữ ký khách hàng]", StringComparison.OrdinalIgnoreCase))
                     break;
-                if (!string.IsNullOrEmpty(text) && !text.StartsWith("[", StringComparison.Ordinal) &&
+                if (!string.IsNullOrEmpty(text) && !text.StartsWith('[') &&
                     !text.Contains(WordTemplateSamples.TermsInstruction, StringComparison.Ordinal))
                     lines.Add(text);
             }

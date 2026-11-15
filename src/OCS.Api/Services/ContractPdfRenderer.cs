@@ -294,9 +294,9 @@ public static class ContractPdfRenderer
         try
         {
             var trimmed = template.FieldMappingsJson.Trim();
-            if (trimmed.StartsWith("["))
+            if (trimmed.StartsWith('['))
                 mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(trimmed) ?? [];
-            else if (trimmed.StartsWith("{"))
+            else if (trimmed.StartsWith('{'))
             {
                 using var doc = JsonDocument.Parse(trimmed);
                 if (doc.RootElement.TryGetProperty("fieldMappings", out var fm))

@@ -89,11 +89,11 @@ public sealed class ContractTemplateService(AppDbContext db) : IContractTemplate
             try
             {
                 var trimmed = x.FieldMappingsJson.Trim();
-                if (trimmed.StartsWith("["))
+                if (trimmed.StartsWith('['))
                 {
                     mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(trimmed) ?? [];
                 }
-                else if (trimmed.StartsWith("{"))
+                else if (trimmed.StartsWith('{'))
                 {
                     using var doc = JsonDocument.Parse(trimmed);
                     var root = doc.RootElement;

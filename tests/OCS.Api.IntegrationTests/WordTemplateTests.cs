@@ -159,7 +159,7 @@ public sealed class WordTemplateTests
         await db.SaveChangesAsync();
         var controller = new WordProductDocumentsController(db);
         var request = new WordProductDocumentRequest([product.Id]);
-        
+
         // Preview defaults to PDF (even with sample fallback when template is not yet in DB)
         var pdfResponse = Assert.IsType<FileContentResult>(await controller.Preview(request));
         Assert.Equal("application/pdf", pdfResponse.ContentType);

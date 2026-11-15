@@ -139,7 +139,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             ? contract.EmployeePhoneSnapshot
             : (directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber);
 
-        return Ok(new {
+        return Ok(new
+        {
             id = contract.Id,
             contractNumber = contract.ContractNumber,
             signedAt = contract.SignedAt,
@@ -163,7 +164,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             headerText = headerText,
             footerText = footerText,
             note = template is { } noteSnapshot && (noteSnapshot.TryGetProperty("note", out var note) || noteSnapshot.TryGetProperty("Note", out note)) ? note.GetString() : null,
-            template = template is not null ? new {
+            template = template is not null ? new
+            {
                 title = title,
                 organizationName = organizationName,
                 headerText = headerText,
@@ -171,7 +173,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             } : null,
             signature = document?.SignatureContent is null || document.SignatureContentType is null ? null : new { contentType = document.SignatureContentType, data = Convert.ToBase64String(document.SignatureContent) },
             customerSignatureDataUrl = document?.SignatureContent is null || document.SignatureContentType is null ? null : $"data:{document.SignatureContentType};base64,{Convert.ToBase64String(document.SignatureContent)}",
-            products = template is { } snapshot && (snapshot.TryGetProperty("products", out var snapshotProducts) || snapshot.TryGetProperty("Products", out snapshotProducts)) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new {
+            products = template is { } snapshot && (snapshot.TryGetProperty("products", out var snapshotProducts) || snapshot.TryGetProperty("Products", out snapshotProducts)) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new
+            {
                 id = x.Id,
                 name = x.Name,
                 barcode = x.Barcode,

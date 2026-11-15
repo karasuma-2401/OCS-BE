@@ -42,7 +42,8 @@ public sealed class ConsignmentsController(IConsignmentService consignmentServic
     public async Task<IActionResult> ReceptionTemplate([FromServices] IContractTemplateService templates, CancellationToken cancellationToken)
     {
         var template = await templates.GetAsync(cancellationToken);
-        return Ok(new {
+        return Ok(new
+        {
             template.Title,
             template.OrganizationName,
             template.HeaderText,

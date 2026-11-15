@@ -514,13 +514,29 @@ public sealed class ConsignmentService(
                 contract.EmployeeTitleSnapshot = staffProf?.JobTitle;
                 contract.EmployeePhoneSnapshot = staff?.PhoneNumber;
 
-                var snapshot = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new {
-                    template.Title, template.OrganizationName, template.HeaderText, template.FooterText, Note = request.Note?.Trim(),
+                var snapshot = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new
+                {
+                    template.Title,
+                    template.OrganizationName,
+                    template.HeaderText,
+                    template.FooterText,
+                    Note = request.Note?.Trim(),
                     CustomerName = contract.CustomerNameSnapshot,
                     CustomerPhone = contract.CustomerPhoneSnapshot,
-                    Products = pdfProducts.Where(item => item.Product.ApprovalStatus != ProductApprovalStatus.Rejected).Select(item => new { item.Product.Id, item.Product.Name, item.Product.Barcode, item.Product.Size, item.Brand, item.Category, item.Product.Material, item.Product.ConditionPercentage,
-                        ListedPrice = item.Product.AgreedListedPrice ?? item.Product.ListedPrice, CommissionRate = item.Product.AgreedCommissionRate ?? 0,
-                        Images = dbContext.ProductImages.Local.Where(i => i.ProductId == item.Product.Id).OrderBy(i => i.SortOrder).Select(i => i.Url).ToArray() }).ToArray()
+                    Products = pdfProducts.Where(item => item.Product.ApprovalStatus != ProductApprovalStatus.Rejected).Select(item => new
+                    {
+                        item.Product.Id,
+                        item.Product.Name,
+                        item.Product.Barcode,
+                        item.Product.Size,
+                        item.Brand,
+                        item.Category,
+                        item.Product.Material,
+                        item.Product.ConditionPercentage,
+                        ListedPrice = item.Product.AgreedListedPrice ?? item.Product.ListedPrice,
+                        CommissionRate = item.Product.AgreedCommissionRate ?? 0,
+                        Images = dbContext.ProductImages.Local.Where(i => i.ProductId == item.Product.Id).OrderBy(i => i.SortOrder).Select(i => i.Url).ToArray()
+                    }).ToArray()
                 }, System.Text.Json.JsonSerializerOptions.Web);
                 dbContext.ContractDocuments.Add(new ContractDocument { ContractId = contractId, Content = snapshot, SignatureContent = signatureBytes, SignatureContentType = request.Signature.ContentType, Terms = template.DefaultTerms, TemplateVersion = template.Version.ToString("N") });
             }
