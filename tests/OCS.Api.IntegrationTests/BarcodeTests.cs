@@ -72,11 +72,11 @@ public sealed class BarcodeTests
         await using (var connection = await database.OpenAsync())
         {
             await using var command = new NpgsqlCommand($"""
-                INSERT INTO "Brands" ("Id", "Name", "DefaultCommissionRate", "CreatedAt")
-                VALUES ('{brandId}', 'Nhãn', 20, now());
+                INSERT INTO "Brands" ("Id", "Name", "DefaultCommissionRate", "Tier", "IsActive", "CreatedAt")
+                VALUES ('{brandId}', 'Nhãn', 20, 'LocalBrand', true, now());
 
-                INSERT INTO "Categories" ("Id", "Name", "CreatedAt")
-                VALUES ('{categoryId}', 'Áo', now());
+                INSERT INTO "Categories" ("Id", "Name", "IsActive", "CreatedAt")
+                VALUES ('{categoryId}', 'Áo', true, now());
 
                 INSERT INTO "Accounts" ("Id", "FullName", "PhoneNumber", "AccountType", "Username", "Status", "CreatedAt")
                 VALUES ('{customerAccountId}', 'Khách thử', '0900000001', 'Customer', 'cust_barcode', 'Active', now()),
