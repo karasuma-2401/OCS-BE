@@ -82,11 +82,11 @@ public sealed class BarcodeTests
                 VALUES ('{customerAccountId}', 'Khách thử', '0900000001', 'Customer', 'cust_barcode', 'PendingActivation', now()),
                        ('{employeeAccountId}', 'Nhân viên thử', '0900000002', 'Internal', 'barcode-test', 'PendingActivation', now());
 
-                INSERT INTO "CustomerProfiles" ("Id", "CreatedAt")
-                VALUES ('{customerAccountId}', now());
+                INSERT INTO "CustomerProfiles" ("Id")
+                VALUES ('{customerAccountId}');
 
-                INSERT INTO "EmployeeProfiles" ("Id", "JobTitle", "HiredOn", "CreatedAt")
-                VALUES ('{employeeAccountId}', 'Manager', CURRENT_DATE, now());
+                INSERT INTO "EmployeeProfiles" ("Id", "JobTitle", "HiredOn", "Status")
+                VALUES ('{employeeAccountId}', 'Manager', CURRENT_DATE, 'Active');
 
                 INSERT INTO "Buyouts" ("Id", "BuyoutNumber", "CustomerId", "CreatedByEmployeeId", "Status", "TotalPurchasePrice", "CreatedAt")
                 VALUES ('{buyoutId}', 'BARCODE-TEST', '{customerAccountId}', '{employeeAccountId}', 'Pending', 0, now());
