@@ -123,4 +123,12 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken) =>
         (await contracts.GetAsync(id, cancellationToken)).ToActionResult(this);
 
+    /// <summary>Lấy thông tin chi tiết hợp đồng để hiển thị và in ấn trên giao diện web.</summary>
+    [HttpGet("{id:guid}/detail")]
+    [Authorize(Policy = PermissionCatalog.CustomersRead)]
+    [ProducesResponseType(typeof(ContractDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetDetail(Guid id, CancellationToken cancellationToken) =>
+        (await contracts.GetDetailAsync(id, cancellationToken)).ToActionResult(this);
+
 }

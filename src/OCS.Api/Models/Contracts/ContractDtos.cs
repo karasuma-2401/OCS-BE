@@ -103,3 +103,38 @@ public sealed record ContractResponse(
     string ExpiryHandling, string Status);
 
 public sealed record ContractListItem(Guid Id, string ContractNumber, string? CustomerName, DateTimeOffset SignedAt, bool HasPdf);
+
+/// <summary>Sản phẩm chi tiết trong hợp đồng ký gửi.</summary>
+public sealed record ContractDetailProductDto(
+    Guid Id,
+    string Name,
+    string Barcode,
+    string Size,
+    int ConditionPercentage,
+    decimal ListedPrice,
+    decimal? AgreedCommissionRate,
+    string BrandName,
+    string CategoryName);
+
+/// <summary>Chi tiết đầy đủ của hợp đồng phục vụ hiển thị và in ấn trên giao diện web.</summary>
+public sealed record ContractDetailDto(
+    Guid Id,
+    string ContractNumber,
+    DateTimeOffset SignedAt,
+    DateTimeOffset EndsAt,
+    string ExpiryHandling,
+    string Status,
+    string CustomerName,
+    string CustomerPhone,
+    string? CustomerEmail,
+    string? CustomerIdentity,
+    string? CustomerAddress,
+    string? BankCode,
+    string? BankAccountNumber,
+    string? BankAccountHolderName,
+    string EmployeeName,
+    string? EmployeeTitle,
+    string? EmployeePhone,
+    string? Terms,
+    string? CustomerSignatureDataUrl,
+    IReadOnlyList<ContractDetailProductDto> Products);

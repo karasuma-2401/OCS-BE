@@ -487,6 +487,71 @@ public sealed class ContractService(AppDbContext db) : IContractService
             : Result.Success(Map(contract));
     }
 
+    public async Task<Result<ContractDetailDto>> GetDetailAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var contract = await db.ConsignmentContracts
+            .Include(x => x.Customer).ThenInclude(x => x!.Account)
+            .Include(x => x.Products).ThenInclude(x => x.Brand)
+            .Include(x => x.Products).ThenInclude(x => x.Category)
+            .Include(x => x.CreatedByEmployee).ThenInclude(x => x.Account)
+            .AsNoTracking()
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (contract is null)
+            return Result.Failure<ContractDetailDto>(ApplicationError.NotFound("CONTRACT.NOT_FOUND", "Không tìm thấy hợp đồng."));
+
+        var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
+        var template = await db.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken);
+
+        string? sigDataUrl = null;
+        if (document?.SignatureContent is { Length: > 0 } sigBytes)
+        {
+            var sigType = string.IsNullOrWhiteSpace(document.SignatureContentType) ? "image/png" : document.SignatureContentType;
+            sigDataUrl = $"data:{sigType};base64,{Convert.ToBase64String(sigBytes)}";
+        }
+
+        var terms = document?.Terms ?? template?.DefaultTerms;
+        var products = contract.Products
+            .Where(x => x.ApprovalStatus != Consts.ProductApprovalStatus.Rejected)
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => new ContractDetailProductDto(
+                x.Id,
+                x.Name,
+                x.Barcode,
+                x.Size,
+                x.ConditionPercentage,
+                x.ListedPrice,
+                x.AgreedCommissionRate,
+                x.Brand?.Name ?? "",
+                x.Category?.Name ?? ""
+            )).ToList();
+
+        var detail = new ContractDetailDto(
+            contract.Id,
+            contract.ContractNumber,
+            contract.SignedAt,
+            contract.EndsAt,
+            contract.ExpiryHandling.ToString(),
+            contract.Status.ToString(),
+            contract.CustomerNameSnapshot ?? contract.Customer?.Account.FullName ?? "",
+            contract.CustomerPhoneSnapshot ?? contract.Customer?.Account.PhoneNumber ?? "",
+            contract.CustomerEmailSnapshot ?? contract.Customer?.Account.Email,
+            contract.CustomerIdentitySnapshot ?? contract.Customer?.Account.IdentityNumber,
+            contract.CustomerAddressSnapshot ?? contract.Customer?.Address,
+            contract.BankCodeSnapshot ?? contract.Customer?.BankCode,
+            contract.BankAccountNumberSnapshot ?? contract.Customer?.BankAccountNumber,
+            contract.BankAccountHolderSnapshot ?? contract.Customer?.BankAccountHolderName,
+            contract.CreatedByEmployee?.Account.FullName ?? "",
+            contract.CreatedByEmployee?.JobTitle,
+            contract.CreatedByEmployee?.Account.PhoneNumber,
+            terms,
+            sigDataUrl,
+            products
+        );
+
+        return Result.Success(detail);
+    }
+
     public async Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken)
     {
         var existing = await db.ContractDocuments.SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
