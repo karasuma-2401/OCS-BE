@@ -71,37 +71,30 @@ public sealed class BarcodeTests
 
         await using (var connection = await database.OpenAsync())
         {
-            await using var command = new NpgsqlCommand("""
+            await using var command = new NpgsqlCommand($"""
                 INSERT INTO "Brands" ("Id", "Name", "DefaultCommissionRate", "CreatedAt")
-                VALUES ($1, 'Nhãn', 20, now());
+                VALUES ('{brandId}', 'Nhãn', 20, now());
 
                 INSERT INTO "Categories" ("Id", "Name", "CreatedAt")
-                VALUES ($2, 'Áo', now());
+                VALUES ('{categoryId}', 'Áo', now());
 
                 INSERT INTO "Accounts" ("Id", "FullName", "PhoneNumber", "AccountType", "Username", "Status", "CreatedAt")
-                VALUES ($3, 'Khách thử', '0900000001', 'Customer', 'cust_barcode', 'Active', now()),
-                       ($4, 'Nhân viên thử', '0900000002', 'Internal', 'barcode-test', 'Active', now());
+                VALUES ('{customerAccountId}', 'Khách thử', '0900000001', 'Customer', 'cust_barcode', 'Active', now()),
+                       ('{employeeAccountId}', 'Nhân viên thử', '0900000002', 'Internal', 'barcode-test', 'Active', now());
 
                 INSERT INTO "CustomerProfiles" ("Id", "CreatedAt")
-                VALUES ($3, now());
+                VALUES ('{customerAccountId}', now());
 
                 INSERT INTO "EmployeeProfiles" ("Id", "JobTitle", "HiredOn", "CreatedAt")
-                VALUES ($4, 'Manager', CURRENT_DATE, now());
+                VALUES ('{employeeAccountId}', 'Manager', CURRENT_DATE, now());
 
                 INSERT INTO "Buyouts" ("Id", "BuyoutNumber", "CustomerId", "CreatedByEmployeeId", "Status", "TotalPurchasePrice", "CreatedAt")
-                VALUES ($5, 'BARCODE-TEST', $3, $4, 'Pending', 0, now());
+                VALUES ('{buyoutId}', 'BARCODE-TEST', '{customerAccountId}', '{employeeAccountId}', 'Pending', 0, now());
 
                 INSERT INTO "Products" ("Id", "Name", "Size", "Barcode", "BrandId", "CategoryId", "SourceType", "BuyoutId", "ListedPrice", "PurchasePrice", "ConditionPercentage", "Status", "ApprovalStatus", "InventoryVersion", "CreatedAt")
-                VALUES ($6, 'Cũ', 'M', 'EXISTING-1', $1, $2, 'Buyout', $5, 100000, 50000, 100, 'PendingProcessing', 'Pending', gen_random_uuid(), now()),
-                       ($7, 'Thiếu mã', 'M', '', $1, $2, 'Buyout', $5, 100000, 50000, 100, 'PendingProcessing', 'Pending', gen_random_uuid(), now());
+                VALUES ('{existingProductId}', 'Cũ', 'M', 'EXISTING-1', '{brandId}', '{categoryId}', 'Buyout', '{buyoutId}', 100000, 50000, 100, 'PendingProcessing', 'Pending', gen_random_uuid(), now()),
+                       ('{missingProductId}', 'Thiếu mã', 'M', '', '{brandId}', '{categoryId}', 'Buyout', '{buyoutId}', 100000, 50000, 100, 'PendingProcessing', 'Pending', gen_random_uuid(), now());
                 """, connection);
-            command.Parameters.AddWithValue(brandId);
-            command.Parameters.AddWithValue(categoryId);
-            command.Parameters.AddWithValue(customerAccountId);
-            command.Parameters.AddWithValue(employeeAccountId);
-            command.Parameters.AddWithValue(buyoutId);
-            command.Parameters.AddWithValue(existingProductId);
-            command.Parameters.AddWithValue(missingProductId);
             await command.ExecuteNonQueryAsync();
         }
 
