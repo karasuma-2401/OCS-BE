@@ -3,8 +3,19 @@ using System.ComponentModel.DataAnnotations;
 namespace OCS.Api.Models.Contracts;
 
 /// <summary>Cấu hình mẫu PDF và điều khoản mặc định hiện hành.</summary>
-public sealed record ContractTemplateResponse(string Title, string OrganizationName, string HeaderText, string FooterText,
-    string DefaultTerms, Guid Version, DateTimeOffset? UpdatedAt, string? PdfBase64, IReadOnlyList<ContractPdfFieldMapping> FieldMappings);
+public sealed record ContractTemplateResponse(
+    string Title,
+    string OrganizationName,
+    string HeaderText,
+    string FooterText,
+    string DefaultTerms,
+    Guid Version,
+    DateTimeOffset? UpdatedAt,
+    string? PdfBase64,
+    IReadOnlyList<ContractPdfFieldMapping> FieldMappings,
+    int? DefaultTermDays = null,
+    string? DefaultExpiryHandling = null
+);
 
 /// <summary>Vùng điền dữ liệu; tọa độ và kích thước tính theo phần trăm trang, gốc ở góc trên trái.</summary>
 public sealed record ContractPdfFieldMapping(string Field, int Page, double X, double Y, double Width, double Height);
@@ -20,4 +31,6 @@ public sealed record UpdateContractTemplateRequest
     public Guid Version { get; init; }
     public string? PdfBase64 { get; init; }
     public List<ContractPdfFieldMapping> FieldMappings { get; init; } = [];
+    public int? DefaultTermDays { get; init; } = 60;
+    public string? DefaultExpiryHandling { get; init; } = "Return";
 }

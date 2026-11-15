@@ -290,7 +290,20 @@ public static class ContractPdfRenderer
             graphics.DrawString(label, new XFont("Noto Sans", 8, XFontStyleEx.Bold), XBrushes.DarkRed,
                 new XRect(10, 4, pdf.Pages[0].Width.Point - 20, 14), XStringFormats.TopRight);
         }
-        var mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(template.FieldMappingsJson) ?? [];
+        List<ContractPdfFieldMapping> mappings = [];
+        try
+        {
+            var trimmed = template.FieldMappingsJson.Trim();
+            if (trimmed.StartsWith("["))
+                mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(trimmed) ?? [];
+            else if (trimmed.StartsWith("{"))
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                if (doc.RootElement.TryGetProperty("fieldMappings", out var fm))
+                    mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(fm.GetRawText()) ?? [];
+            }
+        }
+        catch { }
         foreach (var group in mappings.GroupBy(x => x.Page))
         {
             var page = pdf.Pages[group.Key - 1];

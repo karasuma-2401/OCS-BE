@@ -127,7 +127,7 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)
             return Forbid();
         return (await contracts.GetAsync(id, cancellationToken)).ToActionResult(this);
@@ -139,7 +139,7 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetDetail(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)
             return Forbid();
         return (await contracts.GetDetailAsync(id, cancellationToken)).ToActionResult(this);

@@ -92,9 +92,57 @@ public sealed class ContractTemplateService(AppDbContext db) : IContractTemplate
         entity.Title = request.Title.Trim(); entity.OrganizationName = request.OrganizationName.Trim();
         entity.HeaderText = request.HeaderText.Trim(); entity.FooterText = request.FooterText.Trim(); entity.DefaultTerms = request.DefaultTerms.Trim();
         entity.PdfBackground = string.IsNullOrEmpty(request.PdfBase64) ? null : Convert.FromBase64String(request.PdfBase64);
-        entity.FieldMappingsJson = JsonSerializer.Serialize(request.FieldMappings);
+        var payload = new
+        {
+            fieldMappings = request.FieldMappings ?? [],
+            defaultTermDays = request.DefaultTermDays ?? 60,
+            defaultExpiryHandling = string.IsNullOrWhiteSpace(request.DefaultExpiryHandling) ? "Return" : request.DefaultExpiryHandling
+        };
+        entity.FieldMappingsJson = JsonSerializer.Serialize(payload);
     }
 
-    private static ContractTemplateResponse Map(ContractTemplate x) => new(x.Title, x.OrganizationName, x.HeaderText, x.FooterText, x.DefaultTerms, x.Version, x.UpdatedAt,
-        x.PdfBackground is null ? null : Convert.ToBase64String(x.PdfBackground), JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(x.FieldMappingsJson) ?? []);
+    private static ContractTemplateResponse Map(ContractTemplate x)
+    {
+        List<ContractPdfFieldMapping> mappings = [];
+        int defaultTermDays = 60;
+        string defaultExpiryHandling = "Return";
+
+        if (!string.IsNullOrWhiteSpace(x.FieldMappingsJson))
+        {
+            try
+            {
+                var trimmed = x.FieldMappingsJson.Trim();
+                if (trimmed.StartsWith("["))
+                {
+                    mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(trimmed) ?? [];
+                }
+                else if (trimmed.StartsWith("{"))
+                {
+                    using var doc = JsonDocument.Parse(trimmed);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("fieldMappings", out var fm))
+                        mappings = JsonSerializer.Deserialize<List<ContractPdfFieldMapping>>(fm.GetRawText()) ?? [];
+                    if (root.TryGetProperty("defaultTermDays", out var td) && td.TryGetInt32(out var tdv))
+                        defaultTermDays = tdv;
+                    if (root.TryGetProperty("defaultExpiryHandling", out var eh))
+                        defaultExpiryHandling = eh.GetString() ?? "Return";
+                }
+            }
+            catch { }
+        }
+
+        return new(
+            x.Title,
+            x.OrganizationName,
+            x.HeaderText,
+            x.FooterText,
+            x.DefaultTerms,
+            x.Version,
+            x.UpdatedAt,
+            x.PdfBackground is null ? null : Convert.ToBase64String(x.PdfBackground),
+            mappings,
+            defaultTermDays,
+            defaultExpiryHandling
+        );
+    }
 }
