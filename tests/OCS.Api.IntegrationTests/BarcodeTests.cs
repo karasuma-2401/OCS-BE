@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using OCS.Api.Consts;
 using OCS.Api.Context;
 using OCS.Api.Controllers;
@@ -60,22 +61,50 @@ public sealed class BarcodeTests
     public async Task MigrationBackfillsMissingOnlyAndEnforcesNormalizedUniqueness()
     {
         await using var database = await TestDatabase.CreateAsync("20261113043305_AddContractPdfBackground");
-        await using (var context = database.Context())
+        var brandId = Guid.NewGuid();
+        var categoryId = Guid.NewGuid();
+        var customerAccountId = Guid.NewGuid();
+        var employeeAccountId = Guid.NewGuid();
+        var buyoutId = Guid.NewGuid();
+        var existingProductId = Guid.NewGuid();
+        var missingProductId = Guid.NewGuid();
+
+        await using (var connection = await database.OpenAsync())
         {
-            var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 20 };
-            var category = new Category { Name = "Áo" };
-            var customerAccount = new Account { AccountType = AccountType.Customer, FullName = "Khách thử", PhoneNumber = "0900000001" };
-            var employeeAccount = new Account { AccountType = AccountType.Internal, FullName = "Nhân viên thử", PhoneNumber = "0900000002", Username = "barcode-test" };
-            var customer = new CustomerProfile { Id = customerAccount.Id, Account = customerAccount };
-            var employee = new EmployeeProfile { Id = employeeAccount.Id, Account = employeeAccount, JobTitle = "Manager", HiredOn = DateOnly.FromDateTime(DateTime.UtcNow) };
-            var buyout = new Buyout { BuyoutNumber = "BARCODE-TEST", CustomerId = customer.Id, CreatedByEmployeeId = employee.Id };
-            var existing = new Product { Name = "Cũ", Size = "M", Barcode = "EXISTING-1", Brand = brand, Category = category };
-            var missing = new Product { Name = "Thiếu mã", Size = "M", Barcode = "", Brand = brand, Category = category };
-            existing.AssignBuyoutTerms(buyout.Id, 100000, 50000);
-            missing.AssignBuyoutTerms(buyout.Id, 100000, 50000);
-            context.AddRange(customer, employee, buyout, existing, missing);
-            await context.SaveChangesAsync();
+            await using var command = new NpgsqlCommand("""
+                INSERT INTO "Brands" ("Id", "Name", "DefaultCommissionRate", "CreatedAt")
+                VALUES ($1, 'Nhãn', 20, now());
+
+                INSERT INTO "Categories" ("Id", "Name", "CreatedAt")
+                VALUES ($2, 'Áo', now());
+
+                INSERT INTO "Accounts" ("Id", "FullName", "PhoneNumber", "AccountType", "Username", "Status", "CreatedAt")
+                VALUES ($3, 'Khách thử', '0900000001', 'Customer', 'cust_barcode', 'Active', now()),
+                       ($4, 'Nhân viên thử', '0900000002', 'Internal', 'barcode-test', 'Active', now());
+
+                INSERT INTO "CustomerProfiles" ("Id", "CreatedAt")
+                VALUES ($3, now());
+
+                INSERT INTO "EmployeeProfiles" ("Id", "JobTitle", "HiredOn", "CreatedAt")
+                VALUES ($4, 'Manager', CURRENT_DATE, now());
+
+                INSERT INTO "Buyouts" ("Id", "BuyoutNumber", "CustomerId", "CreatedByEmployeeId", "Status", "TotalPurchasePrice", "CreatedAt")
+                VALUES ($5, 'BARCODE-TEST', $3, $4, 'Pending', 0, now());
+
+                INSERT INTO "Products" ("Id", "Name", "Size", "Barcode", "BrandId", "CategoryId", "SourceType", "BuyoutId", "ListedPrice", "PurchasePrice", "ConditionPercentage", "Status", "ApprovalStatus", "InventoryVersion", "CreatedAt")
+                VALUES ($6, 'Cũ', 'M', 'EXISTING-1', $1, $2, 'Buyout', $5, 100000, 50000, 100, 'PendingProcessing', 'Pending', gen_random_uuid(), now()),
+                       ($7, 'Thiếu mã', 'M', '', $1, $2, 'Buyout', $5, 100000, 50000, 100, 'PendingProcessing', 'Pending', gen_random_uuid(), now());
+                """, connection);
+            command.Parameters.AddWithValue(brandId);
+            command.Parameters.AddWithValue(categoryId);
+            command.Parameters.AddWithValue(customerAccountId);
+            command.Parameters.AddWithValue(employeeAccountId);
+            command.Parameters.AddWithValue(buyoutId);
+            command.Parameters.AddWithValue(existingProductId);
+            command.Parameters.AddWithValue(missingProductId);
+            await command.ExecuteNonQueryAsync();
         }
+
         await database.MigrateAsync();
         await using var check = database.Context();
         var products = await check.Products.OrderBy(x => x.Name).ToListAsync();

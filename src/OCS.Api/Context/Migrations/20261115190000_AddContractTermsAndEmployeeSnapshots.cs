@@ -1,10 +1,14 @@
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using OCS.Api.Context;
 
 #nullable disable
 
 namespace OCS.Api.Context.Migrations
 {
     /// <inheritdoc />
+    [DbContext(typeof(AppDbContext))]
+    [Migration("20261115190000_AddContractTermsAndEmployeeSnapshots")]
     public partial class AddContractTermsAndEmployeeSnapshots : Migration
     {
         /// <inheritdoc />
