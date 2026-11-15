@@ -23,9 +23,11 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
         var contract = await db.ConsignmentContracts.AsNoTracking()
             .Include(x => x.Customer).ThenInclude(x => x!.Account)
+            .Include(x => x.Appointment).ThenInclude(x => x!.Customer).ThenInclude(x => x!.Account)
             .Include(x => x.Products).ThenInclude(x => x.Images)
             .Include(x => x.Products).ThenInclude(x => x.Category)
             .Include(x => x.Products).ThenInclude(x => x.Brand)
+            .Include(x => x.CreatedByEmployee).ThenInclude(x => x.Account)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (contract is null) return NotFound();
         var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
@@ -39,38 +41,123 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
         string? organizationName = null;
         string? headerText = null;
         string? footerText = null;
+        string? snapCustName = null;
+        string? snapCustPhone = null;
         if (template is { } t)
         {
             if (t.TryGetProperty("title", out var p1) || t.TryGetProperty("Title", out p1)) title = p1.GetString();
             if (t.TryGetProperty("organizationName", out var p2) || t.TryGetProperty("OrganizationName", out p2)) organizationName = p2.GetString();
             if (t.TryGetProperty("headerText", out var p3) || t.TryGetProperty("HeaderText", out p3)) headerText = p3.GetString();
             if (t.TryGetProperty("footerText", out var p4) || t.TryGetProperty("FooterText", out p4)) footerText = p4.GetString();
+            if (t.TryGetProperty("customerName", out var p5) || t.TryGetProperty("CustomerName", out p5)) snapCustName = p5.GetString();
+            if (t.TryGetProperty("customerPhone", out var p6) || t.TryGetProperty("CustomerPhone", out p6)) snapCustPhone = p6.GetString();
         }
+
+        var customerName = !string.IsNullOrWhiteSpace(contract.CustomerNameSnapshot)
+            ? contract.CustomerNameSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.FullName)
+                ? contract.Customer!.Account.FullName
+                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.FullName)
+                    ? contract.Appointment!.Customer!.Account.FullName
+                    : (!string.IsNullOrWhiteSpace(snapCustName) ? snapCustName : "Khách hàng")));
+
+        var customerPhone = !string.IsNullOrWhiteSpace(contract.CustomerPhoneSnapshot)
+            ? contract.CustomerPhoneSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.PhoneNumber)
+                ? contract.Customer!.Account.PhoneNumber
+                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.PhoneNumber)
+                    ? contract.Appointment!.Customer!.Account.PhoneNumber
+                    : (!string.IsNullOrWhiteSpace(snapCustPhone) ? snapCustPhone : "")));
+
+        var customerEmail = !string.IsNullOrWhiteSpace(contract.CustomerEmailSnapshot)
+            ? contract.CustomerEmailSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.Email)
+                ? contract.Customer!.Account.Email
+                : contract.Appointment?.Customer?.Account?.Email);
+
+        var customerIdentity = !string.IsNullOrWhiteSpace(contract.CustomerIdentitySnapshot)
+            ? contract.CustomerIdentitySnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.IdentityNumber)
+                ? contract.Customer!.Account.IdentityNumber
+                : contract.Appointment?.Customer?.Account?.IdentityNumber);
+
+        var customerAddress = !string.IsNullOrWhiteSpace(contract.CustomerAddressSnapshot)
+            ? contract.CustomerAddressSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Address)
+                ? contract.Customer!.Address
+                : contract.Appointment?.Customer?.Address);
+
+        var bankCode = !string.IsNullOrWhiteSpace(contract.BankCodeSnapshot)
+            ? contract.BankCodeSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankCode)
+                ? contract.Customer!.BankCode
+                : contract.Appointment?.Customer?.BankCode);
+
+        var bankAccountNumber = !string.IsNullOrWhiteSpace(contract.BankAccountNumberSnapshot)
+            ? contract.BankAccountNumberSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountNumber)
+                ? contract.Customer!.BankAccountNumber
+                : contract.Appointment?.Customer?.BankAccountNumber);
+
+        var bankAccountHolder = !string.IsNullOrWhiteSpace(contract.BankAccountHolderSnapshot)
+            ? contract.BankAccountHolderSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountHolderName)
+                ? contract.Customer!.BankAccountHolderName
+                : contract.Appointment?.Customer?.BankAccountHolderName);
+
+        var employeeName = !string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
+            ? contract.CreatedByEmployee.Account.FullName
+            : "Nhân viên tiếp nhận";
+        var employeeTitle = contract.CreatedByEmployee?.JobTitle;
+        var employeePhone = contract.CreatedByEmployee?.Account?.PhoneNumber;
+
         return Ok(new {
-            contract.Id, contract.ContractNumber, contract.SignedAt, contract.EndsAt,
-            ExpiryHandling = contract.ExpiryHandling.ToString(),
-            CustomerName = contract.CustomerNameSnapshot ?? contract.Customer?.Account?.FullName ?? "",
-            CustomerPhone = contract.CustomerPhoneSnapshot ?? contract.Customer?.Account?.PhoneNumber ?? "",
-            CustomerEmail = contract.CustomerEmailSnapshot, CustomerIdentity = contract.CustomerIdentitySnapshot,
-            CustomerAddress = contract.CustomerAddressSnapshot, contract.BankCodeSnapshot,
-            contract.BankAccountNumberSnapshot, contract.BankAccountHolderSnapshot,
-            Terms = document?.Terms,
-            Title = title,
-            OrganizationName = organizationName,
-            HeaderText = headerText,
-            FooterText = footerText,
-            Note = template is { } noteSnapshot && (noteSnapshot.TryGetProperty("note", out var note) || noteSnapshot.TryGetProperty("Note", out note)) ? note.GetString() : null,
-            Template = template is not null ? new {
-                Title = title,
-                OrganizationName = organizationName,
-                HeaderText = headerText,
-                FooterText = footerText
+            id = contract.Id,
+            contractNumber = contract.ContractNumber,
+            signedAt = contract.SignedAt,
+            endsAt = contract.EndsAt,
+            expiryHandling = contract.ExpiryHandling.ToString(),
+            status = contract.Status.ToString(),
+            customerName = customerName,
+            customerPhone = customerPhone,
+            customerEmail = customerEmail,
+            customerIdentity = customerIdentity,
+            customerAddress = customerAddress,
+            bankCode = bankCode,
+            bankAccountNumber = bankAccountNumber,
+            bankAccountHolderName = bankAccountHolder,
+            employeeName = employeeName,
+            employeeTitle = employeeTitle,
+            employeePhone = employeePhone,
+            terms = document?.Terms,
+            title = title,
+            organizationName = organizationName,
+            headerText = headerText,
+            footerText = footerText,
+            note = template is { } noteSnapshot && (noteSnapshot.TryGetProperty("note", out var note) || noteSnapshot.TryGetProperty("Note", out note)) ? note.GetString() : null,
+            template = template is not null ? new {
+                title = title,
+                organizationName = organizationName,
+                headerText = headerText,
+                footerText = footerText
             } : null,
-            Signature = document?.SignatureContent is null || document.SignatureContentType is null ? null : new { ContentType = document.SignatureContentType, Data = Convert.ToBase64String(document.SignatureContent) },
-            Products = template is { } snapshot && snapshot.TryGetProperty("products", out var snapshotProducts) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new {
-                x.Id, x.Name, x.Barcode, x.Size, Brand = x.Brand?.Name, Category = x.Category?.Name, x.Material, x.Description, x.ConditionPercentage,
-                ListedPrice = x.AgreedListedPrice ?? x.ListedPrice, CommissionRate = x.AgreedCommissionRate ?? 0,
-                Images = x.Images.OrderBy(i => i.SortOrder).Select(i => i.Content != null && i.ContentType != null
+            signature = document?.SignatureContent is null || document.SignatureContentType is null ? null : new { contentType = document.SignatureContentType, data = Convert.ToBase64String(document.SignatureContent) },
+            products = template is { } snapshot && (snapshot.TryGetProperty("products", out var snapshotProducts) || snapshot.TryGetProperty("Products", out snapshotProducts)) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new {
+                id = x.Id,
+                name = x.Name,
+                barcode = x.Barcode,
+                size = x.Size,
+                brand = x.Brand?.Name,
+                brandName = x.Brand?.Name,
+                category = x.Category?.Name,
+                categoryName = x.Category?.Name,
+                material = x.Material,
+                description = x.Description,
+                conditionPercentage = x.ConditionPercentage,
+                listedPrice = x.AgreedListedPrice ?? x.ListedPrice,
+                commissionRate = x.AgreedCommissionRate ?? 0,
+                agreedCommissionRate = x.AgreedCommissionRate ?? 0,
+                images = x.Images.OrderBy(i => i.SortOrder).Select(i => i.Content != null && i.ContentType != null
                     ? $"data:{i.ContentType};base64,{Convert.ToBase64String(i.Content)}" : i.Url).ToArray()
             }).ToArray()
         });

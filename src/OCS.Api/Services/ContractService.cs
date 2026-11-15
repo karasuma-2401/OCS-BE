@@ -330,6 +330,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
             ContractId = contract.Id,
             Content = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new {
                 template.Title, template.OrganizationName, template.HeaderText, template.FooterText,
+                CustomerName = contract.CustomerNameSnapshot,
+                CustomerPhone = contract.CustomerPhoneSnapshot,
                 Products = pdfProducts.Select(item => new { item.Product.Id, item.Product.Name, item.Product.Barcode, item.Product.Size, item.Brand, item.Category, item.Product.Material, item.Product.Description, item.Product.ConditionPercentage,
                     ListedPrice = item.Product.AgreedListedPrice ?? item.Product.ListedPrice, CommissionRate = item.Product.AgreedCommissionRate ?? 0,
                     Images = item.Product.Images.OrderBy(i => i.SortOrder).Select(i => i.Content != null && i.ContentType != null ? $"data:{i.ContentType};base64,{Convert.ToBase64String(i.Content)}" : i.Url).ToArray() }).ToArray()
@@ -517,6 +519,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
     {
         var contract = await db.ConsignmentContracts
             .Include(x => x.Customer).ThenInclude(x => x!.Account)
+            .Include(x => x.Appointment).ThenInclude(x => x!.Customer).ThenInclude(x => x!.Account)
             .Include(x => x.Products).ThenInclude(x => x.Brand)
             .Include(x => x.Products).ThenInclude(x => x.Category)
             .Include(x => x.CreatedByEmployee).ThenInclude(x => x.Account)
@@ -540,6 +543,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
         string? organizationName = null;
         string? headerText = null;
         string? footerText = null;
+        string? snapCustName = null;
+        string? snapCustPhone = null;
 
         if (document?.Content is { Length: > 0 } content && content[0] == (byte)'{')
         {
@@ -555,6 +560,10 @@ public sealed class ContractService(AppDbContext db) : IContractService
                     headerText = p3.GetString();
                 if (root.TryGetProperty("footerText", out var p4) || root.TryGetProperty("FooterText", out p4))
                     footerText = p4.GetString();
+                if (root.TryGetProperty("customerName", out var p5) || root.TryGetProperty("CustomerName", out p5))
+                    snapCustName = p5.GetString();
+                if (root.TryGetProperty("customerPhone", out var p6) || root.TryGetProperty("CustomerPhone", out p6))
+                    snapCustPhone = p6.GetString();
             }
             catch (System.Text.Json.JsonException) { }
         }
@@ -580,6 +589,94 @@ public sealed class ContractService(AppDbContext db) : IContractService
                 x.Category?.Name ?? ""
             )).ToList();
 
+        if (products.Count == 0 && document?.Content is { Length: > 0 } cnt && cnt[0] == (byte)'{')
+        {
+            try
+            {
+                using var jsonDoc = System.Text.Json.JsonDocument.Parse(cnt);
+                var root = jsonDoc.RootElement;
+                if ((root.TryGetProperty("products", out var pArr) || root.TryGetProperty("Products", out pArr)) &&
+                    pArr.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var item in pArr.EnumerateArray())
+                    {
+                        var pId = (item.TryGetProperty("id", out var idElem) || item.TryGetProperty("Id", out idElem)) && Guid.TryParse(idElem.GetString(), out var gid) ? gid : Guid.Empty;
+                        var pName = (item.TryGetProperty("name", out var nElem) || item.TryGetProperty("Name", out nElem)) ? nElem.GetString() ?? "" : "";
+                        var pBarcode = (item.TryGetProperty("barcode", out var bElem) || item.TryGetProperty("Barcode", out bElem)) ? bElem.GetString() ?? "" : "";
+                        var pSize = (item.TryGetProperty("size", out var sElem) || item.TryGetProperty("Size", out sElem)) ? sElem.GetString() ?? "" : "";
+                        var pCond = (item.TryGetProperty("conditionPercentage", out var cpElem) || item.TryGetProperty("ConditionPercentage", out cpElem)) && cpElem.TryGetInt32(out var cp) ? cp : 100;
+                        var pPrice = (item.TryGetProperty("listedPrice", out var lpElem) || item.TryGetProperty("ListedPrice", out lpElem)) && lpElem.TryGetDecimal(out var lp) ? lp : 0m;
+                        decimal? pComm = (item.TryGetProperty("commissionRate", out var crElem) || item.TryGetProperty("CommissionRate", out crElem)) && crElem.TryGetDecimal(out var cr) ? cr : null;
+                        var pBrand = (item.TryGetProperty("brand", out var brElem) || item.TryGetProperty("Brand", out brElem) || item.TryGetProperty("brandName", out brElem)) ? brElem.GetString() ?? "" : "";
+                        var pCat = (item.TryGetProperty("category", out var ctElem) || item.TryGetProperty("Category", out ctElem) || item.TryGetProperty("categoryName", out ctElem)) ? ctElem.GetString() ?? "" : "";
+
+                        products.Add(new ContractDetailProductDto(
+                            pId, pName, pBarcode, pSize, pCond, pPrice, pComm, pBrand, pCat
+                        ));
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+
+        var customerName = !string.IsNullOrWhiteSpace(contract.CustomerNameSnapshot)
+            ? contract.CustomerNameSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.FullName)
+                ? contract.Customer!.Account.FullName
+                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.FullName)
+                    ? contract.Appointment!.Customer!.Account.FullName
+                    : (!string.IsNullOrWhiteSpace(snapCustName) ? snapCustName : "Khách hàng")));
+
+        var customerPhone = !string.IsNullOrWhiteSpace(contract.CustomerPhoneSnapshot)
+            ? contract.CustomerPhoneSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.PhoneNumber)
+                ? contract.Customer!.Account.PhoneNumber
+                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.PhoneNumber)
+                    ? contract.Appointment!.Customer!.Account.PhoneNumber
+                    : (!string.IsNullOrWhiteSpace(snapCustPhone) ? snapCustPhone : "")));
+
+        var customerEmail = !string.IsNullOrWhiteSpace(contract.CustomerEmailSnapshot)
+            ? contract.CustomerEmailSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.Email)
+                ? contract.Customer!.Account.Email
+                : contract.Appointment?.Customer?.Account?.Email);
+
+        var customerIdentity = !string.IsNullOrWhiteSpace(contract.CustomerIdentitySnapshot)
+            ? contract.CustomerIdentitySnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.IdentityNumber)
+                ? contract.Customer!.Account.IdentityNumber
+                : contract.Appointment?.Customer?.Account?.IdentityNumber);
+
+        var customerAddress = !string.IsNullOrWhiteSpace(contract.CustomerAddressSnapshot)
+            ? contract.CustomerAddressSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.Address)
+                ? contract.Customer!.Address
+                : contract.Appointment?.Customer?.Address);
+
+        var bankCode = !string.IsNullOrWhiteSpace(contract.BankCodeSnapshot)
+            ? contract.BankCodeSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankCode)
+                ? contract.Customer!.BankCode
+                : contract.Appointment?.Customer?.BankCode);
+
+        var bankAccountNumber = !string.IsNullOrWhiteSpace(contract.BankAccountNumberSnapshot)
+            ? contract.BankAccountNumberSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountNumber)
+                ? contract.Customer!.BankAccountNumber
+                : contract.Appointment?.Customer?.BankAccountNumber);
+
+        var bankAccountHolderName = !string.IsNullOrWhiteSpace(contract.BankAccountHolderSnapshot)
+            ? contract.BankAccountHolderSnapshot
+            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountHolderName)
+                ? contract.Customer!.BankAccountHolderName
+                : contract.Appointment?.Customer?.BankAccountHolderName);
+
+        var employeeName = !string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
+            ? contract.CreatedByEmployee.Account.FullName
+            : "Nhân viên tiếp nhận";
+        var employeeTitle = contract.CreatedByEmployee?.JobTitle;
+        var employeePhone = contract.CreatedByEmployee?.Account?.PhoneNumber;
+
         var detail = new ContractDetailDto(
             contract.Id,
             contract.ContractNumber,
@@ -587,17 +684,17 @@ public sealed class ContractService(AppDbContext db) : IContractService
             contract.EndsAt,
             contract.ExpiryHandling.ToString(),
             contract.Status.ToString(),
-            contract.CustomerNameSnapshot ?? contract.Customer?.Account?.FullName ?? "",
-            contract.CustomerPhoneSnapshot ?? contract.Customer?.Account?.PhoneNumber ?? "",
-            contract.CustomerEmailSnapshot ?? contract.Customer?.Account?.Email,
-            contract.CustomerIdentitySnapshot ?? contract.Customer?.Account?.IdentityNumber,
-            contract.CustomerAddressSnapshot ?? contract.Customer?.Address,
-            contract.BankCodeSnapshot ?? contract.Customer?.BankCode,
-            contract.BankAccountNumberSnapshot ?? contract.Customer?.BankAccountNumber,
-            contract.BankAccountHolderSnapshot ?? contract.Customer?.BankAccountHolderName,
-            contract.CreatedByEmployee?.Account?.FullName ?? "",
-            contract.CreatedByEmployee?.JobTitle,
-            contract.CreatedByEmployee?.Account?.PhoneNumber,
+            customerName,
+            customerPhone,
+            customerEmail,
+            customerIdentity,
+            customerAddress,
+            bankCode,
+            bankAccountNumber,
+            bankAccountHolderName,
+            employeeName,
+            employeeTitle,
+            employeePhone,
             terms,
             sigDataUrl,
             products,
@@ -680,7 +777,11 @@ public sealed class ContractService(AppDbContext db) : IContractService
             var trimmed = query.Trim().ToUpper();
             q = q.Where(x => x.ContractNumber.ToUpper().Contains(trimmed) ||
                              (x.CustomerNameSnapshot != null && x.CustomerNameSnapshot.ToUpper().Contains(trimmed)) ||
-                             (x.CustomerPhoneSnapshot != null && x.CustomerPhoneSnapshot.Contains(trimmed)));
+                             (x.CustomerPhoneSnapshot != null && x.CustomerPhoneSnapshot.Contains(trimmed)) ||
+                             (x.Customer != null && x.Customer.Account != null && x.Customer.Account.FullName.ToUpper().Contains(trimmed)) ||
+                             (x.Customer != null && x.Customer.Account != null && x.Customer.Account.PhoneNumber.Contains(trimmed)) ||
+                             (x.Appointment != null && x.Appointment.Customer != null && x.Appointment.Customer.Account != null && x.Appointment.Customer.Account.FullName.ToUpper().Contains(trimmed)) ||
+                             (x.Appointment != null && x.Appointment.Customer != null && x.Appointment.Customer.Account != null && x.Appointment.Customer.Account.PhoneNumber.Contains(trimmed)));
         }
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConsignmentContractStatus>(status, true, out var parsedStatus))
         {
@@ -697,7 +798,19 @@ public sealed class ContractService(AppDbContext db) : IContractService
 
         return await q.OrderByDescending(x => x.SignedAt).ThenBy(x => x.Id)
             .Skip((Math.Clamp(page, 1, 10000) - 1) * 20).Take(20)
-            .Select(x => new ContractListItem(x.Id, x.ContractNumber, x.CustomerNameSnapshot, x.SignedAt, true, x.Status.ToString()))
+            .Select(x => new ContractListItem(
+                x.Id,
+                x.ContractNumber,
+                !string.IsNullOrEmpty(x.CustomerNameSnapshot)
+                    ? x.CustomerNameSnapshot
+                    : (x.Customer != null && x.Customer.Account != null && !string.IsNullOrEmpty(x.Customer.Account.FullName)
+                        ? x.Customer.Account.FullName
+                        : (x.Appointment != null && x.Appointment.Customer != null && x.Appointment.Customer.Account != null && !string.IsNullOrEmpty(x.Appointment.Customer.Account.FullName)
+                            ? x.Appointment.Customer.Account.FullName
+                            : "Khách hàng")),
+                x.SignedAt,
+                true,
+                x.Status.ToString()))
             .ToListAsync(cancellationToken);
     }
 
