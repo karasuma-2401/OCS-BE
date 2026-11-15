@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Authorization;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Context;
+using OCS.Api.Entities;
+using OCS.Api.Extensions;
 using Microsoft.EntityFrameworkCore;
 using OCS.Api.Consts;
 
@@ -16,6 +18,15 @@ namespace OCS.Api.Controllers;
 public sealed class ContractPdfController(IContractService contracts, IAuthorizationService authorization, AppDbContext db) : ControllerBase
 {
     /// <summary>Dữ liệu để hiển thị hợp đồng trên web.</summary>
+    [HttpGet("{id}/web")]
+    public async Task<IActionResult> Web(string id, CancellationToken cancellationToken)
+    {
+        if (Guid.TryParse(id, out var guid)) return await Web(guid, cancellationToken);
+        var contract = await db.ConsignmentContracts.AsNoTracking().FirstOrDefaultAsync(x => x.ContractNumber == id, cancellationToken);
+        if (contract is null) return NotFound();
+        return await Web(contract.Id, cancellationToken);
+    }
+
     [HttpGet("{id:guid}/web")]
     public async Task<IActionResult> Web(Guid id, CancellationToken cancellationToken)
     {
@@ -30,6 +41,23 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             .Include(x => x.CreatedByEmployee).ThenInclude(x => x.Account)
             .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
         if (contract is null) return NotFound();
+
+        Account? directCustomerAccount = null;
+        CustomerProfile? directCustomerProfile = null;
+        if (contract.CustomerId.HasValue)
+        {
+            directCustomerAccount = contract.Customer?.Account ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == contract.CustomerId.Value, cancellationToken);
+            directCustomerProfile = contract.Customer ?? await db.CustomerProfiles.AsNoTracking().SingleOrDefaultAsync(cp => cp.Id == contract.CustomerId.Value, cancellationToken);
+        }
+
+        Account? directEmployeeAccount = null;
+        EmployeeProfile? directEmployeeProfile = null;
+        if (contract.CreatedByEmployeeId != Guid.Empty)
+        {
+            directEmployeeAccount = contract.CreatedByEmployee?.Account ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == contract.CreatedByEmployeeId, cancellationToken);
+            directEmployeeProfile = contract.CreatedByEmployee ?? await db.EmployeeProfiles.AsNoTracking().SingleOrDefaultAsync(ep => ep.Id == contract.CreatedByEmployeeId, cancellationToken);
+        }
+
         var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
         System.Text.Json.JsonElement? template = null;
         if (document?.Content is { Length: > 0 } content && content[0] == (byte)'{')
@@ -55,61 +83,55 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
 
         var customerName = !string.IsNullOrWhiteSpace(contract.CustomerNameSnapshot)
             ? contract.CustomerNameSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.FullName)
-                ? contract.Customer!.Account.FullName
-                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.FullName)
-                    ? contract.Appointment!.Customer!.Account.FullName
-                    : (!string.IsNullOrWhiteSpace(snapCustName) ? snapCustName : "Khách hàng")));
+            : (!string.IsNullOrWhiteSpace(directCustomerAccount?.FullName)
+                ? directCustomerAccount!.FullName
+                : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.FullName)
+                    ? contract.Customer!.Account.FullName
+                    : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.FullName)
+                        ? contract.Appointment!.Customer!.Account.FullName
+                        : (!string.IsNullOrWhiteSpace(snapCustName) ? snapCustName : "Khách hàng"))));
 
         var customerPhone = !string.IsNullOrWhiteSpace(contract.CustomerPhoneSnapshot)
             ? contract.CustomerPhoneSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.PhoneNumber)
-                ? contract.Customer!.Account.PhoneNumber
-                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.PhoneNumber)
-                    ? contract.Appointment!.Customer!.Account.PhoneNumber
-                    : (!string.IsNullOrWhiteSpace(snapCustPhone) ? snapCustPhone : "")));
+            : (!string.IsNullOrWhiteSpace(directCustomerAccount?.PhoneNumber)
+                ? directCustomerAccount!.PhoneNumber
+                : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.PhoneNumber)
+                    ? contract.Customer!.Account.PhoneNumber
+                    : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.PhoneNumber)
+                        ? contract.Appointment!.Customer!.Account.PhoneNumber
+                        : (!string.IsNullOrWhiteSpace(snapCustPhone) ? snapCustPhone : ""))));
 
         var customerEmail = !string.IsNullOrWhiteSpace(contract.CustomerEmailSnapshot)
             ? contract.CustomerEmailSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.Email)
-                ? contract.Customer!.Account.Email
-                : contract.Appointment?.Customer?.Account?.Email);
+            : (directCustomerAccount?.Email ?? contract.Customer?.Account?.Email ?? contract.Appointment?.Customer?.Account?.Email);
 
         var customerIdentity = !string.IsNullOrWhiteSpace(contract.CustomerIdentitySnapshot)
             ? contract.CustomerIdentitySnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.IdentityNumber)
-                ? contract.Customer!.Account.IdentityNumber
-                : contract.Appointment?.Customer?.Account?.IdentityNumber);
+            : (directCustomerAccount?.IdentityNumber ?? contract.Customer?.Account?.IdentityNumber ?? contract.Appointment?.Customer?.Account?.IdentityNumber);
 
         var customerAddress = !string.IsNullOrWhiteSpace(contract.CustomerAddressSnapshot)
             ? contract.CustomerAddressSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Address)
-                ? contract.Customer!.Address
-                : contract.Appointment?.Customer?.Address);
+            : (directCustomerProfile?.Address ?? contract.Customer?.Address ?? contract.Appointment?.Customer?.Address);
 
         var bankCode = !string.IsNullOrWhiteSpace(contract.BankCodeSnapshot)
             ? contract.BankCodeSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankCode)
-                ? contract.Customer!.BankCode
-                : contract.Appointment?.Customer?.BankCode);
+            : (directCustomerProfile?.BankCode ?? contract.Customer?.BankCode ?? contract.Appointment?.Customer?.BankCode);
 
         var bankAccountNumber = !string.IsNullOrWhiteSpace(contract.BankAccountNumberSnapshot)
             ? contract.BankAccountNumberSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountNumber)
-                ? contract.Customer!.BankAccountNumber
-                : contract.Appointment?.Customer?.BankAccountNumber);
+            : (directCustomerProfile?.BankAccountNumber ?? contract.Customer?.BankAccountNumber ?? contract.Appointment?.Customer?.BankAccountNumber);
 
         var bankAccountHolder = !string.IsNullOrWhiteSpace(contract.BankAccountHolderSnapshot)
             ? contract.BankAccountHolderSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountHolderName)
-                ? contract.Customer!.BankAccountHolderName
-                : contract.Appointment?.Customer?.BankAccountHolderName);
+            : (directCustomerProfile?.BankAccountHolderName ?? contract.Customer?.BankAccountHolderName ?? contract.Appointment?.Customer?.BankAccountHolderName);
 
-        var employeeName = !string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
-            ? contract.CreatedByEmployee.Account.FullName
-            : "Nhân viên tiếp nhận";
-        var employeeTitle = contract.CreatedByEmployee?.JobTitle;
-        var employeePhone = contract.CreatedByEmployee?.Account?.PhoneNumber;
+        var employeeName = !string.IsNullOrWhiteSpace(directEmployeeAccount?.FullName)
+            ? directEmployeeAccount!.FullName
+            : (!string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
+                ? contract.CreatedByEmployee.Account.FullName
+                : "Nhân viên tiếp nhận");
+        var employeeTitle = directEmployeeProfile?.JobTitle ?? contract.CreatedByEmployee?.JobTitle;
+        var employeePhone = directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber;
 
         return Ok(new {
             id = contract.Id,
@@ -142,6 +164,7 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
                 footerText = footerText
             } : null,
             signature = document?.SignatureContent is null || document.SignatureContentType is null ? null : new { contentType = document.SignatureContentType, data = Convert.ToBase64String(document.SignatureContent) },
+            customerSignatureDataUrl = document?.SignatureContent is null || document.SignatureContentType is null ? null : $"data:{document.SignatureContentType};base64,{Convert.ToBase64String(document.SignatureContent)}",
             products = template is { } snapshot && (snapshot.TryGetProperty("products", out var snapshotProducts) || snapshot.TryGetProperty("Products", out snapshotProducts)) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new {
                 id = x.Id,
                 name = x.Name,

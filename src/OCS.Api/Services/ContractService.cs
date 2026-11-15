@@ -515,8 +515,12 @@ public sealed class ContractService(AppDbContext db) : IContractService
             : Result.Success(Map(contract));
     }
 
-    public async Task<Result<ContractDetailDto>> GetDetailAsync(Guid id, CancellationToken cancellationToken)
+    public Task<Result<ContractDetailDto>> GetDetailAsync(Guid id, CancellationToken cancellationToken) =>
+        GetDetailAsync(id.ToString(), cancellationToken);
+
+    public async Task<Result<ContractDetailDto>> GetDetailAsync(string idOrNumber, CancellationToken cancellationToken)
     {
+        Guid.TryParse(idOrNumber, out var parsedGuid);
         var contract = await db.ConsignmentContracts
             .Include(x => x.Customer).ThenInclude(x => x!.Account)
             .Include(x => x.Appointment).ThenInclude(x => x!.Customer).ThenInclude(x => x!.Account)
@@ -524,12 +528,28 @@ public sealed class ContractService(AppDbContext db) : IContractService
             .Include(x => x.Products).ThenInclude(x => x.Category)
             .Include(x => x.CreatedByEmployee).ThenInclude(x => x.Account)
             .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+            .SingleOrDefaultAsync(x => x.Id == parsedGuid || x.ContractNumber == idOrNumber, cancellationToken);
 
         if (contract is null)
             return Result.Failure<ContractDetailDto>(ApplicationError.NotFound("CONTRACT.NOT_FOUND", "Không tìm thấy hợp đồng."));
 
-        var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
+        Account? directCustomerAccount = null;
+        CustomerProfile? directCustomerProfile = null;
+        if (contract.CustomerId.HasValue)
+        {
+            directCustomerAccount = contract.Customer?.Account ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == contract.CustomerId.Value, cancellationToken);
+            directCustomerProfile = contract.Customer ?? await db.CustomerProfiles.AsNoTracking().SingleOrDefaultAsync(cp => cp.Id == contract.CustomerId.Value, cancellationToken);
+        }
+
+        Account? directEmployeeAccount = null;
+        EmployeeProfile? directEmployeeProfile = null;
+        if (contract.CreatedByEmployeeId != Guid.Empty)
+        {
+            directEmployeeAccount = contract.CreatedByEmployee?.Account ?? await db.Accounts.AsNoTracking().SingleOrDefaultAsync(a => a.Id == contract.CreatedByEmployeeId, cancellationToken);
+            directEmployeeProfile = contract.CreatedByEmployee ?? await db.EmployeeProfiles.AsNoTracking().SingleOrDefaultAsync(ep => ep.Id == contract.CreatedByEmployeeId, cancellationToken);
+        }
+
+        var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == contract.Id, cancellationToken);
         var template = await db.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken) ?? new ContractTemplate();
 
         string? sigDataUrl = null;
@@ -621,61 +641,55 @@ public sealed class ContractService(AppDbContext db) : IContractService
 
         var customerName = !string.IsNullOrWhiteSpace(contract.CustomerNameSnapshot)
             ? contract.CustomerNameSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.FullName)
-                ? contract.Customer!.Account.FullName
-                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.FullName)
-                    ? contract.Appointment!.Customer!.Account.FullName
-                    : (!string.IsNullOrWhiteSpace(snapCustName) ? snapCustName : "Khách hàng")));
+            : (!string.IsNullOrWhiteSpace(directCustomerAccount?.FullName)
+                ? directCustomerAccount!.FullName
+                : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.FullName)
+                    ? contract.Customer!.Account.FullName
+                    : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.FullName)
+                        ? contract.Appointment!.Customer!.Account.FullName
+                        : (!string.IsNullOrWhiteSpace(snapCustName) ? snapCustName : "Khách hàng"))));
 
         var customerPhone = !string.IsNullOrWhiteSpace(contract.CustomerPhoneSnapshot)
             ? contract.CustomerPhoneSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.PhoneNumber)
-                ? contract.Customer!.Account.PhoneNumber
-                : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.PhoneNumber)
-                    ? contract.Appointment!.Customer!.Account.PhoneNumber
-                    : (!string.IsNullOrWhiteSpace(snapCustPhone) ? snapCustPhone : "")));
+            : (!string.IsNullOrWhiteSpace(directCustomerAccount?.PhoneNumber)
+                ? directCustomerAccount!.PhoneNumber
+                : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.PhoneNumber)
+                    ? contract.Customer!.Account.PhoneNumber
+                    : (!string.IsNullOrWhiteSpace(contract.Appointment?.Customer?.Account?.PhoneNumber)
+                        ? contract.Appointment!.Customer!.Account.PhoneNumber
+                        : (!string.IsNullOrWhiteSpace(snapCustPhone) ? snapCustPhone : ""))));
 
         var customerEmail = !string.IsNullOrWhiteSpace(contract.CustomerEmailSnapshot)
             ? contract.CustomerEmailSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.Email)
-                ? contract.Customer!.Account.Email
-                : contract.Appointment?.Customer?.Account?.Email);
+            : (directCustomerAccount?.Email ?? contract.Customer?.Account?.Email ?? contract.Appointment?.Customer?.Account?.Email);
 
         var customerIdentity = !string.IsNullOrWhiteSpace(contract.CustomerIdentitySnapshot)
             ? contract.CustomerIdentitySnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Account?.IdentityNumber)
-                ? contract.Customer!.Account.IdentityNumber
-                : contract.Appointment?.Customer?.Account?.IdentityNumber);
+            : (directCustomerAccount?.IdentityNumber ?? contract.Customer?.Account?.IdentityNumber ?? contract.Appointment?.Customer?.Account?.IdentityNumber);
 
         var customerAddress = !string.IsNullOrWhiteSpace(contract.CustomerAddressSnapshot)
             ? contract.CustomerAddressSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.Address)
-                ? contract.Customer!.Address
-                : contract.Appointment?.Customer?.Address);
+            : (directCustomerProfile?.Address ?? contract.Customer?.Address ?? contract.Appointment?.Customer?.Address);
 
         var bankCode = !string.IsNullOrWhiteSpace(contract.BankCodeSnapshot)
             ? contract.BankCodeSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankCode)
-                ? contract.Customer!.BankCode
-                : contract.Appointment?.Customer?.BankCode);
+            : (directCustomerProfile?.BankCode ?? contract.Customer?.BankCode ?? contract.Appointment?.Customer?.BankCode);
 
         var bankAccountNumber = !string.IsNullOrWhiteSpace(contract.BankAccountNumberSnapshot)
             ? contract.BankAccountNumberSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountNumber)
-                ? contract.Customer!.BankAccountNumber
-                : contract.Appointment?.Customer?.BankAccountNumber);
+            : (directCustomerProfile?.BankAccountNumber ?? contract.Customer?.BankAccountNumber ?? contract.Appointment?.Customer?.BankAccountNumber);
 
         var bankAccountHolderName = !string.IsNullOrWhiteSpace(contract.BankAccountHolderSnapshot)
             ? contract.BankAccountHolderSnapshot
-            : (!string.IsNullOrWhiteSpace(contract.Customer?.BankAccountHolderName)
-                ? contract.Customer!.BankAccountHolderName
-                : contract.Appointment?.Customer?.BankAccountHolderName);
+            : (directCustomerProfile?.BankAccountHolderName ?? contract.Customer?.BankAccountHolderName ?? contract.Appointment?.Customer?.BankAccountHolderName);
 
-        var employeeName = !string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
-            ? contract.CreatedByEmployee.Account.FullName
-            : "Nhân viên tiếp nhận";
-        var employeeTitle = contract.CreatedByEmployee?.JobTitle;
-        var employeePhone = contract.CreatedByEmployee?.Account?.PhoneNumber;
+        var employeeName = !string.IsNullOrWhiteSpace(directEmployeeAccount?.FullName)
+            ? directEmployeeAccount!.FullName
+            : (!string.IsNullOrWhiteSpace(contract.CreatedByEmployee?.Account?.FullName)
+                ? contract.CreatedByEmployee.Account.FullName
+                : "Nhân viên tiếp nhận");
+        var employeeTitle = directEmployeeProfile?.JobTitle ?? contract.CreatedByEmployee?.JobTitle;
+        var employeePhone = directEmployeeAccount?.PhoneNumber ?? contract.CreatedByEmployee?.Account?.PhoneNumber;
 
         var detail = new ContractDetailDto(
             contract.Id,
@@ -796,22 +810,43 @@ public sealed class ContractService(AppDbContext db) : IContractService
             q = q.Where(x => x.SignedAt <= toDate.Value);
         }
 
-        return await q.OrderByDescending(x => x.SignedAt).ThenBy(x => x.Id)
+        var items = await q.OrderByDescending(x => x.SignedAt).ThenBy(x => x.Id)
             .Skip((Math.Clamp(page, 1, 10000) - 1) * 20).Take(20)
-            .Select(x => new ContractListItem(
+            .Select(x => new
+            {
                 x.Id,
                 x.ContractNumber,
-                !string.IsNullOrEmpty(x.CustomerNameSnapshot)
-                    ? x.CustomerNameSnapshot
-                    : (x.Customer != null && x.Customer.Account != null && !string.IsNullOrEmpty(x.Customer.Account.FullName)
-                        ? x.Customer.Account.FullName
-                        : (x.Appointment != null && x.Appointment.Customer != null && x.Appointment.Customer.Account != null && !string.IsNullOrEmpty(x.Appointment.Customer.Account.FullName)
-                            ? x.Appointment.Customer.Account.FullName
-                            : "Khách hàng")),
+                x.CustomerNameSnapshot,
+                x.CustomerId,
                 x.SignedAt,
-                true,
-                x.Status.ToString()))
+                Status = x.Status.ToString()
+            })
             .ToListAsync(cancellationToken);
+
+        var missingCustomerIds = items
+            .Where(x => string.IsNullOrWhiteSpace(x.CustomerNameSnapshot) && x.CustomerId.HasValue)
+            .Select(x => x.CustomerId!.Value)
+            .Distinct()
+            .ToList();
+
+        var customerNameMap = missingCustomerIds.Count > 0
+            ? await db.Accounts.AsNoTracking()
+                .Where(a => missingCustomerIds.Contains(a.Id))
+                .ToDictionaryAsync(a => a.Id, a => a.FullName, cancellationToken)
+            : new Dictionary<Guid, string>();
+
+        return items.Select(x => new ContractListItem(
+            x.Id,
+            x.ContractNumber,
+            !string.IsNullOrWhiteSpace(x.CustomerNameSnapshot)
+                ? x.CustomerNameSnapshot
+                : (x.CustomerId.HasValue && customerNameMap.TryGetValue(x.CustomerId.Value, out var name) && !string.IsNullOrWhiteSpace(name)
+                    ? name
+                    : "Khách hàng"),
+            x.SignedAt,
+            true,
+            x.Status
+        )).ToList();
     }
 
     private static ContractResponse Map(ConsignmentContract contract) => new(

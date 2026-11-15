@@ -21,6 +21,7 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
     [Authorize(Policy = PermissionCatalog.ProductsCreate)]
     public async Task<ActionResult<GeneratedBarcodeResponse>> GenerateBarcode(CancellationToken cancellationToken) =>
         Ok(new GeneratedBarcodeResponse(await contracts.GenerateBarcodeAsync(cancellationToken)));
+
     /// <summary>Lập hợp đồng cơ bản từ lịch hẹn hoặc khách đến trực tiếp.</summary>
     [HttpPost]
     [RequestSizeLimit(12_000_000)]
@@ -134,10 +135,10 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
     }
 
     /// <summary>Lấy thông tin chi tiết hợp đồng để hiển thị và in ấn trên giao diện web.</summary>
-    [HttpGet("{id:guid}/detail")]
+    [HttpGet("{id}/detail")]
     [ProducesResponseType(typeof(ContractDetailDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetDetail(Guid id, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetDetail(string id, CancellationToken cancellationToken)
     {
         if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)

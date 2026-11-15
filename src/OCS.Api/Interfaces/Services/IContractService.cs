@@ -12,6 +12,7 @@ public interface IContractService
     Task<Result<string>> PreviewWebAsync(CreateContractRequest request, Guid employeeId, CancellationToken cancellationToken);
     Task<Result<ContractResponse>> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Result<ContractDetailDto>> GetDetailAsync(Guid id, CancellationToken cancellationToken);
+    Task<Result<ContractDetailDto>> GetDetailAsync(string idOrNumber, CancellationToken cancellationToken);
     Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken);
     Task<IReadOnlyList<ContractListItem>> ListAsync(int page, string? query = null, string? status = null, DateTimeOffset? fromDate = null, DateTimeOffset? toDate = null, CancellationToken cancellationToken = default);
     Task<Result<ContractCustomerResponse>> FindCustomerByPhoneAsync(string phone, CancellationToken cancellationToken);
