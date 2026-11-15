@@ -13,7 +13,7 @@ namespace OCS.Api.Controllers;
 /// <summary>Tải và kiểm tra các ô thông tin trong mẫu Word.</summary>
 [ApiController]
 [Route("api/word-template-samples")]
-[Authorize(Roles = "Admin,Manager")]
+[Authorize(Roles = "Admin,Manager,Staff")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class WordTemplateSamplesController(AppDbContext db) : ControllerBase
 {

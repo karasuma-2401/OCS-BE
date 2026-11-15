@@ -19,9 +19,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
     [HttpGet("{id:guid}/web")]
     public async Task<IActionResult> Web(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
-            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
-             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
+            !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
         var contract = await db.ConsignmentContracts.AsNoTracking()
             .Include(x => x.Customer).ThenInclude(x => x!.Account)
             .Include(x => x.Products).ThenInclude(x => x.Images)
@@ -39,8 +38,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
         return Ok(new {
             contract.Id, contract.ContractNumber, contract.SignedAt, contract.EndsAt,
             ExpiryHandling = contract.ExpiryHandling.ToString(),
-            CustomerName = contract.CustomerNameSnapshot ?? contract.Customer?.Account.FullName ?? "",
-            CustomerPhone = contract.CustomerPhoneSnapshot ?? contract.Customer?.Account.PhoneNumber ?? "",
+            CustomerName = contract.CustomerNameSnapshot ?? contract.Customer?.Account?.FullName ?? "",
+            CustomerPhone = contract.CustomerPhoneSnapshot ?? contract.Customer?.Account?.PhoneNumber ?? "",
             CustomerEmail = contract.CustomerEmailSnapshot, CustomerIdentity = contract.CustomerIdentitySnapshot,
             CustomerAddress = contract.CustomerAddressSnapshot, contract.BankCodeSnapshot,
             contract.BankAccountNumberSnapshot, contract.BankAccountHolderSnapshot,
@@ -67,9 +66,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Pdf(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
-            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
-             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
+            !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
         var content = await contracts.GetPdfAsync(id, cancellationToken);
         return content is null || !content.AsSpan().StartsWith("%PDF"u8) ? NotFound() : File(content, "application/pdf");
     }
@@ -78,9 +76,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
     [HttpGet("{id:guid}/document")]
     public async Task<IActionResult> Document(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
-            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
-             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
+            !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
         var content = await contracts.GetPdfAsync(id, cancellationToken);
         if (content is null) return NotFound();
         if (content.AsSpan().StartsWith("%PDF"u8)) return File(content, "application/pdf");
@@ -92,9 +89,8 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
     [HttpGet("{id:guid}/barcode-products")]
     public async Task<IActionResult> BarcodeProducts(Guid id, CancellationToken cancellationToken)
     {
-        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
-            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
-             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") && !User.IsInRole("Staff") &&
+            !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
         var products = await contracts.GetBarcodeProductsAsync(id, cancellationToken);
         return products is null ? NotFound() : Ok(products);
     }

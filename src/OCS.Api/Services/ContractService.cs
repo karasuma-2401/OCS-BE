@@ -527,7 +527,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
             return Result.Failure<ContractDetailDto>(ApplicationError.NotFound("CONTRACT.NOT_FOUND", "Không tìm thấy hợp đồng."));
 
         var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
-        var template = await db.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken);
+        var template = await db.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken) ?? new ContractTemplate();
 
         string? sigDataUrl = null;
         if (document?.SignatureContent is { Length: > 0 } sigBytes)
@@ -536,7 +536,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
             sigDataUrl = $"data:{sigType};base64,{Convert.ToBase64String(sigBytes)}";
         }
 
-        var terms = document?.Terms ?? template?.DefaultTerms;
+        var terms = document?.Terms ?? template.DefaultTerms;
         var products = contract.Products
             .Where(x => x.ApprovalStatus != Consts.ProductApprovalStatus.Rejected)
             .OrderBy(x => x.CreatedAt)
@@ -559,17 +559,17 @@ public sealed class ContractService(AppDbContext db) : IContractService
             contract.EndsAt,
             contract.ExpiryHandling.ToString(),
             contract.Status.ToString(),
-            contract.CustomerNameSnapshot ?? contract.Customer?.Account.FullName ?? "",
-            contract.CustomerPhoneSnapshot ?? contract.Customer?.Account.PhoneNumber ?? "",
-            contract.CustomerEmailSnapshot ?? contract.Customer?.Account.Email,
-            contract.CustomerIdentitySnapshot ?? contract.Customer?.Account.IdentityNumber,
+            contract.CustomerNameSnapshot ?? contract.Customer?.Account?.FullName ?? "",
+            contract.CustomerPhoneSnapshot ?? contract.Customer?.Account?.PhoneNumber ?? "",
+            contract.CustomerEmailSnapshot ?? contract.Customer?.Account?.Email,
+            contract.CustomerIdentitySnapshot ?? contract.Customer?.Account?.IdentityNumber,
             contract.CustomerAddressSnapshot ?? contract.Customer?.Address,
             contract.BankCodeSnapshot ?? contract.Customer?.BankCode,
             contract.BankAccountNumberSnapshot ?? contract.Customer?.BankAccountNumber,
             contract.BankAccountHolderSnapshot ?? contract.Customer?.BankAccountHolderName,
-            contract.CreatedByEmployee?.Account.FullName ?? "",
+            contract.CreatedByEmployee?.Account?.FullName ?? "",
             contract.CreatedByEmployee?.JobTitle,
-            contract.CreatedByEmployee?.Account.PhoneNumber,
+            contract.CreatedByEmployee?.Account?.PhoneNumber,
             terms,
             sigDataUrl,
             products

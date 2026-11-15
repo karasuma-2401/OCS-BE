@@ -37,7 +37,7 @@ public sealed class ConsignmentsController(IConsignmentService consignmentServic
 
     /// <summary>Lấy nội dung mẫu hợp đồng để khách xem trước khi ký.</summary>
     [HttpGet("reception-template")]
-    [Authorize(Policy = PermissionCatalog.AppointmentsStaffReception)]
+    [Authorize(Roles = "Admin,Manager,Staff")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> ReceptionTemplate([FromServices] IContractTemplateService templates, CancellationToken cancellationToken)
     {
