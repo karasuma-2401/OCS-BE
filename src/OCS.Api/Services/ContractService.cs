@@ -404,7 +404,15 @@ public sealed class ContractService(AppDbContext db) : IContractService
     {
         if (!await db.ConsignmentContracts.AsNoTracking().AnyAsync(contract => contract.Id == id, cancellationToken)) return null;
         return await db.Products.AsNoTracking().Where(product => product.ConsignmentContractId == id).OrderBy(product => product.Name)
-            .Select(product => new BarcodeLabelProduct(product.Id, product.Name, product.Barcode, product.ListedPrice)).ToListAsync(cancellationToken);
+            .Select(product => new BarcodeLabelProduct(
+                product.Id,
+                product.Name,
+                product.Barcode,
+                product.ListedPrice,
+                product.Size,
+                product.Brand.Name,
+                product.ConditionPercentage > 0 ? $"{product.ConditionPercentage}%" : null
+            )).ToListAsync(cancellationToken);
     }
 
     public async Task<ContractImageContent?> GetImageAsync(Guid id, CancellationToken cancellationToken) =>

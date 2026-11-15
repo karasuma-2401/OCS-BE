@@ -1,7 +1,15 @@
 namespace OCS.Api.Models.Products;
 
 /// <summary>Thông tin cần thiết để in nhãn sản phẩm.</summary>
-public sealed record BarcodeLabelProduct(Guid Id, string Name, string Barcode, decimal ListedPrice);
+public sealed record BarcodeLabelProduct(
+    Guid Id,
+    string Name,
+    string Barcode,
+    decimal ListedPrice,
+    string? Size = null,
+    string? Brand = null,
+    string? Condition = null
+);
 
 /// <summary>Kết quả cấp mã tạm cho một sản phẩm chưa lưu.</summary>
 public sealed record GeneratedBarcodeResponse(string Barcode);
