@@ -12,7 +12,8 @@ public sealed record InventoryProductDto(Guid Id, string Barcode, string Name, s
     string SourceType, string? SourceReference, string Status, string ApprovalStatus, Guid Version,
     InventoryLocationDto? Location, string? CoverImageUrl);
 public sealed record InventoryDetailDto(InventoryProductDto Product, string? AgreementEvidence,
-    decimal? AgreedListedPrice, IReadOnlyList<InventoryImageDto> Images, IReadOnlyList<InventoryEventDto> History);
+    decimal? AgreedListedPrice, IReadOnlyList<InventoryImageDto> Images, IReadOnlyList<InventoryEventDto> History,
+    decimal? PurchasePrice);
 
 public sealed record InventoryReviewRequest(Guid ExpectedVersion, bool Approve, string? Reason,
     decimal? VerifiedPrice, string? AgreementEvidence);
