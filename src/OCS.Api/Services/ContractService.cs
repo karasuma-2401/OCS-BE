@@ -536,6 +536,34 @@ public sealed class ContractService(AppDbContext db) : IContractService
             sigDataUrl = $"data:{sigType};base64,{Convert.ToBase64String(sigBytes)}";
         }
 
+        string? title = null;
+        string? organizationName = null;
+        string? headerText = null;
+        string? footerText = null;
+
+        if (document?.Content is { Length: > 0 } content && content[0] == (byte)'{')
+        {
+            try
+            {
+                using var jsonDoc = System.Text.Json.JsonDocument.Parse(content);
+                var root = jsonDoc.RootElement;
+                if (root.TryGetProperty("title", out var p1) || root.TryGetProperty("Title", out p1))
+                    title = p1.GetString();
+                if (root.TryGetProperty("organizationName", out var p2) || root.TryGetProperty("OrganizationName", out p2))
+                    organizationName = p2.GetString();
+                if (root.TryGetProperty("headerText", out var p3) || root.TryGetProperty("HeaderText", out p3))
+                    headerText = p3.GetString();
+                if (root.TryGetProperty("footerText", out var p4) || root.TryGetProperty("FooterText", out p4))
+                    footerText = p4.GetString();
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+
+        title = string.IsNullOrWhiteSpace(title) ? template.Title : title;
+        organizationName = string.IsNullOrWhiteSpace(organizationName) ? template.OrganizationName : organizationName;
+        headerText = string.IsNullOrWhiteSpace(headerText) ? template.HeaderText : headerText;
+        footerText = string.IsNullOrWhiteSpace(footerText) ? template.FooterText : footerText;
+
         var terms = document?.Terms ?? template.DefaultTerms;
         var products = contract.Products
             .Where(x => x.ApprovalStatus != Consts.ProductApprovalStatus.Rejected)
@@ -572,7 +600,11 @@ public sealed class ContractService(AppDbContext db) : IContractService
             contract.CreatedByEmployee?.Account?.PhoneNumber,
             terms,
             sigDataUrl,
-            products
+            products,
+            title,
+            organizationName,
+            headerText,
+            footerText
         );
 
         return Result.Success(detail);

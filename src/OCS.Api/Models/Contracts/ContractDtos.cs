@@ -137,4 +137,8 @@ public sealed record ContractDetailDto(
     string? EmployeePhone,
     string? Terms,
     string? CustomerSignatureDataUrl,
-    IReadOnlyList<ContractDetailProductDto> Products);
+    IReadOnlyList<ContractDetailProductDto> Products,
+    string? Title = null,
+    string? OrganizationName = null,
+    string? HeaderText = null,
+    string? FooterText = null);

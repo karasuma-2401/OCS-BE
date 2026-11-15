@@ -35,6 +35,17 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             try { template = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(content); }
             catch (System.Text.Json.JsonException) { /* Tài liệu lịch sử có thể không phải ảnh chụp mẫu web. */ }
         }
+        string? title = null;
+        string? organizationName = null;
+        string? headerText = null;
+        string? footerText = null;
+        if (template is { } t)
+        {
+            if (t.TryGetProperty("title", out var p1) || t.TryGetProperty("Title", out p1)) title = p1.GetString();
+            if (t.TryGetProperty("organizationName", out var p2) || t.TryGetProperty("OrganizationName", out p2)) organizationName = p2.GetString();
+            if (t.TryGetProperty("headerText", out var p3) || t.TryGetProperty("HeaderText", out p3)) headerText = p3.GetString();
+            if (t.TryGetProperty("footerText", out var p4) || t.TryGetProperty("FooterText", out p4)) footerText = p4.GetString();
+        }
         return Ok(new {
             contract.Id, contract.ContractNumber, contract.SignedAt, contract.EndsAt,
             ExpiryHandling = contract.ExpiryHandling.ToString(),
@@ -44,12 +55,16 @@ public sealed class ContractPdfController(IContractService contracts, IAuthoriza
             CustomerAddress = contract.CustomerAddressSnapshot, contract.BankCodeSnapshot,
             contract.BankAccountNumberSnapshot, contract.BankAccountHolderSnapshot,
             Terms = document?.Terms,
-            Note = template is { } noteSnapshot && noteSnapshot.TryGetProperty("note", out var note) ? note.GetString() : null,
-            Template = template is { } t ? new {
-                Title = t.TryGetProperty("title", out var title) ? title.GetString() : null,
-                OrganizationName = t.TryGetProperty("organizationName", out var organization) ? organization.GetString() : null,
-                HeaderText = t.TryGetProperty("headerText", out var header) ? header.GetString() : null,
-                FooterText = t.TryGetProperty("footerText", out var footer) ? footer.GetString() : null
+            Title = title,
+            OrganizationName = organizationName,
+            HeaderText = headerText,
+            FooterText = footerText,
+            Note = template is { } noteSnapshot && (noteSnapshot.TryGetProperty("note", out var note) || noteSnapshot.TryGetProperty("Note", out note)) ? note.GetString() : null,
+            Template = template is not null ? new {
+                Title = title,
+                OrganizationName = organizationName,
+                HeaderText = headerText,
+                FooterText = footerText
             } : null,
             Signature = document?.SignatureContent is null || document.SignatureContentType is null ? null : new { ContentType = document.SignatureContentType, Data = Convert.ToBase64String(document.SignatureContent) },
             Products = template is { } snapshot && snapshot.TryGetProperty("products", out var snapshotProducts) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new {
