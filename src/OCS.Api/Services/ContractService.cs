@@ -487,14 +487,66 @@ public sealed class ContractService(AppDbContext db) : IContractService
             : Result.Success(Map(contract));
     }
 
-    public async Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken) =>
-        await db.ContractDocuments.AsNoTracking().Where(x => x.ContractId == id).Select(x => x.Content).SingleOrDefaultAsync(cancellationToken);
+    public async Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var existing = await db.ContractDocuments.SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
+        if (existing?.Content is { Length: > 0 } bytes && (bytes.AsSpan().StartsWith("%PDF"u8) || bytes.AsSpan().StartsWith("PK"u8)))
+            return bytes;
+
+        var contract = await db.ConsignmentContracts
+            .Include(x => x.Customer).ThenInclude(x => x!.Account)
+            .Include(x => x.Products).ThenInclude(x => x.Brand)
+            .Include(x => x.Products).ThenInclude(x => x.Category)
+            .Include(x => x.CreatedByEmployee).ThenInclude(x => x.Account)
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (contract is null) return null;
+
+        var template = await db.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == 1, cancellationToken) ?? new ContractTemplate();
+        var pdfProducts = contract.Products
+            .Where(x => x.ApprovalStatus != Consts.ProductApprovalStatus.Rejected)
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => (x, x.Brand?.Name ?? "", x.Category?.Name ?? "")).ToList();
+
+        var employeeAccount = contract.CreatedByEmployee?.Account;
+        var terms = existing?.Terms ?? (string.IsNullOrWhiteSpace(template.DefaultTerms) ? null : template.DefaultTerms);
+        var signatureBytes = existing?.SignatureContent;
+
+        var pdf = ContractPdfRenderer.Render(
+            contract,
+            employeeAccount?.FullName ?? "",
+            contract.CreatedByEmployee?.JobTitle,
+            employeeAccount?.PhoneNumber ?? "",
+            pdfProducts,
+            terms,
+            signatureBytes,
+            preview: false,
+            template: template);
+
+        if (existing is not null)
+        {
+            existing.Content = pdf;
+        }
+        else
+        {
+            db.ContractDocuments.Add(new ContractDocument
+            {
+                ContractId = contract.Id,
+                Content = pdf,
+                Terms = terms,
+                TemplateVersion = template.Version.ToString("N"),
+                SignatureContent = signatureBytes,
+                SignatureContentType = "image/png"
+            });
+        }
+        await db.SaveChangesAsync(cancellationToken);
+        return pdf;
+    }
 
     public async Task<IReadOnlyList<ContractListItem>> ListAsync(int page, CancellationToken cancellationToken) =>
         await db.ConsignmentContracts.AsNoTracking().OrderByDescending(x => x.SignedAt).ThenBy(x => x.Id)
             .Skip((Math.Clamp(page, 1, 10000) - 1) * 20).Take(20)
-            .Select(x => new ContractListItem(x.Id, x.ContractNumber, x.CustomerNameSnapshot, x.SignedAt,
-                db.ContractDocuments.Any(d => d.ContractId == x.Id))).ToListAsync(cancellationToken);
+            .Select(x => new ContractListItem(x.Id, x.ContractNumber, x.CustomerNameSnapshot, x.SignedAt, true)).ToListAsync(cancellationToken);
 
     private static ContractResponse Map(ConsignmentContract contract) => new(
         contract.Id, contract.ContractNumber, contract.CustomerId, contract.AppointmentId,
