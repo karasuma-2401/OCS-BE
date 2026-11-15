@@ -7,7 +7,6 @@ using OCS.Api.Entities;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Contracts;
 using System.Text.Json;
-using PdfSharp.Pdf.IO;
 
 namespace OCS.Api.Services;
 
@@ -62,28 +61,6 @@ public sealed class ContractTemplateService(AppDbContext db) : IContractTemplate
         request.HeaderText is null || request.HeaderText.Length > 1000 || request.FooterText is null || request.FooterText.Length > 1000 ||
         request.DefaultTerms is null || request.DefaultTerms.Length > 6000)
             return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "Vui lòng kiểm tra tiêu đề và độ dài nội dung mẫu.");
-        if (request.FieldMappings is null || request.FieldMappings.Count > 40)
-            return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "Tối đa 40 vùng điền dữ liệu.");
-        if (string.IsNullOrEmpty(request.PdfBase64))
-            return request.FieldMappings.Count == 0 ? null : ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "Cần tải PDF nền trước khi thiết lập vùng dữ liệu.");
-        if (request.PdfBase64.Length > 2_800_000)
-            return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "Mẫu PDF không được vượt quá 2 MB.");
-        try
-        {
-            var bytes = Convert.FromBase64String(request.PdfBase64);
-            if (bytes.Length > 2 * 1024 * 1024) throw new FormatException();
-            using var pdf = PdfReader.Open(new MemoryStream(bytes), PdfDocumentOpenMode.Modify);
-            if (pdf.PageCount is < 1 or > 20) throw new FormatException();
-            foreach (var field in request.FieldMappings)
-                if (field is null || !ContractPdfRenderer.Fields.Contains(field.Field) || field.Page < 1 || field.Page > pdf.PageCount ||
-                    !double.IsFinite(field.X) || !double.IsFinite(field.Y) || !double.IsFinite(field.Width) || !double.IsFinite(field.Height) ||
-                    field.X < 0 || field.Y < 0 || field.Width <= 0 || field.Height <= 0 || field.X + field.Width > 100 || field.Y + field.Height > 100)
-                    return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "Vùng dữ liệu không hợp lệ hoặc nằm ngoài trang PDF.");
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "PDF không hợp lệ, có mật khẩu, vượt quá 2 MB hoặc quá 20 trang.");
-        }
         return null;
     }
 
@@ -91,7 +68,7 @@ public sealed class ContractTemplateService(AppDbContext db) : IContractTemplate
     {
         entity.Title = request.Title.Trim(); entity.OrganizationName = request.OrganizationName.Trim();
         entity.HeaderText = request.HeaderText.Trim(); entity.FooterText = request.FooterText.Trim(); entity.DefaultTerms = request.DefaultTerms.Trim();
-        entity.PdfBackground = string.IsNullOrEmpty(request.PdfBase64) ? null : Convert.FromBase64String(request.PdfBase64);
+        entity.PdfBackground = null;
         var payload = new
         {
             fieldMappings = request.FieldMappings ?? [],

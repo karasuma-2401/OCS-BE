@@ -15,28 +15,31 @@ namespace OCS.Api.IntegrationTests;
 public sealed class ContractTemplateTests
 {
     [Fact]
-    public async Task CustomPdfMappingsAreSavedValidatedAndRenderedWithFullAppendix()
+    public async Task WebTemplateFieldsAreSavedAndRenderedConsistently()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
         var service = new ContractTemplateService(db);
         var request = new UpdateContractTemplateRequest
         {
-            Title = "Mẫu PDF",
-            PdfBase64 = Convert.ToBase64String(ContractPdfRenderer.CreateSampleBackground()),
-            FieldMappings = [new("customerName", 1, 35, 42, 50, 4), new("signature", 1, 60, 75, 30, 12)]
+            Title = "HỢP ĐỒNG DỊCH VỤ KÝ GỬI THỜI TRANG",
+            OrganizationName = "CỬA HÀNG OLD CLOTHES STORE (OCS)",
+            HeaderText = "Đầu trang web",
+            FooterText = "Chân trang web",
+            DefaultTerms = "Điều khoản mặc định web",
+            DefaultTermDays = 45,
+            DefaultExpiryHandling = "Donate"
         };
         var preview = service.Preview(request);
         Assert.True(preview.IsSuccess);
-        using var pdf = PdfReader.Open(new MemoryStream(preview.Data!), PdfDocumentOpenMode.Import);
-        Assert.True(pdf.PageCount >= 2);
         var saved = await service.UpdateAsync(request, Guid.NewGuid(), default);
         Assert.True(saved.IsSuccess);
-        Assert.Equal(request.PdfBase64, (await service.GetAsync(default)).PdfBase64);
-        Assert.Equal(2, (await service.GetAsync(default)).FieldMappings.Count);
-        Assert.False(service.Preview(request with { FieldMappings = [new("customerName", 2, 0, 0, 50, 5)] }).IsSuccess);
-        Assert.False(service.Preview(request with { FieldMappings = [new("customerName", 1, 90, 0, 20, 5)] }).IsSuccess);
-        Assert.False(service.Preview(request with { PdfBase64 = "aW52YWxpZA==" }).IsSuccess);
+        var fetched = await service.GetAsync(default);
+        Assert.Equal("HỢP ĐỒNG DỊCH VỤ KÝ GỬI THỜI TRANG", fetched.Title);
+        Assert.Equal("CỬA HÀNG OLD CLOTHES STORE (OCS)", fetched.OrganizationName);
+        Assert.Equal(45, fetched.DefaultTermDays);
+        Assert.Equal("Donate", fetched.DefaultExpiryHandling);
+        Assert.Equal("Điều khoản mặc định web", fetched.DefaultTerms);
     }
 
     [Fact]
