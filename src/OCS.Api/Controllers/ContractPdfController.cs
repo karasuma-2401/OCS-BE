@@ -2,6 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Authorization;
 using OCS.Api.Interfaces.Services;
+using OCS.Api.Context;
+using Microsoft.EntityFrameworkCore;
+using OCS.Api.Consts;
 
 namespace OCS.Api.Controllers;
 
@@ -10,8 +13,54 @@ namespace OCS.Api.Controllers;
 [Route("api/contracts")]
 [Authorize(Roles = "Admin,Manager,Staff")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class ContractPdfController(IContractService contracts, IAuthorizationService authorization) : ControllerBase
+public sealed class ContractPdfController(IContractService contracts, IAuthorizationService authorization, AppDbContext db) : ControllerBase
 {
+    /// <summary>Dữ liệu để hiển thị hợp đồng trên web.</summary>
+    [HttpGet("{id:guid}/web")]
+    public async Task<IActionResult> Web(Guid id, CancellationToken cancellationToken)
+    {
+        if (!User.IsInRole("Admin") && !User.IsInRole("Manager") &&
+            (!(await authorization.AuthorizeAsync(User, PermissionCatalog.AppointmentsStaffReception)).Succeeded ||
+             !(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded)) return Forbid();
+        var contract = await db.ConsignmentContracts.AsNoTracking()
+            .Include(x => x.Customer).ThenInclude(x => x!.Account)
+            .Include(x => x.Products).ThenInclude(x => x.Images)
+            .Include(x => x.Products).ThenInclude(x => x.Category)
+            .Include(x => x.Products).ThenInclude(x => x.Brand)
+            .SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (contract is null) return NotFound();
+        var document = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
+        System.Text.Json.JsonElement? template = null;
+        if (document?.Content is { Length: > 0 } content && content[0] == (byte)'{')
+        {
+            try { template = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(content); }
+            catch (System.Text.Json.JsonException) { /* Tài liệu lịch sử có thể không phải ảnh chụp mẫu web. */ }
+        }
+        return Ok(new {
+            contract.Id, contract.ContractNumber, contract.SignedAt, contract.EndsAt,
+            ExpiryHandling = contract.ExpiryHandling.ToString(),
+            CustomerName = contract.CustomerNameSnapshot ?? contract.Customer?.Account.FullName ?? "",
+            CustomerPhone = contract.CustomerPhoneSnapshot ?? contract.Customer?.Account.PhoneNumber ?? "",
+            CustomerEmail = contract.CustomerEmailSnapshot, CustomerIdentity = contract.CustomerIdentitySnapshot,
+            CustomerAddress = contract.CustomerAddressSnapshot, contract.BankCodeSnapshot,
+            contract.BankAccountNumberSnapshot, contract.BankAccountHolderSnapshot,
+            Terms = document?.Terms,
+            Note = template is { } noteSnapshot && noteSnapshot.TryGetProperty("note", out var note) ? note.GetString() : null,
+            Template = template is { } t ? new {
+                Title = t.TryGetProperty("title", out var title) ? title.GetString() : null,
+                OrganizationName = t.TryGetProperty("organizationName", out var organization) ? organization.GetString() : null,
+                HeaderText = t.TryGetProperty("headerText", out var header) ? header.GetString() : null,
+                FooterText = t.TryGetProperty("footerText", out var footer) ? footer.GetString() : null
+            } : null,
+            Signature = document?.SignatureContent is null || document.SignatureContentType is null ? null : new { ContentType = document.SignatureContentType, Data = Convert.ToBase64String(document.SignatureContent) },
+            Products = template is { } snapshot && snapshot.TryGetProperty("products", out var snapshotProducts) && snapshotProducts.ValueKind == System.Text.Json.JsonValueKind.Array ? (object)snapshotProducts : contract.Products.Where(x => x.ApprovalStatus != ProductApprovalStatus.Rejected).OrderBy(x => x.CreatedAt).Select(x => new {
+                x.Id, x.Name, x.Barcode, x.Size, Brand = x.Brand?.Name, Category = x.Category?.Name, x.Material, x.Description, x.ConditionPercentage,
+                ListedPrice = x.AgreedListedPrice ?? x.ListedPrice, CommissionRate = x.AgreedCommissionRate ?? 0,
+                Images = x.Images.OrderBy(i => i.SortOrder).Select(i => i.Content != null && i.ContentType != null
+                    ? $"data:{i.ContentType};base64,{Convert.ToBase64String(i.Content)}" : i.Url).ToArray()
+            }).ToArray()
+        });
+    }
     /// <summary>Lấy PDF đã lưu.</summary>
     [HttpGet("{id:guid}/pdf")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK, "application/pdf")]

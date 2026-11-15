@@ -68,7 +68,7 @@ public sealed class ContractTemplateTests
     }
 
     [Fact]
-    public async Task NewContractsUseWordTemplateAndExistingDocumentsStayUnchanged()
+    public async Task NewContractsUseWebTemplateAndExistingSnapshotsStayUnchanged()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
@@ -76,8 +76,8 @@ public sealed class ContractTemplateTests
         db.EmployeeProfiles.Add(employee);
         await db.SaveChangesAsync();
         var firstVersion = Guid.NewGuid();
-        var template = new WordDocumentTemplate { Kind = WordTemplateSamples.Contract, Content = WordTemplateSamples.Create(WordTemplateSamples.Contract), Version = firstVersion, UpdatedAt = DateTimeOffset.UtcNow };
-        db.WordDocumentTemplates.Add(template);
+        var template = new ContractTemplate { Id = 1, Title = "Mẫu đầu", DefaultTerms = "Điều khoản đầu", Version = firstVersion };
+        db.ContractTemplates.Add(template);
         await db.SaveChangesAsync();
         var now = DateTimeOffset.UtcNow;
         var contractRequest = new CreateContractRequest
@@ -87,22 +87,25 @@ public sealed class ContractTemplateTests
             EndsAt = now.AddDays(30),
             ExpiryHandling = "Return",
             TemplateVersion = firstVersion,
+            Signature = new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" },
             Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" }
         };
         var contracts = new ContractService(db);
         Assert.True((await contracts.CreateAsync(contractRequest, employee.Id, default)).IsSuccess);
         var document = await db.ContractDocuments.SingleAsync();
-        var oldWord = document.Content.ToArray();
-        Assert.Null(document.Terms);
+        var oldSnapshot = document.Content.ToArray();
+        Assert.Equal("Điều khoản đầu", document.Terms);
         Assert.Equal(firstVersion.ToString("N"), document.TemplateVersion);
         template.Version = Guid.NewGuid();
+        template.Title = "Mẫu mới";
+        template.DefaultTerms = "Điều khoản mới";
         await db.SaveChangesAsync();
-        Assert.Equal(oldWord, (await db.ContractDocuments.SingleAsync()).Content);
-        var stale = await contracts.PreviewAsync(contractRequest with { RequestId = Guid.NewGuid() }, employee.Id, default);
+        Assert.Equal(oldSnapshot, (await db.ContractDocuments.SingleAsync()).Content);
+        var stale = await contracts.PreviewWebAsync(contractRequest with { RequestId = Guid.NewGuid() }, employee.Id, default);
         Assert.Equal("CONTRACT_TEMPLATE.CHANGED", stale.Error!.Code);
         var next = await contracts.CreateAsync(contractRequest with { RequestId = Guid.NewGuid(), TemplateVersion = template.Version }, employee.Id, default);
         Assert.True(next.IsSuccess);
-        Assert.Contains(await db.ContractDocuments.ToListAsync(), d => d.TemplateVersion == template.Version.ToString("N"));
+        Assert.Contains(await db.ContractDocuments.ToListAsync(), d => d.TemplateVersion == template.Version.ToString("N") && d.Terms == "Điều khoản mới");
     }
 
     [Fact]

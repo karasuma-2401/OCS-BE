@@ -9,6 +9,7 @@ public interface IContractService
     Task<Result<ContractResponse>> CreateAsync(CreateContractRequest request, Guid employeeId, CancellationToken cancellationToken);
     Task<Result<byte[]>> PreviewAsync(CreateContractRequest request, Guid employeeId, CancellationToken cancellationToken);
     Task<Result<byte[]>> PreviewWordAsync(CreateContractRequest request, Guid employeeId, CancellationToken cancellationToken);
+    Task<Result<string>> PreviewWebAsync(CreateContractRequest request, Guid employeeId, CancellationToken cancellationToken);
     Task<Result<ContractResponse>> GetAsync(Guid id, CancellationToken cancellationToken);
     Task<Result<ContractDetailDto>> GetDetailAsync(Guid id, CancellationToken cancellationToken);
     Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken);

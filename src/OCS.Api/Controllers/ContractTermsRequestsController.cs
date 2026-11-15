@@ -58,6 +58,24 @@ public sealed class ContractTermsRequestsController(AppDbContext db) : Controlle
         return item is null ? NotFound() : Ok(Map(item));
     }
 
+    [HttpPut("{id:guid}/approve-web")]
+    [Authorize(Roles = "Admin,Manager")]
+    public async Task<IActionResult> ApproveWeb(Guid id, ApproveWebTermsRequest request, CancellationToken cancellationToken)
+    {
+        if (Actor is not Guid actor) return Unauthorized();
+        if (string.IsNullOrWhiteSpace(request.Terms) || request.Terms.Length > 20000 || request.Note?.Length > 2000)
+            return BadRequest(new ProblemDetails { Title = "Nhập điều khoản tối đa 20.000 ký tự và ghi chú tối đa 2.000 ký tự." });
+        var item = await db.ContractTermsRequests.SingleOrDefaultAsync(x => x.Id == id, cancellationToken);
+        if (item is null) return NotFound();
+        if (item.Status != "Pending" || item.Version != request.Version) return Conflict(new ProblemDetails { Title = "Yêu cầu đã thay đổi. Hãy tải lại." });
+        item.ApprovedTemplate = System.Text.Encoding.UTF8.GetBytes("OCS-TEXT:\n" + request.Terms.Trim());
+        item.Status = "Approved"; item.DecisionNote = request.Note?.Trim(); item.DecidedAt = DateTimeOffset.UtcNow;
+        item.DecidedBy = actor; item.Version = Guid.NewGuid();
+        try { await db.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException) { return Conflict(new ProblemDetails { Title = "Yêu cầu đã thay đổi. Hãy tải lại." }); }
+        return Ok(Map(item));
+    }
+
     /// <summary>Nhân viên hủy yêu cầu của mình trước khi tạo hợp đồng.</summary>
     [HttpPost("{id:guid}/cancel")]
     [Authorize(Policy = PermissionCatalog.AppointmentsStaffReception)]
@@ -139,5 +157,6 @@ public sealed class ContractTermsRequestsController(AppDbContext db) : Controlle
 
 public sealed record CreateTermsRequest(Guid DraftKey, string? Reason, string? CustomerPhone);
 public sealed record RejectTermsRequest(Guid Version, string? Note);
+public sealed record ApproveWebTermsRequest(Guid Version, string? Terms, string? Note);
 public sealed record CancelTermsRequest(Guid Version);
 public sealed record TermsRequestResponse(Guid Id, Guid DraftKey, Guid RequestedBy, string Reason, string Status, string? DecisionNote, Guid Version, DateTimeOffset CreatedAt, DateTimeOffset? DecidedAt, string? RequestedByName);

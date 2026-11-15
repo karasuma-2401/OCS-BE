@@ -219,7 +219,7 @@ public static class ContractPdfRenderer
         Line(template.Title, title);
         if (!string.IsNullOrWhiteSpace(template.HeaderText)) Line(template.HeaderText);
         if (preview) Line("BẢN XEM TRƯỚC - CHƯA LƯU HỢP ĐỒNG", bold);
-        Line("BẢN DỰ THẢO - CHƯA PHÊ DUYỆT", bold);
+        if (signature is null) Line("BẢN DỰ THẢO - CHƯA PHÊ DUYỆT", bold);
         Line($"Mã hợp đồng: {contract.ContractNumber}");
         Line($"Ngày ký theo thông tin nhập: {Date(contract.SignedAt)}");
         Line($"Ngày kết thúc: {Date(contract.EndsAt)}");

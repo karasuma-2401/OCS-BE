@@ -43,7 +43,25 @@ public sealed class ConsignmentService(
                 ApplicationError.Validation("CONSIGNMENT.ITEMS_REQUIRED", "Phiếu tiếp nhận cần ít nhất 1 sản phẩm."));
         }
 
+        if (request.Items.Any(item => string.IsNullOrWhiteSpace(item.Name)))
+        {
+            return Result.Failure<ReceptionContractResponse>(
+                ApplicationError.Validation("CONSIGNMENT.ITEM_NAME_REQUIRED", "Vui lòng nhập tên cho từng sản phẩm."));
+        }
+        if (request.Signature is null || request.Signature.ContentType is not ("image/png" or "image/jpeg") ||
+            string.IsNullOrWhiteSpace(request.Signature.Data) || request.Signature.Data.Length > 700000)
+            return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CONSIGNMENT.SIGNATURE_REQUIRED", "Khách hàng cần ký xác nhận trước khi lưu."));
+        byte[] signatureBytes;
+        try { signatureBytes = Convert.FromBase64String(request.Signature.Data); }
+        catch (FormatException) { return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CONSIGNMENT.INVALID_SIGNATURE", "Không thể đọc chữ ký.")); }
+        if (signatureBytes.Length > 512 * 1024 || !ContractPdfRenderer.IsValidSignature(signatureBytes, request.Signature.ContentType))
+            return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CONSIGNMENT.INVALID_SIGNATURE", "Ảnh chữ ký không hợp lệ hoặc vượt quá 512 KB."));
+        var bankParts = new[] { request.CustomerInfo.BankCode, request.CustomerInfo.BankAccountNumber, request.CustomerInfo.BankAccountHolderName };
+        if (bankParts.Any(x => !string.IsNullOrWhiteSpace(x)) && bankParts.Any(string.IsNullOrWhiteSpace))
+            return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CUSTOMER.INVALID_BANK", "Vui lòng nhập đầy đủ thông tin tài khoản ngân hàng."));
         var isBuyout = string.Equals(request.IntakeType?.Trim(), "Buyout", StringComparison.OrdinalIgnoreCase);
+        if (request.ActualItemCount > 0 && request.ActualItemCount < request.Items.Count)
+            return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CONSIGNMENT.ITEM_COUNT_MISMATCH", "Số món thực tế không thể nhỏ hơn số sản phẩm đã nhập."));
 
         if (!Enum.TryParse<ExpiryHandling>(request.ExpiryHandling, true, out var expiryHandling) ||
             !Enum.IsDefined(expiryHandling))
@@ -70,80 +88,21 @@ public sealed class ConsignmentService(
             dbContext.EmployeeProfiles.Add(new EmployeeProfile { Id = staffId });
         }
 
-        var requestedCategoryIds = request.Items.Select(i => i.CategoryId).Distinct().ToList();
+        var requestedCategoryIds = request.Items.Select(i => i.CategoryId).Distinct().ToArray();
         var categories = await dbContext.Categories
-            .Where(c => requestedCategoryIds.Contains(c.Id))
+            .Where(c => c.IsActive && requestedCategoryIds.Contains(c.Id))
             .ToDictionaryAsync(c => c.Id, cancellationToken);
+        if (categories.Count != requestedCategoryIds.Length)
+            return Result.Failure<ReceptionContractResponse>(
+                ApplicationError.Validation("CONSIGNMENT.INVALID_CATEGORY", "Danh mục sản phẩm không tồn tại hoặc đã ngừng sử dụng. Vui lòng chọn lại."));
 
-        var requestedBrandIds = request.Items.Select(i => i.BrandId).Distinct().ToList();
+        var requestedBrandIds = request.Items.Select(i => i.BrandId).Distinct().ToArray();
         var brands = await dbContext.Brands
-            .Where(b => requestedBrandIds.Contains(b.Id))
+            .Where(b => b.IsActive && requestedBrandIds.Contains(b.Id))
             .ToDictionaryAsync(b => b.Id, cancellationToken);
-
-        Category? fallbackCategory = null;
-        Brand? fallbackBrand = null;
-
-        foreach (var item in request.Items)
-        {
-            if (!categories.ContainsKey(item.CategoryId))
-            {
-                fallbackCategory ??= await dbContext.Categories.FirstOrDefaultAsync(cancellationToken);
-                if (fallbackCategory is not null)
-                {
-                    item.CategoryId = fallbackCategory.Id;
-                    categories[fallbackCategory.Id] = fallbackCategory;
-                }
-                else
-                {
-                    return Result.Failure<ReceptionContractResponse>(
-                        ApplicationError.Validation("CONSIGNMENT.INVALID_CATEGORY", $"Danh mục {item.CategoryId} không tồn tại trong hệ thống."));
-                }
-            }
-
-            if (!brands.ContainsKey(item.BrandId))
-            {
-                var existingBrand = await dbContext.Brands.FirstOrDefaultAsync(b => b.Id == item.BrandId, cancellationToken);
-                if (existingBrand is null && (item.BrandId == Guid.Parse("40000000-0000-0000-0000-000000000000") || item.BrandId == Guid.Parse("40000000-0000-0000-0000-000000000099") || item.BrandId == Guid.Empty))
-                {
-                    existingBrand = await dbContext.Brands.FirstOrDefaultAsync(b => b.Name == "Khác" && b.IsActive, cancellationToken)
-                        ?? await dbContext.Brands.FirstOrDefaultAsync(b => b.Tier == BrandTier.NoBrand && b.IsActive, cancellationToken);
-
-                    if (existingBrand is null)
-                    {
-                        existingBrand = new Brand
-                        {
-                            Id = Guid.Parse("40000000-0000-0000-0000-000000000099"),
-                            Name = "Khác",
-                            Tier = BrandTier.NoBrand,
-                            DefaultCommissionRate = 10m,
-                            IsActive = true
-                        };
-                        dbContext.Brands.Add(existingBrand);
-                    }
-                }
-
-                if (existingBrand is not null)
-                {
-                    item.BrandId = existingBrand.Id;
-                    brands[existingBrand.Id] = existingBrand;
-                }
-                else
-                {
-                    fallbackBrand ??= await dbContext.Brands.FirstOrDefaultAsync(cancellationToken);
-                    if (fallbackBrand is not null)
-                    {
-                        item.BrandId = fallbackBrand.Id;
-                        brands[fallbackBrand.Id] = fallbackBrand;
-                    }
-                    else
-                    {
-                        return Result.Failure<ReceptionContractResponse>(
-                            ApplicationError.Validation("CONSIGNMENT.INVALID_BRAND", $"Thương hiệu {item.BrandId} không tồn tại trong hệ thống."));
-                    }
-                }
-            }
-        }
-
+        if (brands.Count != requestedBrandIds.Length)
+            return Result.Failure<ReceptionContractResponse>(
+                ApplicationError.Validation("CONSIGNMENT.INVALID_BRAND", "Thương hiệu sản phẩm không tồn tại hoặc đã ngừng sử dụng. Vui lòng chọn lại."));
         var seenUrlsInBatch = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allImageUrls = new List<string>();
 
@@ -166,7 +125,7 @@ public sealed class ConsignmentService(
                 }
             }
 
-            foreach (var url in itemUrls)
+            foreach (var url in itemUrls.Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 if (!IsValidStorageImageUrl(url, out var urlError))
                 {
@@ -210,6 +169,7 @@ public sealed class ConsignmentService(
             Guid customerId;
             string customerName;
             string customerPhone;
+            var existingCustomer = false;
 
             if (request.AppointmentId.HasValue && request.AppointmentId.Value != Guid.Empty)
             {
@@ -235,12 +195,9 @@ public sealed class ConsignmentService(
                 }
 
                 customerId = linkedAppointment.CustomerId;
-                customerName = !string.IsNullOrWhiteSpace(request.CustomerInfo.FullName)
-                    ? request.CustomerInfo.FullName.Trim()
-                    : linkedAppointment.Customer.Account.FullName;
-                customerPhone = !string.IsNullOrWhiteSpace(request.CustomerInfo.PhoneNumber)
-                    ? request.CustomerInfo.PhoneNumber.Trim()
-                    : linkedAppointment.Customer.Account.PhoneNumber;
+                existingCustomer = true;
+                customerName = linkedAppointment.Customer.Account.FullName;
+                customerPhone = linkedAppointment.Customer.Account.PhoneNumber;
             }
             else
             {
@@ -251,26 +208,13 @@ public sealed class ConsignmentService(
                     : request.CustomerInfo.Email.Trim();
                 var normalizedEmail = EmailIdentity.Normalize(cleanEmail);
 
-                Account? existingCustomerAccount = null;
-
-                if (!string.IsNullOrWhiteSpace(normalizedEmail))
-                {
-                    existingCustomerAccount = await dbContext.Accounts
-                        .Include(a => a.CustomerProfile)
-                        .FirstOrDefaultAsync(a => a.NormalizedEmail == normalizedEmail, cancellationToken);
-                }
-
-                if (existingCustomerAccount is null)
-                {
-                    existingCustomerAccount = await dbContext.Accounts
-                        .Include(a => a.CustomerProfile)
-                        .FirstOrDefaultAsync(
-                            a => a.AccountType == AccountType.Customer && a.PhoneNumber == cleanPhone,
-                            cancellationToken);
-                }
-
+                var existingCustomerAccount = await dbContext.Accounts.Include(a => a.CustomerProfile)
+                    .FirstOrDefaultAsync(a => a.AccountType == AccountType.Customer && a.PhoneNumber == cleanPhone, cancellationToken);
+                if (normalizedEmail is not null && await dbContext.Accounts.AnyAsync(a => a.NormalizedEmail == normalizedEmail && (existingCustomerAccount == null || a.Id != existingCustomerAccount.Id), cancellationToken))
+                    return Result.Failure<ReceptionContractResponse>(ApplicationError.Conflict("CUSTOMER.ALREADY_EXISTS", "Email đã được sử dụng bởi tài khoản khác."));
                 if (existingCustomerAccount is not null)
                 {
+                    existingCustomer = true;
                     if (existingCustomerAccount.CustomerProfile is null)
                     {
                         dbContext.CustomerProfiles.Add(new CustomerProfile
@@ -286,6 +230,9 @@ public sealed class ConsignmentService(
                 }
                 else
                 {
+                    var identity = request.CustomerInfo.IdentityNumber?.Trim();
+                    if (!string.IsNullOrEmpty(identity) && await dbContext.Accounts.AnyAsync(a => a.AccountType == AccountType.Customer && a.IdentityNumber == identity, cancellationToken))
+                        return Result.Failure<ReceptionContractResponse>(ApplicationError.Conflict("CUSTOMER.ALREADY_EXISTS", "Giấy tờ đã được sử dụng bởi khách hàng khác."));
                     var newCustomerId = Guid.NewGuid();
                     var newAccount = new Account
                     {
@@ -294,6 +241,7 @@ public sealed class ConsignmentService(
                         FullName = cleanName,
                         PhoneNumber = cleanPhone,
                         Email = cleanEmail,
+                        IdentityNumber = request.CustomerInfo.IdentityNumber?.Trim(),
                         Status = AccountStatus.Active,
                         CreatedByAccountId = staffId
                     };
@@ -301,6 +249,10 @@ public sealed class ConsignmentService(
                     var newProfile = new CustomerProfile
                     {
                         Id = newCustomerId,
+                        Address = request.CustomerInfo.Address?.Trim(),
+                        BankCode = request.CustomerInfo.BankCode?.Trim().ToUpperInvariant(),
+                        BankAccountNumber = request.CustomerInfo.BankAccountNumber?.Trim(),
+                        BankAccountHolderName = request.CustomerInfo.BankAccountHolderName?.Trim(),
                         Status = CustomerStatus.Active,
                         Account = newAccount
                     };
@@ -321,6 +273,15 @@ public sealed class ConsignmentService(
                 }
             }
 
+            var resolvedProfile = await dbContext.CustomerProfiles.FindAsync([customerId], cancellationToken);
+            var resolvedAccount = await dbContext.Accounts.FindAsync([customerId], cancellationToken);
+            static bool Same(string? a, string? b) => string.Equals(a?.Trim() ?? "", b?.Trim() ?? "", StringComparison.Ordinal);
+            if (existingCustomer && (resolvedAccount is null || resolvedProfile is null ||
+                !Same(request.CustomerInfo.FullName, resolvedAccount.FullName) || !Same(request.CustomerInfo.PhoneNumber, resolvedAccount.PhoneNumber) ||
+                !Same(request.CustomerInfo.Email, resolvedAccount.Email) || !Same(request.CustomerInfo.IdentityNumber, resolvedAccount.IdentityNumber) ||
+                !Same(request.CustomerInfo.Address, resolvedProfile.Address) || !Same(request.CustomerInfo.BankCode, resolvedProfile.BankCode) ||
+                !Same(request.CustomerInfo.BankAccountNumber, resolvedProfile.BankAccountNumber) || !Same(request.CustomerInfo.BankAccountHolderName, resolvedProfile.BankAccountHolderName)))
+                return Result.Failure<ReceptionContractResponse>(ApplicationError.Conflict("CUSTOMER.PROFILE_CHANGED", "Hồ sơ khách hàng đã thay đổi. Hãy tải lại, kiểm tra và ký lại trước khi lưu."));
             var now = DateTimeOffset.UtcNow;
             var vietnamToday = DateOnly.FromDateTime(now.UtcDateTime.AddHours(7));
             var dateStamp = vietnamToday.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
@@ -345,6 +306,15 @@ public sealed class ConsignmentService(
                     Id = contractId,
                     ContractNumber = contractNumber,
                     CustomerId = customerId,
+                    CustomerNameSnapshot = customerName,
+                    CustomerPhoneSnapshot = customerPhone,
+                    CustomerEmailSnapshot = resolvedAccount?.Email,
+                    CustomerIdentitySnapshot = resolvedAccount?.IdentityNumber,
+                    CustomerAddressSnapshot = resolvedProfile?.Address,
+                    BankCodeSnapshot = resolvedProfile?.BankCode,
+                    BankAccountNumberSnapshot = resolvedProfile?.BankAccountNumber,
+                    BankAccountHolderSnapshot = resolvedProfile?.BankAccountHolderName,
+                    ActualItemCount = request.ActualItemCount,
                     AppointmentId = linkedAppointment?.Id,
                     CreatedByEmployeeId = staffId,
                     SignedAt = now,
@@ -371,6 +341,8 @@ public sealed class ConsignmentService(
                     CreatedByEmployeeId = staffId,
                     ApprovedByEmployeeId = staffId,
                     TotalPurchasePrice = totalPurchase,
+                    SignatureContent = signatureBytes,
+                    SignatureContentType = request.Signature.ContentType,
                     Status = BuyoutStatus.Approved
                 };
                 dbContext.Buyouts.Add(buyout);
@@ -380,6 +352,7 @@ public sealed class ConsignmentService(
                 .CountAsync(p => p.Barcode.StartsWith($"OCS-{shortDateStamp}-") || p.Barcode.StartsWith($"REJ-{shortDateStamp}-"), cancellationToken);
 
             var createdProductsDto = new List<ReceptionCreatedProductDto>();
+            var pdfProducts = new List<(Product Product, string Brand, string Category)>();
             decimal totalEstimatedValue = 0m;
             decimal totalCustomerPayout = 0m;
             int approvedCount = 0;
@@ -422,7 +395,7 @@ public sealed class ConsignmentService(
                 decimal brandConfiguredRate = brand.DefaultCommissionRate > 0
                     ? brand.DefaultCommissionRate
                     : GetDefaultTierCommissionRate(brand.Tier);
-                decimal effectiveRate = brandConfiguredRate;
+                decimal effectiveRate = item.CommissionRate ?? brandConfiguredRate;
                 decimal customerPayout;
 
                 if (!isBuyout)
@@ -451,6 +424,7 @@ public sealed class ConsignmentService(
                 }
 
                 dbContext.Products.Add(product);
+                pdfProducts.Add((product, brand.Name, categories[item.CategoryId].Name));
 
                 dbContext.ProductStatusHistories.Add(new ProductStatusHistory
                 {
@@ -522,6 +496,19 @@ public sealed class ConsignmentService(
                 });
             }
 
+            if (contract is not null)
+            {
+                var template = await dbContext.ContractTemplates.AsNoTracking().SingleOrDefaultAsync(t => t.Id == 1, cancellationToken) ?? new ContractTemplate();
+                if (request.TemplateVersion != template.Version)
+                    return Result.Failure<ReceptionContractResponse>(ApplicationError.Conflict("CONTRACT_TEMPLATE.CHANGED", "Mẫu hợp đồng đã thay đổi. Hãy tải lại, xem và ký lại."));
+                var snapshot = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new {
+                    template.Title, template.OrganizationName, template.HeaderText, template.FooterText, Note = request.Note?.Trim(),
+                    Products = pdfProducts.Where(item => item.Product.ApprovalStatus != ProductApprovalStatus.Rejected).Select(item => new { item.Product.Id, item.Product.Name, item.Product.Barcode, item.Product.Size, item.Brand, item.Category, item.Product.Material, item.Product.ConditionPercentage,
+                        ListedPrice = item.Product.AgreedListedPrice ?? item.Product.ListedPrice, CommissionRate = item.Product.AgreedCommissionRate ?? 0,
+                        Images = dbContext.ProductImages.Local.Where(i => i.ProductId == item.Product.Id).OrderBy(i => i.SortOrder).Select(i => i.Url).ToArray() }).ToArray()
+                }, System.Text.Json.JsonSerializerOptions.Web);
+                dbContext.ContractDocuments.Add(new ContractDocument { ContractId = contractId, Content = snapshot, SignatureContent = signatureBytes, SignatureContentType = request.Signature.ContentType, Terms = template.DefaultTerms, TemplateVersion = template.Version.ToString("N") });
+            }
             if (linkedAppointment is not null)
             {
                 linkedAppointment.Status = AppointmentStatus.Completed;
@@ -668,6 +655,12 @@ public sealed class ConsignmentService(
             CustomerName = request.CustomerName,
             CustomerPhone = request.CustomerPhone,
             CustomerEmail = request.CustomerEmail,
+            IdentityNumber = request.IdentityNumber,
+            Address = request.Address,
+            BankCode = request.BankCode,
+            BankAccountNumber = request.BankAccountNumber,
+            BankAccountHolderName = request.BankAccountHolderName,
+            ActualItemCount = request.ActualItemCount,
             TermDays = request.TermDays,
             CommissionShop = request.CommissionShop,
             Note = request.Note,

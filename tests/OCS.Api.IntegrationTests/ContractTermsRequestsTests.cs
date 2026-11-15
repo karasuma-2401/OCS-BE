@@ -16,6 +16,30 @@ namespace OCS.Api.IntegrationTests;
 public sealed class ContractTermsRequestsTests
 {
     [Fact]
+    public async Task WebApprovalIsReviewedAndSavedForTheSameCustomer()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var employee = new EmployeeProfile { Id = Guid.NewGuid() };
+        db.EmployeeProfiles.Add(employee);
+        await db.SaveChangesAsync();
+        var staff = Controller(db, employee.Id);
+        var pending = Assert.IsType<TermsRequestResponse>(Assert.IsType<OkObjectResult>(await staff.Create(new CreateTermsRequest(Guid.NewGuid(), "Điều chỉnh", "0901234567"), default)).Value);
+        var manager = Controller(db, Guid.NewGuid());
+        Assert.IsType<ConflictObjectResult>(await manager.ApproveWeb(pending.Id, new ApproveWebTermsRequest(Guid.Empty, "Điều khoản riêng", null), default));
+        var approved = Assert.IsType<TermsRequestResponse>(Assert.IsType<OkObjectResult>(await manager.ApproveWeb(pending.Id, new ApproveWebTermsRequest(pending.Version, "Điều khoản riêng", null), default)).Value);
+        var now = DateTimeOffset.UtcNow;
+        var request = new CreateContractRequest { RequestId = pending.DraftKey, SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return", Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" }, TermsRequestId = approved.Id };
+        var service = new ContractService(db);
+        var preview = await service.PreviewWebAsync(request, employee.Id, default);
+        Assert.True(preview.IsSuccess, preview.Error?.Message);
+        Assert.Equal("Điều khoản riêng", preview.Data);
+        Assert.Empty(db.ConsignmentContracts);
+        var signature = new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" };
+        var saved = await service.CreateAsync(request with { Signature = signature }, employee.Id, default);
+        Assert.True(saved.IsSuccess, saved.Error?.Message);
+        Assert.Equal(preview.Data, (await db.ContractDocuments.SingleAsync()).Terms);
+    }
+    [Fact]
     public async Task RequestRequiresApprovalAndAppliesOnlyToItsOwnContract()
     {
         await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -64,7 +88,7 @@ public sealed class ContractTermsRequestsTests
     [Fact]
     public void ApprovalAndListRequireManagerRole()
     {
-        foreach (var name in new[] { nameof(ContractTermsRequestsController.Pending), nameof(ContractTermsRequestsController.Approve), nameof(ContractTermsRequestsController.Reject) })
+        foreach (var name in new[] { nameof(ContractTermsRequestsController.Pending), nameof(ContractTermsRequestsController.Approve), nameof(ContractTermsRequestsController.ApproveWeb), nameof(ContractTermsRequestsController.Reject) })
         {
             var attributes = typeof(ContractTermsRequestsController).GetMethod(name)!.GetCustomAttributes(typeof(AuthorizeAttribute), true).Cast<AuthorizeAttribute>();
             Assert.Contains(attributes, attribute => attribute.Roles == "Admin,Manager");

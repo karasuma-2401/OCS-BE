@@ -61,6 +61,10 @@ public sealed class ContractServiceTests
             Products = [new ContractProductRequest { Name = "Áo", Size = "M", BrandId = brand.Id, CategoryId = category.Id, AgreedCommissionRate = 15, ListedPrice = 120000 }]
         };
         var service = new ContractService(db);
+        var webPreview = await service.PreviewWebAsync(request, employee.Id, default);
+        Assert.True(webPreview.IsSuccess, webPreview.Error?.Message);
+        Assert.Empty(db.ConsignmentContracts);
+        Assert.Empty(db.ContractDocuments);
         var preview = await service.PreviewAsync(request, employee.Id, default);
         Assert.True(preview.IsSuccess, preview.Error?.Message);
         Assert.True(preview.Data!.AsSpan().StartsWith("%PDF"u8));
@@ -73,7 +77,7 @@ public sealed class ContractServiceTests
         Assert.Empty(db.ConsignmentContracts);
         Assert.Empty(db.ContractDocuments);
         Assert.Empty(db.Products);
-        var created = await service.CreateAsync(request, employee.Id, default);
+        var created = await service.CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.True(created.IsSuccess, created.Error?.Message);
         Assert.Single(db.CustomerProfiles);
         Assert.Single(db.ConsignmentContracts);
@@ -107,7 +111,7 @@ public sealed class ContractServiceTests
         await db.SaveChangesAsync();
         var now = DateTimeOffset.UtcNow;
         var request = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(1), ExpiryHandling = "Return", Terms = "Thay đổi điều khoản", Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" } };
-        var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
+        var result = await new ContractService(db).CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.Equal("CONTRACT.INVALID_TERMS", result.Error!.Code);
         Assert.Empty(db.ContractDocuments);
     }
@@ -188,12 +192,12 @@ public sealed class ContractServiceTests
         Assert.Equal("CUSTOMER.INVALID_PHONE", (await service.FindCustomerByPhoneAsync("123", default)).Error!.Code);
         var now = DateTimeOffset.UtcNow;
         var request = new CreateContractRequest { CustomerId = customer.Id, RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Donate" };
-        var result = await service.CreateAsync(request, employee.Id, default);
+        var result = await service.CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.True(result.IsSuccess);
         Assert.Null(result.Data!.AppointmentId);
         Assert.Equal(customer.Id, result.Data.CustomerId);
         Assert.Equal("Donate", result.Data.ExpiryHandling);
-        Assert.Equal("CONTRACT.ALREADY_EXISTS", (await service.CreateAsync(request, employee.Id, default)).Error!.Code);
+        Assert.Equal("CONTRACT.ALREADY_EXISTS", (await service.CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default)).Error!.Code);
         Assert.Equal("CONTRACT.INVALID_CUSTOMER", (await service.CreateAsync(request with { RequestId = null }, employee.Id, default)).Error!.Code);
         Assert.Equal("CONTRACT.INVALID_CUSTOMER", (await service.CreateAsync(request with { AppointmentId = Guid.NewGuid() }, employee.Id, default)).Error!.Code);
     }
@@ -215,7 +219,7 @@ public sealed class ContractServiceTests
         var now = DateTimeOffset.UtcNow;
         var request = new CreateContractRequest { AppointmentId = appointment.Id, SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return" };
 
-        var created = await service.CreateAsync(request, employee.Id, default);
+        var created = await service.CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.True(created.IsSuccess);
         Assert.Equal(customerId, created.Data!.CustomerId);
         Assert.Equal(employee.Id, created.Data.CreatedByEmployeeId);
@@ -223,7 +227,7 @@ public sealed class ContractServiceTests
         Assert.Equal("Active", created.Data.Status);
         Assert.Equal("Return", created.Data.ExpiryHandling);
         Assert.True((await service.GetAsync(created.Data.Id, default)).IsSuccess);
-        Assert.Equal("CONTRACT.ALREADY_EXISTS", (await service.CreateAsync(request, employee.Id, default)).Error!.Code);
+        Assert.Equal("CONTRACT.ALREADY_EXISTS", (await service.CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default)).Error!.Code);
         Assert.Equal(AppointmentStatus.CheckedIn, (await db.Appointments.SingleAsync()).Status);
         Assert.Equal(1, await db.ConsignmentContracts.CountAsync());
     }
@@ -253,7 +257,7 @@ public sealed class ContractServiceTests
             Products = [new ContractProductRequest { Name = "Áo", Size = "M", ConditionPercentage = 90, ListedPrice = 100000, AgreedCommissionRate = 15.25m, BrandId = brand.Id, CategoryId = category.Id,
                 Images = [new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }, new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" }] }]
         };
-        var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
+        var result = await new ContractService(db).CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.True(result.IsSuccess, result.Error?.Message);
         var contract = await db.ConsignmentContracts.SingleAsync();
         Assert.Equal("Khách vãng lai", contract.CustomerNameSnapshot);
@@ -268,8 +272,11 @@ public sealed class ContractServiceTests
         var document = await db.ContractDocuments.SingleAsync();
         Assert.Equal(contract.Id, document.ContractId);
         Assert.Null(document.Terms);
-        Assert.True(document.Content.AsSpan().StartsWith("%PDF"u8));
-        Assert.Equal(document.Content, await new ContractService(db).GetPdfAsync(contract.Id, default));
+        using (var snapshot = System.Text.Json.JsonDocument.Parse(document.Content))
+        {
+            Assert.Equal(product.Name, snapshot.RootElement.GetProperty("products")[0].GetProperty("name").GetString());
+            Assert.StartsWith("data:image/png;base64,", snapshot.RootElement.GetProperty("products")[0].GetProperty("images")[0].GetString());
+        }
         Assert.Equal(ProductStatus.PendingProcessing, product.Status);
         var images = await db.ProductImages.OrderBy(x => x.SortOrder).ToListAsync();
         Assert.Equal(2, images.Count);
@@ -312,14 +319,14 @@ public sealed class ContractServiceTests
             Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" },
             Products = [new ContractProductRequest { Name = "Áo", Size = "M", BrandId = brand.Id, CategoryId = category.Id, AgreedCommissionRate = commission }]
         };
-        var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
+        var result = await new ContractService(db).CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.Equal("CONTRACT.INVALID_PRODUCTS", result.Error!.Code);
         Assert.Empty(db.ConsignmentContracts);
         Assert.Empty(db.ContractDocuments);
     }
 
     [Fact]
-    public async Task ExistingCustomerChangesStayOnContractAndSignatureIsStoredInPdf()
+    public async Task ExistingCustomerChangesStayOnContractAndSignatureIsStoredWithWebSnapshot()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
         await using var db = new AppDbContext(options);
@@ -341,7 +348,7 @@ public sealed class ContractServiceTests
             CustomerDetails = new ContractCustomerDetailsRequest { Address = "Địa chỉ chỉ trên hợp đồng", BankCode = "VCB", BankAccountNumber = "123456", BankAccountHolderName = "Khách" },
             Signature = signature
         };
-        var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
+        var result = await new ContractService(db).CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.True(result.IsSuccess, result.Error?.Message);
         var saved = await db.ConsignmentContracts.SingleAsync();
         Assert.Equal("Khách gốc", saved.CustomerNameSnapshot);
@@ -350,10 +357,8 @@ public sealed class ContractServiceTests
         Assert.Equal("Địa chỉ gốc", profile.Address);
         var document = await db.ContractDocuments.SingleAsync();
         Assert.Equal(Convert.FromBase64String(signature.Data), document.SignatureContent);
-        Assert.True(document.Content.AsSpan().StartsWith("%PDF"u8));
-        using var input = new MemoryStream(document.Content);
-        using var pdf = PdfSharp.Pdf.IO.PdfReader.Open(input, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
-        Assert.True(pdf.PageCount > 0);
+        using var snapshot = System.Text.Json.JsonDocument.Parse(document.Content);
+        Assert.Equal("HỢP ĐỒNG KÝ GỬI", snapshot.RootElement.GetProperty("title").GetString());
     }
 
     [Fact]
@@ -375,7 +380,7 @@ public sealed class ContractServiceTests
             Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" },
             Signature = new ContractImageRequest { ContentType = "image/png", Data = "not-base64" }
         };
-        var result = await new ContractService(db).CreateAsync(request, employee.Id, default);
+        var result = await new ContractService(db).CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.Equal("CONTRACT.INVALID_SIGNATURE", result.Error!.Code);
         Assert.Empty(db.ConsignmentContracts);
         Assert.Empty(db.ContractDocuments);

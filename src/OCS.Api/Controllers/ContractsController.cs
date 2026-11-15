@@ -6,9 +6,6 @@ using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Contracts;
 using OCS.Api.Models.Products;
-using OCS.Api.Context;
-using OCS.Api.Services;
-using Microsoft.EntityFrameworkCore;
 
 namespace OCS.Api.Controllers;
 
@@ -37,6 +34,17 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
         if (request.Products?.Count > 0 && !(await authorization.AuthorizeAsync(User, PermissionCatalog.ProductsCreate)).Succeeded) return Forbid();
         var result = await contracts.CreateAsync(request, employeeId, cancellationToken);
         return result.IsSuccess ? CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result.Data) : result.ToActionResult(this);
+    }
+
+    [HttpPost("preview-web")]
+    [RequestSizeLimit(12_000_000)]
+    public async Task<IActionResult> PreviewWeb(CreateContractRequest request, CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var employeeId)) return Unauthorized();
+        if (!(await authorization.AuthorizeAsync(User, PermissionCatalog.CustomersRead)).Succeeded) return Forbid();
+        if (request.Products?.Count > 0 && !(await authorization.AuthorizeAsync(User, PermissionCatalog.ProductsCreate)).Succeeded) return Forbid();
+        var result = await contracts.PreviewWebAsync(request, employeeId, cancellationToken);
+        return result.IsSuccess ? Ok(new { terms = result.Data }) : result.ToActionResult(this);
     }
 
     /// <summary>Xem trước hợp đồng dưới dạng PDF từ thông tin đang nhập, không tạo hợp đồng hoặc hồ sơ khách.</summary>
@@ -74,11 +82,9 @@ public sealed class ContractsController(IContractService contracts, IAuthorizati
 
     /// <summary>Lấy mẫu và điều khoản mặc định để lập hợp đồng.</summary>
     [HttpGet("template")]
-    public async Task<ActionResult<ContractTemplateResponse>> Template([FromServices] IContractTemplateService templates, [FromServices] AppDbContext db, CancellationToken cancellationToken)
+    public async Task<ActionResult<ContractTemplateResponse>> Template([FromServices] IContractTemplateService templates, CancellationToken cancellationToken)
     {
-        var version = await db.WordDocumentTemplates.AsNoTracking().Where(x => x.Kind == WordTemplateSamples.Contract)
-            .Select(x => (Guid?)x.Version).SingleOrDefaultAsync(cancellationToken);
-        return Ok((await templates.GetAsync(cancellationToken)) with { Version = version ?? Guid.Empty, DefaultTerms = "", PdfBase64 = null, FieldMappings = [] });
+        return Ok((await templates.GetAsync(cancellationToken)) with { PdfBase64 = null, FieldMappings = [] });
     }
 
     /// <summary>Tra cứu hồ sơ khách theo số điện thoại chính xác.</summary>

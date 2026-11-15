@@ -31,7 +31,7 @@ public sealed class BarcodeTests
         var request = new CreateContractRequest { RequestId = Guid.NewGuid(), SignedAt = now, EndsAt = now.AddDays(30), ExpiryHandling = "Return", Guest = new ContractGuestRequest { FullName = "Khách", PhoneNumber = "0901234567" }, Products = [product] };
         Assert.True((await service.PreviewAsync(request, employee.Id, default)).IsSuccess);
         Assert.Empty(db.Products);
-        var result = await service.CreateAsync(request, employee.Id, default);
+        var result = await service.CreateAsync(request with { Signature = request.Signature ?? new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" } }, employee.Id, default);
         Assert.True(result.IsSuccess, result.Error?.Message);
         Assert.Equal(barcode, (await db.Products.SingleAsync()).Barcode);
         Assert.Equal(barcode, Assert.Single((await service.GetBarcodeProductsAsync(result.Data!.Id, default))!).Barcode);

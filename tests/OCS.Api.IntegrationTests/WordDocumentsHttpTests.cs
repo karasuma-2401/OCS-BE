@@ -96,6 +96,7 @@ public sealed class WordDocumentsHttpTests
             EndsAt = now.AddDays(30),
             ExpiryHandling = "Return",
             TemplateVersion = template.Version,
+            Signature = new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" },
             Guest = new ContractGuestRequest { FullName = "Khách thử", PhoneNumber = "0901234567" },
             Products = [new ContractProductRequest { Name = "Áo mẫu", Barcode = "OCS-1234567890ABCDEF", Size = "M", BrandId = brandId, CategoryId = categoryId, ListedPrice = 150000, AgreedCommissionRate = 20 }]
         };
@@ -107,10 +108,14 @@ public sealed class WordDocumentsHttpTests
         Assert.True(created.StatusCode == HttpStatusCode.Created, await created.Content.ReadAsStringAsync());
         var result = await created.Content.ReadFromJsonAsync<ContractResponse>();
         Assert.NotNull(result);
-        using var documentResponse = await client.GetAsync($"/api/contracts/{result.Id}/document");
+        using var documentResponse = await client.GetAsync($"/api/contracts/{result.Id}/web");
         Assert.Equal(HttpStatusCode.OK, documentResponse.StatusCode);
-        Assert.Equal("application/pdf", documentResponse.Content.Headers.ContentType?.MediaType);
-        Assert.True((await documentResponse.Content.ReadAsByteArrayAsync()).AsSpan().StartsWith("%PDF"u8));
+        using (var web = System.Text.Json.JsonDocument.Parse(await documentResponse.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("Khách thử", web.RootElement.GetProperty("customerName").GetString());
+            Assert.Equal("Áo mẫu", web.RootElement.GetProperty("products")[0].GetProperty("name").GetString());
+            Assert.Equal("image/png", web.RootElement.GetProperty("signature").GetProperty("contentType").GetString());
+        }
         Guid productId;
         await using (var scope = factory.Services.CreateAsyncScope()) productId = (await scope.ServiceProvider.GetRequiredService<AppDbContext>().Products.SingleAsync()).Id;
         using var slip = await client.PostAsJsonAsync("/api/product-documents/preview", new { productIds = new[] { productId } });
@@ -128,7 +133,7 @@ public sealed class WordDocumentsHttpTests
         Assert.True(requestResponse.IsSuccessStatusCode, await requestResponse.Content.ReadAsStringAsync());
         var termsRequest = await requestResponse.Content.ReadFromJsonAsync<OCS.Api.Controllers.TermsRequestResponse>();
         Assert.NotNull(termsRequest);
-        var specialRequest = request with { RequestId = draft, Products = [] };
+        var specialRequest = request with { RequestId = draft, Products = [], Signature = null };
         using var pendingPreview = await client.PostAsJsonAsync("/api/contracts/preview", specialRequest);
         Assert.Equal(HttpStatusCode.Conflict, pendingPreview.StatusCode);
         var specialTemplate = contractTemplate.ToArray();

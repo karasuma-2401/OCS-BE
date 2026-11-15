@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
@@ -11,6 +12,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.AspNetCore.TestHost;
 using OCS.Api.Consts;
 using OCS.Api.Context;
 using OCS.Api.Controllers;
@@ -251,8 +254,11 @@ public sealed class BuyoutWorkflowTests
             builder.UseEnvironment("Testing");
             builder.ConfigureLogging(logging => logging.ClearProviders());
             builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(settings));
-            builder.ConfigureServices(services =>
+            builder.ConfigureTestServices(services =>
             {
+                services.RemoveAll<DbContextOptions<AppDbContext>>();
+                services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
+                services.RemoveAll<AppDbContext>();
                 services.AddDbContext<AppDbContext>(options => options.UseInMemoryDatabase(dbName));
                 services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
                 {
