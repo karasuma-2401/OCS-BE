@@ -1,3 +1,4 @@
+﻿using Microsoft.Extensions.Configuration;
 using OCS.Api.Common;
 using OCS.Api.Consts;
 using OCS.Api.Entities;
@@ -9,19 +10,41 @@ namespace OCS.Api.IntegrationTests;
 
 public sealed class AccountManagementServiceTests
 {
+    private static IConfiguration TestConfiguration() => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Accounts:DefaultInternalPassword"] = "UnitTestPassword1!" }).Build();
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("weak")]
+    public async Task MissingOrInvalidConfiguredDefaultCannotCreateOrResetAccount(string? configuredPassword)
+    {
+        var admin = CreateAccount(Role.AdminRoleId, "Admin");
+        var staff = CreateAccount(Role.StaffRoleId, "Staff");
+        staff.PasswordHash = "existing-hash";
+        using var unitOfWork = new TestUnitOfWork(admin, staff);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Accounts:DefaultInternalPassword"] = configuredPassword }).Build();
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), configuration);
+        var request = new CreateStaffAccountRequest("Staff A", "staff@example.com", "0900000000", "staff_a", null, "Staff", new DateOnly(2026, 11, 5), true);
+        var create = await service.CreateStaffAccountAsync(admin.Id, request);
+        var reset = await service.ResetPasswordAsync(admin.Id, staff.Id, new ResetAccountPasswordRequest(null, true));
+        Assert.Equal("ACCOUNT.DEFAULT_PASSWORD_UNAVAILABLE", create.Error!.Code);
+        Assert.Equal("ACCOUNT.DEFAULT_PASSWORD_UNAVAILABLE", reset.Error!.Code);
+        Assert.Null(unitOfWork.Auth.CreatedAccount);
+        Assert.Equal("existing-hash", staff.PasswordHash);
+    }
+
     [Fact]
     public async Task AdminCanResetStaffPasswordAndRevokeSessions()
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         using var unitOfWork = new TestUnitOfWork(admin, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ResetPasswordAsync(admin.Id, staff.Id,
             new ResetAccountPasswordRequest(null, true));
 
         Assert.True(result.IsSuccess);
-        Assert.True(new PasswordHasher().VerifyPassword("Ocs@123456", staff.PasswordHash!));
+        Assert.True(new PasswordHasher().VerifyPassword("UnitTestPassword1!", staff.PasswordHash!));
         Assert.Equal(staff.Id, unitOfWork.Auth.SessionsRevokedFor);
         Assert.Equal("PasswordReset", unitOfWork.Auth.AuditLogs.Single().Action);
         Assert.Equal(admin.Id, unitOfWork.Auth.AuditLogs.Single().ActorAccountId);
@@ -37,7 +60,7 @@ public sealed class AccountManagementServiceTests
         root.Username = "ocs_admin";
         root.PasswordHash = "old-hash";
         using var unitOfWork = new TestUnitOfWork(admin, root);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ResetPasswordAsync(admin.Id, root.Id,
             new ResetAccountPasswordRequest("Example123!"));
@@ -54,7 +77,7 @@ public sealed class AccountManagementServiceTests
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         using var unitOfWork = new TestUnitOfWork(manager, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ResetPasswordAsync(manager.Id, staff.Id,
             new ResetAccountPasswordRequest("Example123!"));
@@ -67,7 +90,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ResetPasswordAsync(admin.Id, admin.Id,
             new ResetAccountPasswordRequest("Example123!"));
@@ -82,7 +105,7 @@ public sealed class AccountManagementServiceTests
         var customer = CreateAccount(Role.CustomerRoleId, "Customer");
         customer.AccountType = AccountType.Customer;
         using var unitOfWork = new TestUnitOfWork(admin, customer);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ResetPasswordAsync(admin.Id, customer.Id,
             new ResetAccountPasswordRequest(null, true));
@@ -106,7 +129,7 @@ public sealed class AccountManagementServiceTests
             EntityId = staff.Id.ToString("D"),
             Source = "Accounts.ResetPassword"
         });
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.GetAccountHistoryAsync(admin.Id, new PagedRequest(), staff.Id);
 
@@ -120,7 +143,7 @@ public sealed class AccountManagementServiceTests
     {
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         using var unitOfWork = new TestUnitOfWork(manager);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.GetAccountHistoryAsync(manager.Id, new PagedRequest(), null);
 
@@ -132,7 +155,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.GetPagedAccountsAsync(admin.Id, new PagedRequest(), null,
             null, null, "manager");
@@ -146,7 +169,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.GetPagedAccountsAsync(admin.Id, new PagedRequest(), null,
             null, null, "Owner");
@@ -162,7 +185,7 @@ public sealed class AccountManagementServiceTests
         staff.Email = "old@example.com";
         staff.Username = "old_staff";
         using var unitOfWork = new TestUnitOfWork(admin, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateAccountInfoAsync(admin.Id, staff.Id,
             new UpdateAccountInfoRequest("New Name", "new@example.com", "0900000000", "new_staff"));
@@ -183,7 +206,7 @@ public sealed class AccountManagementServiceTests
         staff.Email = "staff@example.com";
         staff.Username = "staff";
         using var unitOfWork = new TestUnitOfWork(admin, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateAccountInfoAsync(admin.Id, staff.Id,
             new UpdateAccountInfoRequest("New Name", "STAFF@example.com", "0900000000", "staff"));
@@ -201,7 +224,7 @@ public sealed class AccountManagementServiceTests
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         staff.Username = "staff";
         using var unitOfWork = new TestUnitOfWork(manager, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateAccountInfoAsync(manager.Id, staff.Id,
             new UpdateAccountInfoRequest("New Name", "new@example.com", "0900000000", "new_staff"));
@@ -217,7 +240,7 @@ public sealed class AccountManagementServiceTests
         root.Username = "ocs_admin";
         root.Email = "root@example.com";
         using var unitOfWork = new TestUnitOfWork(admin, root);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateAccountInfoAsync(admin.Id, root.Id,
             new UpdateAccountInfoRequest("Root", "other@example.com", "0900000000", "ocs_admin"));
@@ -233,7 +256,7 @@ public sealed class AccountManagementServiceTests
         admin.Email = "admin@example.com";
         admin.Username = "admin";
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateAccountInfoAsync(admin.Id, admin.Id,
             new UpdateAccountInfoRequest("Admin", "other@example.com", "0900000000", "admin"));
@@ -249,7 +272,7 @@ public sealed class AccountManagementServiceTests
         var root = CreateAccount(Role.AdminRoleId, "Admin");
         root.Username = "ocs_admin";
         using var unitOfWork = new TestUnitOfWork(admin, root);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var lockResult = await service.ChangeLockStatusAsync(admin.Id, root.Id,
             new ChangeAccountLockRequest(true));
@@ -271,7 +294,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
         var request = new CreateInternalAccountRequest("Manager A", "manager@example.com",
             "0900000000", "manager_a", "Example123!", "Quản lý",
             new DateOnly(2026, 11, 5), "Manager");
@@ -291,7 +314,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
         var request = new CreateInternalAccountRequest("Manager A", "manager@example.com",
             "0900000000", "manager_a", null, "Quản lý",
             new DateOnly(2026, 11, 5), "Manager", UseDefaultPassword: true);
@@ -300,7 +323,7 @@ public sealed class AccountManagementServiceTests
 
         Assert.True(result.IsSuccess);
         Assert.Equal(AccountStatus.PendingActivation, unitOfWork.Auth.CreatedAccount!.Status);
-        Assert.True(new PasswordHasher().VerifyPassword("Ocs@123456",
+        Assert.True(new PasswordHasher().VerifyPassword("UnitTestPassword1!",
             unitOfWork.Auth.CreatedAccount.PasswordHash!));
     }
 
@@ -309,7 +332,7 @@ public sealed class AccountManagementServiceTests
     {
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         using var unitOfWork = new TestUnitOfWork(manager);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
         var request = new CreateStaffAccountRequest("Staff A", "staff@example.com",
             "0900000000", "staff_a", null, "Nhân viên",
             new DateOnly(2026, 11, 5), UseDefaultPassword: true);
@@ -317,7 +340,7 @@ public sealed class AccountManagementServiceTests
         var result = await service.CreateStaffAccountAsync(manager.Id, request);
 
         Assert.True(result.IsSuccess);
-        Assert.True(new PasswordHasher().VerifyPassword("Ocs@123456",
+        Assert.True(new PasswordHasher().VerifyPassword("UnitTestPassword1!",
             unitOfWork.Auth.CreatedAccount!.PasswordHash!));
         Assert.Equal("Staff", result.Data!.Roles.Single());
     }
@@ -327,14 +350,14 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
         var request = new CreateStaffAccountRequest("Staff A", "staff@example.com",
             "0900000000", "staff_a", null, "Nhân viên", new DateOnly(2026, 11, 5));
 
         var result = await service.CreateStaffAccountAsync(admin.Id, request);
 
         Assert.True(result.IsSuccess);
-        Assert.True(new PasswordHasher().VerifyPassword("Ocs@123456",
+        Assert.True(new PasswordHasher().VerifyPassword("UnitTestPassword1!",
             unitOfWork.Auth.CreatedAccount!.PasswordHash!));
     }
 
@@ -346,7 +369,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
         var request = new CreateStaffAccountRequest("Staff A", "staff@example.com",
             "0900000000", "staff_a", password, "Nhân viên",
             new DateOnly(2026, 11, 5), useDefaultPassword);
@@ -362,7 +385,7 @@ public sealed class AccountManagementServiceTests
     {
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         using var unitOfWork = new TestUnitOfWork(manager);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
         var request = new CreateInternalAccountRequest("Admin A", "admin@example.com",
             "0900000000", "admin_a", "Example123!", "Admin",
             new DateOnly(2026, 11, 5), "Admin");
@@ -379,7 +402,7 @@ public sealed class AccountManagementServiceTests
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         using var unitOfWork = new TestUnitOfWork(admin, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var disabled = await service.ChangeStatusAsync(admin.Id, staff.Id,
             new ChangeAccountStatusRequest("Deactivated"));
@@ -399,7 +422,7 @@ public sealed class AccountManagementServiceTests
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         var target = CreateAccount(Role.ManagerRoleId, "Manager");
         using var unitOfWork = new TestUnitOfWork(manager, target);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ChangeStatusAsync(manager.Id, target.Id,
             new ChangeAccountStatusRequest("Deactivated"));
@@ -415,7 +438,7 @@ public sealed class AccountManagementServiceTests
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         staff.EmployeeProfile = new EmployeeProfile { Id = staff.Id, JobTitle = "Cũ", HiredOn = new DateOnly(2026, 1, 1) };
         using var unitOfWork = new TestUnitOfWork(manager, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateEmployeeProfileAsync(manager.Id, staff.Id,
             new UpdateEmployeeProfileRequest("Tên mới", "0900000000", "Bán hàng", new DateOnly(2026, 2, 1)));
@@ -431,7 +454,7 @@ public sealed class AccountManagementServiceTests
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         using var unitOfWork = new TestUnitOfWork(admin, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateRolesAsync(admin.Id, staff.Id,
             new UpdateAccountRolesRequest(["Manager"]));
@@ -449,7 +472,7 @@ public sealed class AccountManagementServiceTests
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         using var unitOfWork = new TestUnitOfWork(manager, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateRolesAsync(manager.Id, staff.Id,
             new UpdateAccountRolesRequest(["Admin"]));
@@ -463,7 +486,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateRolesAsync(admin.Id, admin.Id,
             new UpdateAccountRolesRequest(["Staff"]));
@@ -479,7 +502,7 @@ public sealed class AccountManagementServiceTests
         var customer = CreateAccount(Role.CustomerRoleId, "Customer");
         customer.AccountType = AccountType.Customer;
         using var unitOfWork = new TestUnitOfWork(admin, customer);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateRolesAsync(admin.Id, customer.Id,
             new UpdateAccountRolesRequest(["Staff"]));
@@ -494,7 +517,7 @@ public sealed class AccountManagementServiceTests
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         var secondAdmin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin, secondAdmin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.UpdateRolesAsync(admin.Id, admin.Id,
             new UpdateAccountRolesRequest(["Staff"]));
@@ -510,7 +533,7 @@ public sealed class AccountManagementServiceTests
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         var staff = CreateAccount(Role.StaffRoleId, "Staff");
         using var unitOfWork = new TestUnitOfWork(admin, staff);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ChangeLockStatusAsync(admin.Id, staff.Id, new ChangeAccountLockRequest(true));
 
@@ -526,7 +549,7 @@ public sealed class AccountManagementServiceTests
         var manager = CreateAccount(Role.ManagerRoleId, "Manager");
         var target = CreateAccount(Role.ManagerRoleId, "Manager");
         using var unitOfWork = new TestUnitOfWork(manager, target);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ChangeLockStatusAsync(manager.Id, target.Id, new ChangeAccountLockRequest(true));
 
@@ -541,7 +564,7 @@ public sealed class AccountManagementServiceTests
     {
         var admin = CreateAccount(Role.AdminRoleId, "Admin");
         using var unitOfWork = new TestUnitOfWork(admin);
-        var service = new AccountManagementService(unitOfWork, new PasswordHasher());
+        var service = new AccountManagementService(unitOfWork, new PasswordHasher(), TestConfiguration());
 
         var result = await service.ChangeLockStatusAsync(admin.Id, admin.Id, new ChangeAccountLockRequest(true));
 

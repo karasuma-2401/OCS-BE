@@ -12,11 +12,17 @@ using OCS.Api.Models.Accounts;
 
 namespace OCS.Api.Services;
 
-public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher)
+public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHasher passwordHasher, IConfiguration configuration)
     : IAccountManagementService
 {
-    private const string DefaultInternalPassword = "Ocs@123456";
     private const string PasswordPattern = @"^(?=.*[a-z])(?=.*[A-Z])(?=.*[\d\W]).{8,70}$";
+
+    private string? DefaultInternalPassword()
+    {
+        var password = configuration["Accounts:DefaultInternalPassword"];
+        return !string.IsNullOrWhiteSpace(password) && Encoding.UTF8.GetByteCount(password) <= 72 &&
+            new RegularExpressionAttribute(PasswordPattern).IsValid(password) ? password : null;
+    }
 
     public async Task<Result<bool>> ResetPasswordAsync(Guid requesterAccountId, Guid accountId,
         ResetAccountPasswordRequest request, CancellationToken cancellationToken = default)
@@ -69,7 +75,13 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
                     "ACCOUNT.INVALID_PASSWORD", "Mật khẩu mặc định chỉ dành cho tài khoản nội bộ."));
             }
 
-            var password = request.UseDefaultPassword ? DefaultInternalPassword : request.Password!;
+            var password = request.UseDefaultPassword ? DefaultInternalPassword() : request.Password;
+            if (password is null)
+            {
+                await unitOfWork.RollbackTransactionAsync(cancellationToken);
+                return Result.Failure<bool>(ApplicationError.ServiceUnavailable(
+                    "ACCOUNT.DEFAULT_PASSWORD_UNAVAILABLE", "Mật khẩu mặc định chưa được cấu hình hợp lệ."));
+            }
             account.PasswordHash = passwordHasher.HashPassword(password);
             var now = DateTimeOffset.UtcNow;
             unitOfWork.AuthRepository.AddAuditLog(new AuditLog
@@ -667,7 +679,10 @@ public sealed class AccountManagementService(IUnitOfWork unitOfWork, IPasswordHa
                 "ACCOUNT.INVALID_PASSWORD", "Chọn mật khẩu mặc định hoặc nhập mật khẩu tự đặt hợp lệ."));
         }
 
-        var password = useDefaultPassword ? DefaultInternalPassword : request.Password!;
+        var password = useDefaultPassword ? DefaultInternalPassword() : request.Password;
+        if (password is null)
+            return Result.Failure<AccountSummaryDto>(ApplicationError.ServiceUnavailable(
+                "ACCOUNT.DEFAULT_PASSWORD_UNAVAILABLE", "Mật khẩu mặc định chưa được cấu hình hợp lệ."));
 
         var email = request.Email.Trim();
         if (EmailIdentity.Normalize(email) is null)
