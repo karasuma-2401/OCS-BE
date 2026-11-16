@@ -122,7 +122,7 @@ public sealed class ContractTermsRequestsController(AppDbContext db) : Controlle
         var errors = WordTemplateValidator.Validate(bytes, WordTemplateSamples.Contract);
         if (errors.Count > 0) return BadRequest(new WordTemplateValidationResponse(false, errors));
         using (var word = WordprocessingDocument.Open(new MemoryStream(bytes), false))
-            if (word.MainDocumentPart!.Document.Body!.InnerText.Contains(WordTemplateSamples.TermsInstruction, StringComparison.Ordinal))
+            if (word.MainDocumentPart?.Document?.Body?.InnerText.Contains(WordTemplateSamples.TermsInstruction, StringComparison.Ordinal) == true)
                 return BadRequest(new ProblemDetails { Title = "Hãy viết điều khoản trước khi duyệt." });
         item.ApprovedTemplate = bytes;
         item.Status = "Approved";

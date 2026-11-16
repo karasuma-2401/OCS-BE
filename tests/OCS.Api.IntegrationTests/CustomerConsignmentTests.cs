@@ -234,6 +234,58 @@ public sealed class CustomerConsignmentTests
         Assert.True(Assert.Single(listed.Products).DetailAvailable);
     }
 
+    [Fact]
+    public async Task CustomerPreviewDoesNotOverwriteSnapshotAndRequiresOwnership()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options);
+        var owner = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        db.Accounts.AddRange(Customer(owner), Customer(other));
+        var employeeId = Guid.NewGuid();
+        db.Accounts.Add(new Account { Id = employeeId, AccountType = AccountType.Internal, Status = AccountStatus.Active, EmployeeProfile = new EmployeeProfile { Id = employeeId } });
+        var contract = new ConsignmentContract { CustomerId = owner, CreatedByEmployeeId = employeeId, ContractNumber = "SNAPSHOT-DOC" };
+        db.ConsignmentContracts.Add(contract);
+        var snapshot = System.Text.Encoding.UTF8.GetBytes("{\"title\":\"Hợp đồng\"}");
+        db.ContractDocuments.Add(new ContractDocument { ContractId = contract.Id, Content = snapshot });
+        await db.SaveChangesAsync();
+        var service = new CustomerConsignmentService(db, new CustomerProfileRepository(db), contractService: new ContractService(db));
+        var response = Assert.Single((await service.GetAsync(owner, default))!);
+        Assert.NotNull(response.ContractDocument);
+        Assert.Null(response.ContractDocument.UploadedAt);
+        Assert.True(await db.ConsignmentContracts.AnyAsync(c => c.Id == contract.Id && c.CustomerId == owner));
+        Assert.NotNull(await new ContractService(db).GetCustomerPreviewPdfAsync(contract.Id, default));
+        var document = await service.GetDocumentAsync(owner, contract.Id, default);
+        Assert.NotNull(document);
+        Assert.StartsWith("%PDF", System.Text.Encoding.ASCII.GetString(document.Content, 0, 4));
+        Assert.Null(await service.GetDocumentAsync(other, contract.Id, default));
+        Assert.Equal(snapshot, (await db.ContractDocuments.SingleAsync()).Content);
+    }
+
+    [Theory]
+    [InlineData("%PDF-1.4", "application/pdf")]
+    [InlineData("PK-document", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")]
+    public async Task CustomerCanAccessOnlyOwnGeneratedContractDocument(string content, string contentType)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options);
+        var owner = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        db.Accounts.AddRange(Customer(owner), Customer(other));
+        var contract = new ConsignmentContract { CustomerId = owner, ContractNumber = "GENERATED-DOC" };
+        db.ConsignmentContracts.Add(contract);
+        var bytes = System.Text.Encoding.ASCII.GetBytes(content);
+        db.ContractDocuments.Add(new ContractDocument { ContractId = contract.Id, Content = bytes });
+        await db.SaveChangesAsync();
+        var customer = CreateController(db, owner);
+        var listed = Assert.Single(Assert.IsType<ConsignmentTrackingResponse[]>(Assert.IsType<OkObjectResult>(await customer.Get(default)).Value));
+        Assert.Equal(contentType, listed.ContractDocument?.ContentType);
+        var response = Assert.IsType<FileContentResult>(await customer.GetDocument(contract.Id, default));
+        Assert.Equal(contentType, response.ContentType);
+        Assert.Equal(bytes, response.FileContents);
+        Assert.IsType<NotFoundResult>(await CreateController(db, other).GetDocument(contract.Id, default));
+    }
+
     [Theory]
     [InlineData("image/jpeg", "FFD8FF00")]
     [InlineData("image/png", "89504E470D0A1A0A")]

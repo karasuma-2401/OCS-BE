@@ -184,9 +184,11 @@ public sealed class ContractService(AppDbContext db) : IContractService
         // Legacy callers without a barcode receive a stable value for the same draft.
         var barcodes = request.Products.Select((item, index) => item.Barcode ??
             "OCS-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{numberId:N}:{index}")))[..16]).ToArray();
+#pragma warning disable CA1304, CA1311 // EF Core dich ToUpper sang SQL.
         if (barcodes.Distinct(StringComparer.OrdinalIgnoreCase).Count() != barcodes.Length ||
             await db.Products.AnyAsync(product => product.Barcode != null && barcodes.Contains(product.Barcode.Trim().ToUpper()), cancellationToken))
             return Result.Failure<PreparedContract>(ApplicationError.Conflict("PRODUCT.DUPLICATE_BARCODE", "Mã barcode đã tồn tại. Hãy tạo lại mã cho sản phẩm trước khi tiếp tục."));
+#pragma warning restore CA1304, CA1311
         var decodedImages = new List<(string ContentType, byte[] Content)[]>();
         long totalImageBytes = 0;
         foreach (var item in request.Products)
@@ -394,7 +396,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
         {
             using var stream = new MemoryStream(docxBytes);
             using var doc = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(stream, false);
-            var body = doc.MainDocumentPart?.Document.Body;
+            var body = doc.MainDocumentPart?.Document?.Body;
             if (body is null) return null;
             var paragraphs = body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>().ToList();
             var startIndex = paragraphs.FindIndex(p => p.InnerText.Contains("ĐIỀU KHOẢN", StringComparison.OrdinalIgnoreCase));
@@ -425,7 +427,9 @@ public sealed class ContractService(AppDbContext db) : IContractService
         while (true)
         {
             var barcode = "OCS-" + Convert.ToHexString(RandomNumberGenerator.GetBytes(8));
+#pragma warning disable CA1304, CA1311, CA1862 // EF Core dich ToUpper sang SQL.
             if (!await db.Products.AnyAsync(product => product.Barcode != null && product.Barcode.Trim().ToUpper() == barcode, cancellationToken)) return barcode;
+#pragma warning restore CA1304, CA1311, CA1862
         }
     }
 
@@ -547,7 +551,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
 
     public async Task<Result<ContractDetailDto>> GetDetailAsync(string idOrNumber, CancellationToken cancellationToken)
     {
-        Guid.TryParse(idOrNumber, out var parsedGuid);
+        var parsedGuid = Guid.TryParse(idOrNumber, out var parsed) ? parsed : Guid.Empty;
         var contract = await db.ConsignmentContracts
             .Include(x => x.Customer).ThenInclude(x => x!.Account)
             .Include(x => x.Appointment).ThenInclude(x => x!.Customer).ThenInclude(x => x!.Account)
@@ -769,7 +773,11 @@ public sealed class ContractService(AppDbContext db) : IContractService
         return Result.Success(detail);
     }
 
-    public async Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken)
+    public Task<byte[]?> GetPdfAsync(Guid id, CancellationToken cancellationToken) => RenderPdfAsync(id, true, cancellationToken);
+
+    public Task<byte[]?> GetCustomerPreviewPdfAsync(Guid id, CancellationToken cancellationToken) => RenderPdfAsync(id, false, cancellationToken);
+
+    private async Task<byte[]?> RenderPdfAsync(Guid id, bool persist, CancellationToken cancellationToken)
     {
         var existing = await db.ContractDocuments.SingleOrDefaultAsync(x => x.ContractId == id, cancellationToken);
         if (existing?.Content is { Length: > 0 } bytes && (bytes.AsSpan().StartsWith("%PDF"u8) || bytes.AsSpan().StartsWith("PK"u8)))
@@ -797,13 +805,15 @@ public sealed class ContractService(AppDbContext db) : IContractService
         var pdf = ContractPdfRenderer.Render(
             contract,
             employeeAccount?.FullName ?? "",
-            contract.CreatedByEmployee?.JobTitle,
+            contract.CreatedByEmployee?.JobTitle ?? "",
             employeeAccount?.PhoneNumber ?? "",
             pdfProducts,
             terms,
             signatureBytes,
-            preview: false,
+            preview: !persist,
             template: template);
+
+        if (!persist) return pdf;
 
         if (existing is not null)
         {
@@ -836,7 +846,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
         var q = db.ConsignmentContracts.AsNoTracking();
         if (!string.IsNullOrWhiteSpace(query))
         {
-            var trimmed = query.Trim().ToUpper();
+            var trimmed = query.Trim().ToUpperInvariant();
+#pragma warning disable CA1304, CA1311, CA1862 // EF Core dich ToUpper sang SQL.
             q = q.Where(x => x.ContractNumber.ToUpper().Contains(trimmed) ||
                              (x.CustomerNameSnapshot != null && x.CustomerNameSnapshot.ToUpper().Contains(trimmed)) ||
                              (x.CustomerPhoneSnapshot != null && x.CustomerPhoneSnapshot.Contains(trimmed)) ||
@@ -844,6 +855,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
                              (x.Customer != null && x.Customer.Account != null && x.Customer.Account.PhoneNumber.Contains(trimmed)) ||
                              (x.Appointment != null && x.Appointment.Customer != null && x.Appointment.Customer.Account != null && x.Appointment.Customer.Account.FullName.ToUpper().Contains(trimmed)) ||
                              (x.Appointment != null && x.Appointment.Customer != null && x.Appointment.Customer.Account != null && x.Appointment.Customer.Account.PhoneNumber.Contains(trimmed)));
+#pragma warning restore CA1304, CA1311, CA1862
         }
         if (!string.IsNullOrWhiteSpace(status) && Enum.TryParse<ConsignmentContractStatus>(status, true, out var parsedStatus))
         {

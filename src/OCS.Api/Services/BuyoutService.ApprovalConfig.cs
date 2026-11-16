@@ -12,12 +12,13 @@ public sealed partial class BuyoutService
 {
     private const string ApprovalConfigKey = "buyout.auto_approval";
     private static readonly JsonSerializerOptions ApprovalJson = new(JsonSerializerDefaults.Web);
+    private static readonly BuyoutApprovalConfig DefaultConfig = new(true, 1000000m, null, null, null);
     private static readonly BuyoutApprovalConfig DisabledConfig = new(false, null, null, null, null);
 
     public async Task<BuyoutApprovalConfig> GetApprovalConfigAsync(CancellationToken ct)
     {
         var value = await db.SystemParameters.AsNoTracking().Where(p => p.Key == ApprovalConfigKey).Select(p => p.Value).SingleOrDefaultAsync(ct);
-        if (value is null) return DisabledConfig;
+        if (value is null) return DefaultConfig;
         try
         {
             var config = JsonSerializer.Deserialize<BuyoutApprovalConfig>(value, ApprovalJson);

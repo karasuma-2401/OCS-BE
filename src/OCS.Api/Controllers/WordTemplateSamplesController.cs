@@ -89,7 +89,7 @@ public sealed class WordTemplateSamplesController(AppDbContext db) : ControllerB
         if (kind == WordTemplateSamples.Contract)
         {
             using var word = WordprocessingDocument.Open(new MemoryStream(bytes), false);
-            if (word.MainDocumentPart!.Document.Body!.InnerText.Contains(WordTemplateSamples.TermsInstruction, StringComparison.Ordinal))
+            if (word.MainDocumentPart?.Document?.Body?.InnerText.Contains(WordTemplateSamples.TermsInstruction, StringComparison.Ordinal) == true)
                 return BadRequest(new ProblemDetails { Title = "Hãy thay hướng dẫn trong mẫu bằng điều khoản của cửa hàng trước khi lưu." });
         }
         var template = await db.WordDocumentTemplates.SingleOrDefaultAsync(item => item.Kind == kind, cancellationToken);

@@ -20,7 +20,7 @@ public static class WordTemplateFiller
         using (var document = WordprocessingDocument.Open(output, true))
         {
             var main = document.MainDocumentPart!;
-            var body = main.Document.Body!;
+            var body = main.Document?.Body ?? throw new ArgumentException("Tệp Word không có nội dung hợp lệ.", nameof(source));
             var sourceElements = body.ChildElements.Where(element => element is not SectionProperties).Select(element => element.CloneNode(true)).ToArray();
             var section = body.GetFirstChild<SectionProperties>()?.CloneNode(true);
             body.RemoveAllChildren();
@@ -59,7 +59,7 @@ public static class WordTemplateFiller
         using (var document = WordprocessingDocument.Open(output, true))
         {
             var main = document.MainDocumentPart!;
-            var body = main.Document.Body!;
+            var body = main.Document?.Body ?? throw new ArgumentException("Tệp Word không có nội dung hợp lệ.", nameof(source));
             var fields = kind == WordTemplateSamples.Contract ? WordTemplateSamples.ContractFields : WordTemplateSamples.ProductFields;
             if (kind == WordTemplateSamples.Contract)
             {

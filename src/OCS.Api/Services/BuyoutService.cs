@@ -80,7 +80,7 @@ public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
         buyout.AppliedApprovalThreshold = config.Enabled ? config.Threshold : null;
         buyout.ApprovalConfigurationVersion = config.Version;
         buyout.ApprovalDecidedAt = clock.GetUtcNow();
-        buyout.BuyoutNumber = $"BO-{buyout.Id:N}";
+        buyout.BuyoutNumber = await BuyoutNumberGenerator.GenerateAsync(db, buyout.CreatedAt, ct);
         var item = new BuyoutProposalItem { BuyoutId = buyout.Id, InspectionId = inspection.Id, ListedPrice = request.ListedPrice, Buyout = buyout, Inspection = inspection };
         db.BuyoutProposalItems.Add(item);
         if (autoApproved)

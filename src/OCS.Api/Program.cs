@@ -33,8 +33,10 @@ if (args.Contains("--check-barcodes", StringComparer.Ordinal))
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var missing = await db.Products.CountAsync(p => p.Barcode == null || p.Barcode.Trim() == "");
+#pragma warning disable CA1304, CA1311 // EF Core dich ToUpper sang SQL.
     var duplicateGroups = await db.Products.Where(p => p.Barcode != null && p.Barcode.Trim() != "")
         .GroupBy(p => p.Barcode!.Trim().ToUpper()).CountAsync(g => g.Count() > 1);
+#pragma warning restore CA1304, CA1311
     Console.WriteLine($"Products without barcode: {missing}; duplicate barcode groups: {duplicateGroups}.");
     return;
 }
