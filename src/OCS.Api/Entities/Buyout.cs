@@ -17,6 +17,8 @@ public sealed class Buyout : BaseEntity
     public Guid? ApprovedByEmployeeId { get; set; }
 
     public decimal TotalPurchasePrice { get; set; }
+    public byte[]? SignatureContent { get; set; }
+    public string? SignatureContentType { get; set; }
 
     public Guid Version { get; set; } = Guid.NewGuid();
     public DateTimeOffset? PaidAt { get; set; }

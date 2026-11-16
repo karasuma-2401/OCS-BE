@@ -123,6 +123,12 @@ public sealed partial class CustomerProfileService(IUnitOfWork unitOfWork) : ICu
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await unitOfWork.CommitTransactionAsync(cancellationToken);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            await unitOfWork.RollbackTransactionAsync(cancellationToken);
+            return Result.Failure<CustomerSelfProfileResponse>(
+                ApplicationError.Conflict("CUSTOMER.CONCURRENT_UPDATE", "Hồ sơ vừa thay đổi. Vui lòng tải lại."));
+        }
         catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
             await unitOfWork.RollbackTransactionAsync(cancellationToken);

@@ -21,6 +21,7 @@ public interface IAppointmentService
         Guid? timeSlotId,
         AppointmentStatus? status,
         string? searchKeyword,
+        DateOnly? fromDate,
         CancellationToken cancellationToken = default);
 
     Task<Result<AppointmentDto>> UpdateStatusByStaffAsync(

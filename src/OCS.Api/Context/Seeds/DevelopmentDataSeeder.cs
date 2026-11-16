@@ -111,26 +111,12 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
             (Guid.Parse("11111111-0000-0000-0000-000000000003"), new TimeOnly(11, 0), new TimeOnly(12, 0), 3)
         ];
 
-        var allowedIds = timeSlots.Select(t => t.Id).ToHashSet();
-        var extraSlots = await dbContext.AppointmentTimeSlots
-            .Where(s => !allowedIds.Contains(s.Id) && s.IsActive)
-            .ToListAsync(cancellationToken);
-
-        foreach (var extra in extraSlots)
-        {
-            extra.IsActive = false;
-        }
-
         var slotMap = new Dictionary<TimeOnly, Guid>();
         foreach (var (id, start, end, max) in timeSlots)
         {
             var existing = await dbContext.AppointmentTimeSlots.FirstOrDefaultAsync(s => s.Id == id || (s.StartTime == start && s.EndTime == end), cancellationToken);
             if (existing != null)
             {
-                existing.StartTime = start;
-                existing.EndTime = end;
-                existing.MaxCustomers = max;
-                existing.IsActive = true;
                 slotMap[start] = existing.Id;
                 continue;
             }
@@ -287,6 +273,14 @@ public sealed class DevelopmentDataSeeder(AppDbContext dbContext, IHostEnvironme
                 Id = contractId,
                 ContractNumber = "HD-2026-0001",
                 CustomerId = Guid.Parse("10000000-0000-0000-0000-000000000004"),
+                CustomerNameSnapshot = "Khách Hàng Ký Gửi",
+                CustomerPhoneSnapshot = "0901234567",
+                CustomerEmailSnapshot = "khachhang@ocs.test",
+                CustomerIdentitySnapshot = "079090000004",
+                CustomerAddressSnapshot = "123 Lê Lợi, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+                BankCodeSnapshot = "VCB",
+                BankAccountNumberSnapshot = "0071000123456",
+                BankAccountHolderSnapshot = "KHACH HANG KY GUI",
                 CreatedByEmployeeId = Guid.Parse("10000000-0000-0000-0000-000000000003"),
                 SignedAt = DateTimeOffset.UtcNow.AddMonths(-1),
                 EndsAt = DateTimeOffset.UtcNow.AddMonths(2),

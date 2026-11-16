@@ -363,6 +363,38 @@ namespace OCS.Api.Context.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.BarcodeLabelTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Columns")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FontSizePt")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("HeightMm")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("WidthMm")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BarcodeLabelTemplates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_BarcodeLabelTemplates_Singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.Brand", b =>
                 {
                     b.Property<Guid>("Id")
@@ -435,6 +467,13 @@ namespace OCS.Api.Context.Migrations
                     b.Property<string>("RejectionReason")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<byte[]>("SignatureContent")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("SignatureContentType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -603,6 +642,18 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid?>("AppointmentId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BankAccountHolderSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("BankAccountNumberSnapshot")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("BankCodeSnapshot")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("ContractNumber")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -614,8 +665,40 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid>("CreatedByEmployeeId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CustomerId")
+                    b.Property<string>("CustomerAddressSnapshot")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("CustomerEmailSnapshot")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<Guid?>("CustomerId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("CustomerIdentitySnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("CustomerNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("CustomerPhoneSnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("EmployeeNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("EmployeePhoneSnapshot")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("EmployeeTitleSnapshot")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTimeOffset>("EndsAt")
                         .HasColumnType("timestamp with time zone");
@@ -625,6 +708,18 @@ namespace OCS.Api.Context.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<string>("FooterTextSnapshot")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("HeaderTextSnapshot")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OrganizationNameSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTimeOffset>("SignedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -632,6 +727,14 @@ namespace OCS.Api.Context.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TemplateTitleSnapshot")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("TermsSnapshot")
+                        .HasMaxLength(6000)
+                        .HasColumnType("character varying(6000)");
 
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -684,6 +787,150 @@ namespace OCS.Api.Context.Migrations
                     b.ToTable("ConsignmentDocuments", (string)null);
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.ContractDocument", b =>
+                {
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("SignatureContent")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("SignatureContentType")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("TemplateVersion")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("Terms")
+                        .HasMaxLength(6000)
+                        .HasColumnType("character varying(6000)");
+
+                    b.HasKey("ContractId");
+
+                    b.ToTable("ContractDocuments");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.ContractTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DefaultTerms")
+                        .IsRequired()
+                        .HasMaxLength(6000)
+                        .HasColumnType("character varying(6000)");
+
+                    b.Property<string>("FieldMappingsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FooterText")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("HeaderText")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OrganizationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<byte[]>("PdfBackground")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ContractTemplates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ContractTemplates_Singleton", "\"Id\" = 1");
+                        });
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.ContractTermsRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("ApprovedTemplate")
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CustomerPhone")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("DraftKey")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<Guid>("RequestedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DraftKey")
+                        .IsUnique()
+                        .HasFilter("\"Status\" IN ('Pending', 'Approved')");
+
+                    b.ToTable("ContractTermsRequests");
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.CustomerProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -709,6 +956,12 @@ namespace OCS.Api.Context.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.HasKey("Id");
 
@@ -1557,6 +1810,13 @@ namespace OCS.Api.Context.Migrations
                             Code = "products.price.update",
                             Description = "Cập nhật giá hàng mua đứt.",
                             Name = "Đổi giá hàng mua đứt"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000031"),
+                            Code = "customers.update",
+                            Description = "Cập nhật thông tin liên hệ và nhận tiền của khách.",
+                            Name = "Cập nhật hồ sơ khách"
                         });
                 });
 
@@ -1621,6 +1881,10 @@ namespace OCS.Api.Context.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<string>("Material")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1634,10 +1898,6 @@ namespace OCS.Api.Context.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
-
-                    b.Property<string>("Material")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("SourceType")
                         .IsRequired()
@@ -1690,6 +1950,13 @@ namespace OCS.Api.Context.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<byte[]>("Content")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1879,6 +2146,11 @@ namespace OCS.Api.Context.Migrations
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000031")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000002")
                         },
                         new
@@ -1985,6 +2257,11 @@ namespace OCS.Api.Context.Migrations
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000031")
                         },
                         new
                         {
@@ -2181,6 +2458,31 @@ namespace OCS.Api.Context.Migrations
                     b.ToTable("SystemParameters", (string)null);
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.WordDocumentTemplate", b =>
+                {
+                    b.Property<string>("Kind")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Kind");
+
+                    b.ToTable("WordDocumentTemplates");
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.Account", b =>
                 {
                     b.HasOne("OCS.Api.Entities.Account", "CreatedByAccount")
@@ -2351,8 +2653,7 @@ namespace OCS.Api.Context.Migrations
                     b.HasOne("OCS.Api.Entities.CustomerProfile", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Appointment");
 
@@ -2367,6 +2668,17 @@ namespace OCS.Api.Context.Migrations
                         .WithOne()
                         .HasForeignKey("OCS.Api.Entities.ConsignmentDocument", "ContractId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.ContractDocument", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.ConsignmentContract", "Contract")
+                        .WithOne()
+                        .HasForeignKey("OCS.Api.Entities.ContractDocument", "ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Contract");

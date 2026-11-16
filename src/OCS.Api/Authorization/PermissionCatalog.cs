@@ -11,6 +11,7 @@ public static class PermissionCatalog
     public const string AccountsHistory = "accounts.history";
     public const string AccountsResetPassword = "accounts.reset-password";
     public const string CustomersRead = "customers.read";
+    public const string CustomersUpdate = "customers.update";
     public const string AppointmentsCreate = "appointments.create";
     public const string AppointmentsOwnRead = "appointments.own.read";
     public const string AppointmentsOwnCancel = "appointments.own.cancel";
@@ -64,7 +65,8 @@ public static class PermissionCatalog
         new(ProductsOffer, "Đưa sản phẩm lên bán", "Đưa sản phẩm đã duyệt lên bán.", 27),
         new(ProductsLocation, "Chuyển vị trí sản phẩm", "Cập nhật vị trí lưu kho.", 28),
         new(ProductsLocationsManage, "Quản lý vị trí kho", "Tạo vị trí lưu kho.", 29),
-        new(ProductsPrice, "Đổi giá hàng mua đứt", "Cập nhật giá hàng mua đứt.", 30)
+        new(ProductsPrice, "Đổi giá hàng mua đứt", "Cập nhật giá hàng mua đứt.", 30),
+        new(CustomersUpdate, "Cập nhật hồ sơ khách", "Cập nhật thông tin liên hệ và nhận tiền của khách.", 31)
     ];
 
     public static readonly IReadOnlySet<string> AdminOnly = new HashSet<string>(StringComparer.Ordinal)
@@ -83,14 +85,14 @@ public static class PermissionCatalog
             ["Admin"] = RequiredAdminCodes.ToArray(),
             ["Manager"] =
             [
-                CustomersRead, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
+                CustomersRead, CustomersUpdate, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
                 AppointmentsStaffRead, AppointmentsStaffUpdate, AppointmentsStaffReception,
                 ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
                 ScreenSettlement, ScreenReports, ScreenAccounts
             ],
             ["Staff"] =
             [
-                CustomersRead, AppointmentsStaffRead, AppointmentsStaffUpdate,
+                CustomersRead, CustomersUpdate, AppointmentsStaffRead, AppointmentsStaffUpdate,
                 AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ScreenPos, ScreenInventory,
                 ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports
             ],

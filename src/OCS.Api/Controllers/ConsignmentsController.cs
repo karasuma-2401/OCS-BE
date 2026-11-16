@@ -35,6 +35,25 @@ public sealed class ConsignmentsController(IConsignmentService consignmentServic
         return result.ToActionResult(this);
     }
 
+    /// <summary>Lấy nội dung mẫu hợp đồng để khách xem trước khi ký.</summary>
+    [HttpGet("reception-template")]
+    [Authorize(Roles = "Admin,Manager,Staff")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> ReceptionTemplate([FromServices] IContractTemplateService templates, CancellationToken cancellationToken)
+    {
+        var template = await templates.GetAsync(cancellationToken);
+        return Ok(new
+        {
+            template.Title,
+            template.OrganizationName,
+            template.HeaderText,
+            template.FooterText,
+            template.DefaultTerms,
+            template.Version,
+            template.DefaultTermDays,
+            template.DefaultExpiryHandling
+        });
+    }
     /// <summary>
     /// Lấy danh sách hợp đồng tiếp nhận ký gửi gần đây.
     /// </summary>

@@ -34,6 +34,24 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
             .HasMaxLength(50)
             .IsRequired();
 
+        builder.Property(x => x.CustomerNameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.CustomerPhoneSnapshot).HasMaxLength(20);
+        builder.Property(x => x.CustomerEmailSnapshot).HasMaxLength(254);
+        builder.Property(x => x.CustomerIdentitySnapshot).HasMaxLength(20);
+        builder.Property(x => x.CustomerAddressSnapshot).HasMaxLength(500);
+        builder.Property(x => x.BankCodeSnapshot).HasMaxLength(50);
+        builder.Property(x => x.BankAccountNumberSnapshot).HasMaxLength(50);
+        builder.Property(x => x.BankAccountHolderSnapshot).HasMaxLength(200);
+
+        builder.Property(x => x.TermsSnapshot).HasMaxLength(6000);
+        builder.Property(x => x.TemplateTitleSnapshot).HasMaxLength(200);
+        builder.Property(x => x.OrganizationNameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.HeaderTextSnapshot).HasMaxLength(1000);
+        builder.Property(x => x.FooterTextSnapshot).HasMaxLength(1000);
+        builder.Property(x => x.EmployeeNameSnapshot).HasMaxLength(200);
+        builder.Property(x => x.EmployeeTitleSnapshot).HasMaxLength(100);
+        builder.Property(x => x.EmployeePhoneSnapshot).HasMaxLength(20);
+
         builder.HasIndex(x => x.ContractNumber)
             .IsUnique();
 

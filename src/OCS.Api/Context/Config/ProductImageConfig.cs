@@ -39,6 +39,8 @@ public sealed class ProductImageConfig
             .HasMaxLength(2048)
             .IsRequired();
 
+        builder.Property(x => x.ContentType).HasMaxLength(50);
+
         builder.Property(x => x.ImageType)
             .HasConversion<string>()
             .HasMaxLength(20)

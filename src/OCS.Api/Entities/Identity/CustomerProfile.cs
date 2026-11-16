@@ -17,5 +17,7 @@ public sealed class CustomerProfile
     public CustomerStatus Status { get; set; }
         = CustomerStatus.Active;
 
+    public uint Version { get; private set; }
+
     public Account Account { get; set; } = null!;
 }

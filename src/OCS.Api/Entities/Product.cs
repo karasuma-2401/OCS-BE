@@ -76,6 +76,10 @@ public sealed class Product : BaseEntity
 
     public SaleInvoiceLine? SaleInvoiceLine { get; set; }
 
+    /// <summary>
+    /// Captures the commission tier and rate at appraisal time, so future edits to a brand's default rate
+    /// cannot change the agreed terms or the fixed listed price of this consignment item.
+    /// </summary>
     public void AssignConsignmentTerms(Guid contractId, decimal fixedListedPrice, Brand brand, decimal? agreedCommissionRate = null)
     {
         EnsureUnassigned();
@@ -87,8 +91,8 @@ public sealed class Product : BaseEntity
 
         ArgumentOutOfRangeException.ThrowIfNegative(fixedListedPrice);
 
-        var commissionRate = agreedCommissionRate ?? brand.DefaultCommissionRate;
-        if (commissionRate is < 0 or > 100)
+        var rate = agreedCommissionRate ?? brand.DefaultCommissionRate;
+        if (rate is < 0 or > 100 || decimal.Round(rate, 2) != rate)
         {
             throw new ArgumentOutOfRangeException(nameof(agreedCommissionRate), "The commission rate must be between 0 and 100.");
         }
@@ -99,7 +103,7 @@ public sealed class Product : BaseEntity
         ConsignmentContractId = contractId;
         BrandId = brand.Id;
         AgreedBrandTier = brand.Tier;
-        AgreedCommissionRate = commissionRate;
+        AgreedCommissionRate = rate;
     }
 
     public void AssignBuyoutTerms(Guid buyoutId, decimal listedPrice, decimal purchasePrice)

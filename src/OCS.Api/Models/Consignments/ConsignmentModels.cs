@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using OCS.Api.Models.Contracts;
 
 namespace OCS.Api.Models.Consignments;
 
@@ -12,13 +13,18 @@ public sealed class ReceptionCustomerInfoDto
     [MaxLength(20)]
     public string PhoneNumber { get; set; } = string.Empty;
 
-    [MaxLength(254)]
+    [MaxLength(254), EmailAddress]
     public string? Email { get; set; }
+    [MaxLength(20)] public string? IdentityNumber { get; set; }
+    [MaxLength(500)] public string? Address { get; set; }
+    [MaxLength(50)] public string? BankCode { get; set; }
+    [MaxLength(50)] public string? BankAccountNumber { get; set; }
+    [MaxLength(200)] public string? BankAccountHolderName { get; set; }
 }
 
 public sealed class CreateReceptionItemDto
 {
-    [Required(ErrorMessage = "Tên sản phẩm là bắt buộc.")]
+    [Required(AllowEmptyStrings = true)]
     [MaxLength(200)]
     public string Name { get; set; } = string.Empty;
 
@@ -28,6 +34,7 @@ public sealed class CreateReceptionItemDto
     [Required]
     public Guid BrandId { get; set; }
 
+    [Required(AllowEmptyStrings = true)]
     [MaxLength(30)]
     public string Size { get; set; } = "FreeSize";
 
@@ -64,6 +71,9 @@ public sealed class CreateReceptionItemDto
 public sealed class CreateReceptionRequest
 {
     public Guid? AppointmentId { get; set; }
+
+    public ContractImageRequest? Signature { get; set; }
+    public Guid? TemplateVersion { get; set; }
 
     public string IntakeType { get; set; } = "Consignment";
 
@@ -119,7 +129,7 @@ public sealed class ConsignmentContractSummaryResponse
 {
     public Guid Id { get; set; }
     public string ContractNumber { get; set; } = string.Empty;
-    public Guid CustomerId { get; set; }
+    public Guid? CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public Guid? AppointmentId { get; set; }
@@ -136,9 +146,15 @@ public sealed class SaveReceptionDraftRequest
     public Guid? DraftId { get; set; }
     public Guid? AppointmentId { get; set; }
     public string IntakeType { get; set; } = "Consignment";
-    public string CustomerName { get; set; } = string.Empty;
-    public string CustomerPhone { get; set; } = string.Empty;
+    [Required(AllowEmptyStrings = true)] public string CustomerName { get; set; } = string.Empty;
+    [Required(AllowEmptyStrings = true)] public string CustomerPhone { get; set; } = string.Empty;
     public string? CustomerEmail { get; set; }
+    public string? IdentityNumber { get; set; }
+    public string? Address { get; set; }
+    public string? BankCode { get; set; }
+    public string? BankAccountNumber { get; set; }
+    public string? BankAccountHolderName { get; set; }
+    public int? ActualItemCount { get; set; }
     public int TermDays { get; set; } = 60;
     public decimal CommissionShop { get; set; } = 20;
     public string? Note { get; set; }
@@ -151,9 +167,15 @@ public sealed class ReceptionDraftResponse
     public Guid? StaffId { get; set; }
     public Guid? AppointmentId { get; set; }
     public string IntakeType { get; set; } = "Consignment";
-    public string CustomerName { get; set; } = string.Empty;
-    public string CustomerPhone { get; set; } = string.Empty;
+    [Required(AllowEmptyStrings = true)] public string CustomerName { get; set; } = string.Empty;
+    [Required(AllowEmptyStrings = true)] public string CustomerPhone { get; set; } = string.Empty;
     public string? CustomerEmail { get; set; }
+    public string? IdentityNumber { get; set; }
+    public string? Address { get; set; }
+    public string? BankCode { get; set; }
+    public string? BankAccountNumber { get; set; }
+    public string? BankAccountHolderName { get; set; }
+    public int? ActualItemCount { get; set; }
     public int TermDays { get; set; } = 60;
     public decimal CommissionShop { get; set; } = 20;
     public string? Note { get; set; }
