@@ -326,9 +326,7 @@ public sealed class ConsignmentService(
             }
             else
             {
-                var todayCount = await dbContext.Buyouts
-                    .CountAsync(b => b.BuyoutNumber.StartsWith($"BO-{dateStamp}-"), cancellationToken);
-                contractNumber = await GenerateUniqueBuyoutNumberAsync(dateStamp, todayCount + 1, cancellationToken);
+                contractNumber = await BuyoutNumberGenerator.GenerateAsync(dbContext, now, cancellationToken);
                 contractId = Guid.NewGuid();
 
                 var totalPurchase = request.Items.Sum(i => i.PurchasePrice ?? decimal.Round(i.ListedPrice * 0.5m, 0, MidpointRounding.AwayFromZero));
@@ -370,12 +368,12 @@ public sealed class ConsignmentService(
 
                 var descBuilder = new StringBuilder();
                 if (!string.IsNullOrWhiteSpace(item.Material))
-                    descBuilder.Append($"Chất liệu: {item.Material.Trim()}. ");
+                    descBuilder.Append("Chất liệu: ").Append(item.Material.Trim()).Append(". ");
                 descBuilder.Append(item.HasLabel ? "Tem mác: Còn nguyên. " : "Tem mác: Đã mất/cắt. ");
                 if (!string.IsNullOrWhiteSpace(item.DefectNotes))
-                    descBuilder.Append($"Ghi chú lỗi: {item.DefectNotes.Trim()}. ");
+                    descBuilder.Append("Ghi chú lỗi: ").Append(item.DefectNotes.Trim()).Append(". ");
                 if (isRejected && !string.IsNullOrWhiteSpace(item.RejectionReason))
-                    descBuilder.Append($"Lý do từ chối: {item.RejectionReason.Trim()}.");
+                    descBuilder.Append("Lý do từ chối: ").Append(item.RejectionReason.Trim()).Append('.');
 
                 var product = new Product
                 {
@@ -606,7 +604,7 @@ public sealed class ConsignmentService(
         var list = await dbContext.ConsignmentContracts
             .AsNoTracking()
             .Include(c => c.Customer)
-                .ThenInclude(cu => cu.Account)
+                .ThenInclude(cu => cu!.Account)
             .Include(c => c.Products)
             .OrderByDescending(c => c.SignedAt)
             .Take(100)
@@ -812,17 +810,6 @@ public sealed class ConsignmentService(
         return Result.Success(true);
     }
 
-    private async Task<string> GenerateUniqueBuyoutNumberAsync(string dateStamp, int startSeq, CancellationToken ct)
-    {
-        var seq = startSeq;
-        while (true)
-        {
-            var candidate = $"BO-{dateStamp}-{seq:000}";
-            var exists = await dbContext.Buyouts.AnyAsync(b => b.BuyoutNumber == candidate, ct);
-            if (!exists) return candidate;
-            seq++;
-        }
-    }
 
     private async Task<string> GenerateUniqueBarcodeAsync(string prefix, string shortDateStamp, int startSeq, CancellationToken ct)
     {

@@ -11,7 +11,7 @@ public sealed class SystemParameterConfig : IEntityTypeConfiguration<SystemParam
         builder.ToTable("SystemParameters");
         builder.HasKey(x => x.Key);
         builder.Property(x => x.Key).HasMaxLength(100).ValueGeneratedNever();
-        builder.Property(x => x.Value).HasMaxLength(2000).IsRequired();
+        builder.Property(x => x.Value).HasMaxLength(2000).IsRequired().IsConcurrencyToken();
         builder.Property(x => x.Description).HasMaxLength(1000);
     }
 }

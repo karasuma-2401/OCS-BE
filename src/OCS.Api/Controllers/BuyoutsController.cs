@@ -14,6 +14,18 @@ namespace OCS.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class BuyoutsController(BuyoutService service) : ControllerBase
 {
+    /// <summary>Lay cau hinh nguong tu duyet.</summary>
+    [HttpGet("approval-config")]
+    [Authorize(Policy = PermissionCatalog.ProductsRead)]
+    public async Task<IActionResult> ApprovalConfig(CancellationToken ct) => Ok(await service.GetApprovalConfigAsync(ct));
+
+    /// <summary>Cap nhat nguong tu duyet.</summary>
+    [HttpPut("approval-config")]
+    [Authorize(Roles = "Admin,Manager")]
+    [Authorize(Policy = PermissionCatalog.ProductsApprove)]
+    public async Task<IActionResult> UpdateApprovalConfig(UpdateBuyoutApprovalConfigRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await service.UpdateApprovalConfigAsync(actor, request, ct)).ToActionResult(this) : Unauthorized();
+
     [HttpGet("customers")]
     [Authorize(Policy = PermissionCatalog.AppointmentsStaffReception)]
     public async Task<IActionResult> Customers([FromQuery] string? query, CancellationToken ct) =>

@@ -123,7 +123,7 @@ public sealed class FcmNotificationService(
 
         if (!IsConfigured)
         {
-            logger.LogInformation(
+            if (logger.IsEnabled(LogLevel.Information)) logger.LogInformation(
                 "FCM skipped for account {AccountId} ({DeviceCount} device(s)) because Firebase credentials are not configured.",
                 recipientAccountId,
                 records.Count);

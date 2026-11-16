@@ -158,7 +158,7 @@ public sealed class InventoryService(AppDbContext db)
         var product = await Products().SingleOrDefaultAsync(x => x.Id == id, ct);
         if (product is null) return Missing<InventoryProductDto>();
         if (request.ExpectedVersion == Guid.Empty || product.InventoryVersion != request.ExpectedVersion) return Conflict();
-        if (product.SourceType != ProductSourceType.Buyout || product.Buyout is not { Status: BuyoutStatus.Approved, ApprovedByEmployeeId: not null } ||
+        if (product.SourceType != ProductSourceType.Buyout || !IsApprovedBuyout(product.Buyout) ||
             product.Status is not (ProductStatus.PendingProcessing or ProductStatus.OnSale))
             return Invalid("Chỉ được đổi giá hàng mua đứt đã duyệt và chưa kết thúc.");
         var reason = request.Reason?.Trim();
@@ -193,7 +193,10 @@ public sealed class InventoryService(AppDbContext db)
         !string.IsNullOrWhiteSpace(p.Size) && p.Brand.IsActive && p.Category.IsActive && p.ListedPrice >= 0 &&
         (p.SourceType == ProductSourceType.Consignment
             ? p.ConsignmentContract is { Status: ConsignmentContractStatus.Active } contract && contract.IsWithinTerm(DateTimeOffset.UtcNow)
-            : p.SourceType == ProductSourceType.Buyout && p.Buyout is { Status: BuyoutStatus.Approved, ApprovedByEmployeeId: not null });
+            : p.SourceType == ProductSourceType.Buyout && IsApprovedBuyout(p.Buyout));
+
+    private static bool IsApprovedBuyout(Buyout? buyout) => buyout is { Status: BuyoutStatus.Approved } &&
+        (buyout.ApprovedByEmployeeId is not null || buyout.IsAutoApproved);
 
     private async Task<Result<InventoryProductDto>> SaveAsync(Product product, Guid actor, string action, string? previous, string? next, string? reason, CancellationToken ct)
     {

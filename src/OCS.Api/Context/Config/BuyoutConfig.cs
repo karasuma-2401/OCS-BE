@@ -26,7 +26,7 @@ public sealed class BuyoutConfig : IEntityTypeConfiguration<Buyout>
                 "CK_Buyouts_Approver",
                 """
                 "Status" <> 'Approved'
-                OR "ApprovedByEmployeeId" IS NOT NULL
+                OR "ApprovedByEmployeeId" IS NOT NULL OR "IsAutoApproved" = TRUE
                 """);
         });
 
@@ -48,6 +48,8 @@ public sealed class BuyoutConfig : IEntityTypeConfiguration<Buyout>
         builder.Property(x => x.SignatureContentType).HasMaxLength(20);
         builder.Property(x => x.Version).IsConcurrencyToken();
         builder.Property(x => x.RejectionReason).HasMaxLength(1000);
+        builder.Property(x => x.ApprovalDecisionReason).HasMaxLength(50);
+        builder.Property(x => x.AppliedApprovalThreshold).HasPrecision(18, 2);
         builder.HasOne<EmployeeProfile>().WithMany().HasForeignKey(x => x.PaidByEmployeeId).OnDelete(DeleteBehavior.Restrict);
 
         builder.Property(x => x.Status)

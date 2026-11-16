@@ -28,6 +28,7 @@ API cho **Old Clothes Store**, hệ thống quản lý cửa hàng ký gửi qu�
 
    - `ConnectionStrings__DefaultConnection`: connection string PostgreSQL theo định dạng Npgsql. Nếu PostgreSQL chạy trên máy cá nhân, dùng `host.docker.internal` thay cho `localhost`.
    - `Jwt__Key`: chuỗi bí mật tối thiểu 32 byte.
+   - `Accounts__DefaultInternalPassword`: mật khẩu mặc định cho thao tác tạo hoặc đặt lại tài khoản nội bộ. Để trống sẽ vô hiệu hóa lựa chọn này; khi đó cần nhập mật khẩu riêng. Không dùng chung mật khẩu mặc định trong môi trường thực tế.
    - `Email__Username`, `Email__AppPassword`, `Email__FromAddress`: thông tin gửi OTP qua Gmail.
    - Giữ `ASPNETCORE_ENVIRONMENT=Development`. Khi chạy trực tiếp bằng .NET, để `Redis__ConnectionString=` trống để dùng bộ nhớ tạm, hoặc đặt `localhost:6379` nếu Redis chạy trên máy. Docker Compose tự dùng `redis:6379`. Cấu hình `R2__*` nếu sử dụng lưu trữ ảnh.
 

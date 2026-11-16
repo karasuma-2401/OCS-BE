@@ -3,11 +3,12 @@ using OCS.Api.Consts;
 using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
+using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Customers;
 
 namespace OCS.Api.Services;
 
-public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfileRepository customerProfiles, PrivateProductImageStore? images = null)
+public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfileRepository customerProfiles, PrivateProductImageStore? images = null, IContractService? contractService = null)
 {
     private static readonly TimeZoneInfo VietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
 
@@ -87,6 +88,13 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             .Where(d => contractIds.Contains(d.ContractId))
             .Select(d => new { d.ContractId, d.FileName, d.ContentType, d.UploadedAt })
             .ToDictionaryAsync(d => d.ContractId, cancellationToken);
+        var uploadedIds = documents.Keys.ToArray();
+        var generatedDocuments = await db.ContractDocuments.AsNoTracking()
+            .Where(d => contractIds.Contains(d.ContractId) && !uploadedIds.Contains(d.ContractId) && d.Content.Length > 0)
+            .Select(d => new { d.ContractId, d.Content, d.CreatedAt })
+            .ToListAsync(cancellationToken);
+        var generatedMetadata = generatedDocuments.Select(d => (d.ContractId, Metadata: DocumentMetadata(d.ContractId, d.Content, d.CreatedAt)))
+            .Where(d => d.Metadata is not null).ToDictionary(d => d.ContractId, d => d.Metadata!);
 
         return contracts.Select(c =>
         {
@@ -104,7 +112,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                 // Chi cong quyet toan hoan tat; Pending va Transferred chua duoc tinh.
                 c.Payouts.Where(p => p.Status == PayoutStatus.Completed).Sum(p => p.TotalAmount),
                 documents.TryGetValue(c.Id, out var document)
-                    ? new ConsignmentDocumentMetadata(document.FileName, document.ContentType, document.UploadedAt) : null);
+                    ? new ConsignmentDocumentMetadata(document.FileName, document.ContentType, document.UploadedAt)
+                    : generatedMetadata.GetValueOrDefault(c.Id) ?? (contractService is null ? null : new ConsignmentDocumentMetadata($"ban-xem-{c.Id}.pdf", "application/pdf", null)));
         }).ToArray();
     }
     public async Task<bool> IsActiveCustomerAsync(Guid customerId, CancellationToken cancellationToken)
@@ -113,9 +122,29 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
         return account?.CustomerProfile?.Status == CustomerStatus.Active;
     }
 
-    public Task<ConsignmentDocument?> GetDocumentAsync(Guid customerId, Guid contractId, CancellationToken ct) =>
-        db.ConsignmentDocuments.AsNoTracking().SingleOrDefaultAsync(
+    private static ConsignmentDocumentMetadata? DocumentMetadata(Guid contractId, byte[] content, DateTimeOffset createdAt)
+    {
+        if (content.AsSpan().StartsWith("%PDF"u8)) return new($"hop-dong-{contractId}.pdf", "application/pdf", createdAt);
+        if (content.AsSpan().StartsWith("PK"u8)) return new($"hop-dong-{contractId}.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", createdAt);
+        return null;
+    }
+
+    public async Task<ConsignmentDocument?> GetDocumentAsync(Guid customerId, Guid contractId, CancellationToken ct)
+    {
+        var uploaded = await db.ConsignmentDocuments.AsNoTracking().SingleOrDefaultAsync(
             d => d.ContractId == contractId && d.Contract.CustomerId == customerId, ct);
+        if (uploaded is not null) return uploaded;
+        var generated = await db.ContractDocuments.AsNoTracking().SingleOrDefaultAsync(
+            d => d.ContractId == contractId && d.Contract.CustomerId == customerId, ct);
+        if (generated is not null)
+        {
+            var metadata = DocumentMetadata(contractId, generated.Content, generated.CreatedAt);
+            if (metadata is not null) return new ConsignmentDocument { ContractId = contractId, FileName = metadata.FileName, ContentType = metadata.ContentType, UploadedAt = generated.CreatedAt, Content = generated.Content };
+        }
+        if (contractService is null || !await db.ConsignmentContracts.AsNoTracking().AnyAsync(c => c.Id == contractId && c.CustomerId == customerId, ct)) return null;
+        var preview = await contractService.GetCustomerPreviewPdfAsync(contractId, ct);
+        return preview is null || preview.Length == 0 ? null : new ConsignmentDocument { ContractId = contractId, FileName = $"ban-xem-{contractId}.pdf", ContentType = "application/pdf", Content = preview };
+    }
 
     public async Task<ConsignmentProductDetailResponse?> GetProductAsync(Guid customerId, Guid contractId, Guid productId, CancellationToken ct)
     {

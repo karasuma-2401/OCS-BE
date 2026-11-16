@@ -9,7 +9,7 @@ using OCS.Api.Authorization;
 
 namespace OCS.Api.Services;
 
-public sealed class BuyoutService(AppDbContext db, TimeProvider clock)
+public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
 {
     private const decimal MaxMoney = 9999999999999999.99m;
 
@@ -70,11 +70,32 @@ public sealed class BuyoutService(AppDbContext db, TimeProvider clock)
         if (inspection.Customer.Status != CustomerStatus.Active || inspection.Customer.Account.Status != AccountStatus.Active || !inspection.Brand.IsActive || !inspection.Category.IsActive)
             return Invalid<BuyoutResponse>("Khách hàng, thương hiệu và danh mục phải đang hoạt động.");
         if (await db.BuyoutProposalItems.AnyAsync(i => i.InspectionId == inspection.Id && i.IsActive, ct)) return Conflict<BuyoutResponse>("Sản phẩm kiểm định đã có phiếu thu mua đang hoạt động.");
+        await using var transaction = await LockApprovalConfigAsync(ct);
+        var config = await GetApprovalConfigAsync(ct);
+        var autoApproved = config.Enabled && config.Threshold.HasValue && request.PurchasePrice <= config.Threshold.Value && request.ListedPrice >= request.PurchasePrice;
         var buyout = new Buyout { CustomerId = inspection.CustomerId, CreatedByEmployeeId = actor, TotalPurchasePrice = request.PurchasePrice, CreatedAt = clock.GetUtcNow() };
-        buyout.BuyoutNumber = $"BO-{buyout.Id:N}";
+        buyout.IsAutoApproved = autoApproved;
+        buyout.Status = autoApproved ? BuyoutStatus.Approved : BuyoutStatus.Pending;
+        buyout.ApprovalDecisionReason = !config.Enabled ? "Disabled" : request.ListedPrice < request.PurchasePrice ? "BelowPurchasePrice" : autoApproved ? "WithinThreshold" : "AboveThreshold";
+        buyout.AppliedApprovalThreshold = config.Enabled ? config.Threshold : null;
+        buyout.ApprovalConfigurationVersion = config.Version;
+        buyout.ApprovalDecidedAt = clock.GetUtcNow();
+        buyout.BuyoutNumber = await BuyoutNumberGenerator.GenerateAsync(db, buyout.CreatedAt, ct);
         var item = new BuyoutProposalItem { BuyoutId = buyout.Id, InspectionId = inspection.Id, ListedPrice = request.ListedPrice, Buyout = buyout, Inspection = inspection };
         db.BuyoutProposalItems.Add(item);
-        var reviewers = await db.Accounts.Where(a => a.AccountType == AccountType.Internal && a.Status == AccountStatus.Active &&
+        if (autoApproved)
+            db.AuditLogs.Add(new AuditLog
+            {
+                ActorType = AuditActorType.System,
+                Action = "BuyoutAutoApproved",
+                EntityType = nameof(Buyout),
+                EntityId = buyout.Id.ToString(),
+                Source = "Buyout",
+                OccurredAt = buyout.ApprovalDecidedAt!.Value,
+                RecordedAt = buyout.ApprovalDecidedAt.Value,
+                Changes = System.Text.Json.JsonSerializer.Serialize(new { buyout.ApprovalDecisionReason, buyout.AppliedApprovalThreshold, buyout.ApprovalConfigurationVersion })
+            });
+        var reviewers = autoApproved ? [] : await db.Accounts.Where(a => a.AccountType == AccountType.Internal && a.Status == AccountStatus.Active &&
             a.EmployeeProfile != null && a.EmployeeProfile.Status == EmployeeStatus.Working &&
             a.AccountRoles.Any(ar => ar.Role.Code == "Admin" || ar.Role.Code == "Manager") &&
             a.AccountRoles.Any(ar => ar.Role.RolePermissions.Any(rp => rp.Permission.Code == PermissionCatalog.ProductsApprove)))
@@ -91,7 +112,7 @@ public sealed class BuyoutService(AppDbContext db, TimeProvider clock)
                 SentAt = now,
                 CreatedAt = now
             });
-        try { await db.SaveChangesAsync(ct); }
+        try { await db.SaveChangesAsync(ct); if (transaction is not null) await transaction.CommitAsync(ct); }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }) { return Conflict<BuyoutResponse>("Sản phẩm kiểm định đã có phiếu thu mua đang hoạt động."); }
         return Result.Success(Map(buyout, item, null));
     }
@@ -159,7 +180,7 @@ public sealed class BuyoutService(AppDbContext db, TimeProvider clock)
         var item = await Items().Include(i => i.Inspection).ThenInclude(i => i.Brand).Include(i => i.Inspection).ThenInclude(i => i.Category).SingleOrDefaultAsync(x => x.BuyoutId == id, ct);
         if (item is null) return Missing<BuyoutResponse>();
         var b = item.Buyout;
-        if (request.ExpectedVersion == Guid.Empty || b.Version != request.ExpectedVersion || b.Status != BuyoutStatus.Approved || b.ApprovedByEmployeeId is null || b.PaidAt is not null || b.Products.Count != 0)
+        if (request.ExpectedVersion == Guid.Empty || b.Version != request.ExpectedVersion || b.Status != BuyoutStatus.Approved || (b.ApprovedByEmployeeId is null && !b.IsAutoApproved) || b.PaidAt is not null || b.Products.Count != 0)
             return Conflict<BuyoutResponse>("Phiếu chưa được duyệt, đã thay đổi hoặc đã chi tiền.");
         if (!request.CustomerAgreed || request.PaymentMethod is not ("Cash" or "BankTransfer") || request.StorageLocationId == Guid.Empty ||
             (request.PaymentMethod == "BankTransfer" && string.IsNullOrWhiteSpace(request.BankTransactionReference)) || request.BankTransactionReference?.Trim().Length > 100)
@@ -185,7 +206,7 @@ public sealed class BuyoutService(AppDbContext db, TimeProvider clock)
         .Include(i => i.Buyout).ThenInclude(b => b.Products);
     private Task<bool> EmployeeActive(Guid actor, CancellationToken ct) => db.EmployeeProfiles.AnyAsync(e => e.Id == actor && e.Status == EmployeeStatus.Working && e.Account.Status == AccountStatus.Active && e.Account.AccountType == AccountType.Internal, ct);
     private static bool Money(decimal value) => value >= 0 && value <= MaxMoney && decimal.Round(value, 2) == value;
-    private static BuyoutResponse Map(Buyout b, BuyoutProposalItem i, Product? p) => new(b.Id, b.BuyoutNumber, b.CustomerId, i.InspectionId, b.CreatedByEmployeeId, b.ApprovedByEmployeeId, b.PaidAt.HasValue ? "Paid" : b.Status.ToString(), b.TotalPurchasePrice, i.ListedPrice, b.Version, b.CreatedAt, b.PaidAt, b.PaidByEmployeeId, b.RejectionReason, p?.Id, p?.Barcode, new BuyoutInspectionSnapshot(i.Inspection.Id, i.Inspection.CustomerId, i.Inspection.Name, i.Inspection.Size, i.Inspection.Description, i.Inspection.ConditionPercentage, i.Inspection.BrandId, i.Inspection.CategoryId, i.Inspection.InspectionNotes, i.Inspection.InspectedByEmployeeId, i.Inspection.CreatedAt, i.Inspection.Brand.Name, i.Inspection.Category.Name), i.Inspection.Customer.Account.FullName);
+    private static BuyoutResponse Map(Buyout b, BuyoutProposalItem i, Product? p) => new(b.Id, b.BuyoutNumber, b.CustomerId, i.InspectionId, b.CreatedByEmployeeId, b.ApprovedByEmployeeId, b.PaidAt.HasValue ? "Paid" : b.Status.ToString(), b.TotalPurchasePrice, i.ListedPrice, b.Version, b.CreatedAt, b.PaidAt, b.PaidByEmployeeId, b.RejectionReason, p?.Id, p?.Barcode, new BuyoutInspectionSnapshot(i.Inspection.Id, i.Inspection.CustomerId, i.Inspection.Name, i.Inspection.Size, i.Inspection.Description, i.Inspection.ConditionPercentage, i.Inspection.BrandId, i.Inspection.CategoryId, i.Inspection.InspectionNotes, i.Inspection.InspectedByEmployeeId, i.Inspection.CreatedAt, i.Inspection.Brand.Name, i.Inspection.Category.Name), i.Inspection.Customer.Account.FullName, b.IsAutoApproved, b.ApprovalDecisionReason, b.AppliedApprovalThreshold, b.ApprovalConfigurationVersion, b.ApprovalDecidedAt);
     private static Result<T> Invalid<T>(string message) => Result.Failure<T>(ApplicationError.Validation("BUYOUT.INVALID", message));
     private static Result<T> Conflict<T>(string message) => Result.Failure<T>(ApplicationError.Conflict("BUYOUT.CONFLICT", message));
     private static Result<T> Missing<T>() => Result.Failure<T>(ApplicationError.NotFound("BUYOUT.NOT_FOUND", "Không tìm thấy phiếu thu mua hoặc bản kiểm định."));

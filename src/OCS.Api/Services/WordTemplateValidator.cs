@@ -10,10 +10,11 @@ public static class WordTemplateValidator
 {
     public const int MaximumFileBytes = 2 * 1024 * 1024;
     private const long MaximumExpandedBytes = 20 * 1024 * 1024;
+    private static readonly string[] SignedDateFields = ["contract.signed_day", "contract.signed_month", "contract.signed_year"];
     internal static readonly Regex Marker = new(@"(?<!\[)\[([^\[\]\r\n]+)\](?!\])", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     internal static IEnumerable<Paragraph> Paragraphs(MainDocumentPart main) =>
-        main.Document.Body!.Descendants<Paragraph>()
+        (main.Document?.Body?.Descendants<Paragraph>() ?? [])
             .Concat(main.HeaderParts.SelectMany(part => part.Header?.Descendants<Paragraph>() ?? []))
             .Concat(main.FooterParts.SelectMany(part => part.Footer?.Descendants<Paragraph>() ?? []));
 
@@ -59,7 +60,7 @@ public static class WordTemplateValidator
                 : new[] { "product.name", "product.price", "product.barcode", "product.barcode_image" };
             foreach (var key in required.Where(key => !names.Contains(fields[key]))) errors.Add($"Thiếu tham số: [{fields[key]}].");
             if (kind == WordTemplateSamples.Contract && !names.Contains(fields["contract.signed_at"]) &&
-                new[] { "contract.signed_day", "contract.signed_month", "contract.signed_year" }.Any(key => !names.Contains(fields[key])))
+                SignedDateFields.Any(key => !names.Contains(fields[key])))
                 errors.Add("Cần [Ngày ký] hoặc đủ cả [Ngày], [Tháng] và [Năm].");
             var pictureName = fields[kind == WordTemplateSamples.Contract ? "customer.signature" : "product.barcode_image"];
             if (markers.Any(item => item.Name == pictureName && item.Paragraph.InnerText.Trim() != $"[{pictureName}]"))

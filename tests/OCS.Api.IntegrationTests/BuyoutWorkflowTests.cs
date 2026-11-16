@@ -27,6 +27,109 @@ namespace OCS.Api.IntegrationTests;
 public sealed class BuyoutWorkflowTests
 {
     [Fact]
+    public async Task NewBuyoutsUseVietnamDateAndDistinctSequenceNumbers()
+    {
+        await using var db = NewDb();
+        var (staff, _, customer, brand, category, _) = await SeedAsync(db);
+        var service = new BuyoutService(db, TimeProvider.System);
+        var first = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
+        var second = await service.InspectAsync(staff, new(customer, "Bag", "M", null, 90, brand, category, "Passed", true), default);
+        var a = await service.CreateAsync(staff, new(first.Data!.Id, 100, 200), default);
+        var b = await service.CreateAsync(staff, new(second.Data!.Id, 100, 200), default);
+        Assert.True(a.IsSuccess);
+        Assert.True(b.IsSuccess);
+        var date = a.Data!.CreatedAt.ToOffset(TimeSpan.FromHours(7)).ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal($"BO-{date}-0001", a.Data.BuyoutNumber);
+        Assert.Equal($"BO-{date}-0002", b.Data!.BuyoutNumber);
+    }
+
+    [Theory]
+    [InlineData(999999, 1000000, "Approved")]
+    [InlineData(1000000, 1000000, "Approved")]
+    [InlineData(1000001, 1200000, "Pending")]
+    [InlineData(1000000, 999999, "Pending")]
+    public async Task DefaultApprovalThresholdAppliesToNewProposals(int purchasePrice, int listedPrice, string status)
+    {
+        await using var db = NewDb();
+        var (staff, _, customer, brand, category, _) = await SeedAsync(db);
+        var service = new BuyoutService(db, TimeProvider.System);
+        var config = await service.GetApprovalConfigAsync(default);
+        Assert.True(config.Enabled);
+        Assert.Equal(1000000m, config.Threshold);
+        var inspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
+        var created = await service.CreateAsync(staff, new(inspection.Data!.Id, purchasePrice, listedPrice), default);
+        Assert.Equal(status, created.Data!.Status);
+        Assert.Equal(1000000m, created.Data.AppliedApprovalThreshold);
+        Assert.Null(created.Data.ApprovalConfigurationVersion);
+        Assert.Empty(db.Products);
+        Assert.Empty(db.FinancialTransactions);
+    }
+
+    [Fact]
+    public async Task ApprovalConfigRejectsInvalidValuesAndDisabledOrMalformedConfigDoesNotAutoApprove()
+    {
+        await using var db = NewDb();
+        var (staff, manager, customer, brand, category, _) = await SeedAsync(db);
+        var service = new BuyoutService(db, TimeProvider.System);
+        Assert.False((await service.UpdateApprovalConfigAsync(manager, new(true, 0, null, null), default)).IsSuccess);
+        Assert.False((await service.UpdateApprovalConfigAsync(manager, new(true, 1.001m, null, null), default)).IsSuccess);
+        var config = await service.UpdateApprovalConfigAsync(manager, new(false, null, null, "Off"), default);
+        Assert.True(config.IsSuccess);
+        var inspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
+        var proposal = await service.CreateAsync(staff, new(inspection.Data!.Id, 100, 200), default);
+        Assert.Equal("Pending", proposal.Data!.Status);
+        Assert.Equal("Disabled", proposal.Data.ApprovalDecisionReason);
+        var updated = await service.UpdateApprovalConfigAsync(manager, new(true, 500, config.Data!.Version, "On"), default);
+        Assert.True(updated.IsSuccess);
+        Assert.Equal("Pending", (await service.GetAsync(proposal.Data.Id, default)).Data!.Status);
+        Assert.Equal(config.Data.Version, (await service.GetAsync(proposal.Data.Id, default)).Data!.ApprovalConfigurationVersion);
+        var parameter = await db.SystemParameters.SingleAsync(p => p.Key == "buyout.auto_approval");
+        parameter.Value = "not-json";
+        await db.SaveChangesAsync();
+        Assert.False((await service.GetApprovalConfigAsync(default)).Enabled);
+    }
+
+    [Theory]
+    [InlineData(300000, 600000, "Approved", "WithinThreshold")]
+    [InlineData(500000, 500000, "Approved", "WithinThreshold")]
+    [InlineData(700000, 800000, "Pending", "AboveThreshold")]
+    [InlineData(300000, 250000, "Pending", "BelowPurchasePrice")]
+    public async Task AutoApprovalUsesConfiguredThresholdAndPreservesPaymentWorkflow(int purchasePrice, int listedPrice, string status, string reason)
+    {
+        await using var db = NewDb();
+        var (staff, manager, customer, brand, category, location) = await SeedAsync(db);
+        var service = new BuyoutService(db, TimeProvider.System);
+        var defaultConfig = await service.GetApprovalConfigAsync(default);
+        Assert.True(defaultConfig.Enabled);
+        Assert.Equal(1000000m, defaultConfig.Threshold);
+        var configured = await service.UpdateApprovalConfigAsync(manager, new(true, 500000, null, "Threshold"), default);
+        Assert.True(configured.IsSuccess);
+        Assert.False((await service.UpdateApprovalConfigAsync(manager, new(true, 400000, null, null), default)).IsSuccess);
+        var inspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
+        var created = await service.CreateAsync(staff, new(inspection.Data!.Id, purchasePrice, listedPrice), default);
+        Assert.True(created.IsSuccess);
+        Assert.Equal(status, created.Data!.Status);
+        Assert.Equal(reason, created.Data.ApprovalDecisionReason);
+        Assert.Equal(configured.Data!.Version, created.Data.ApprovalConfigurationVersion);
+        Assert.Empty(db.Products);
+        Assert.Empty(db.FinancialTransactions);
+        if (status == "Approved")
+        {
+            Assert.True(created.Data.IsAutoApproved);
+            Assert.Null(created.Data.ApprovedByEmployeeId);
+            Assert.DoesNotContain(db.Notifications, n => n.Title == "Phiếu mua đứt chờ duyệt");
+            Assert.Contains(db.AuditLogs, a => a.ActorType == AuditActorType.System && a.Action == "BuyoutAutoApproved");
+            var paid = await service.PayAsync(created.Data.Id, staff, new(created.Data.Version, location, "Cash", null, true), default);
+            Assert.True(paid.IsSuccess);
+            Assert.True((await service.GetReceiptAsync(created.Data.Id, default)).IsSuccess);
+            var product = Assert.Single(db.Products);
+            var priceChange = await new InventoryService(db).ChangePriceAsync(product.Id, staff, new(product.InventoryVersion, 900000, "Adjustment"), default);
+            Assert.True(priceChange.IsSuccess);
+        }
+        else Assert.False(created.Data.IsAutoApproved);
+    }
+
+    [Fact]
     public async Task CustomerLookupRequiresQueryAndOnlyReturnsActiveCustomers()
     {
         await using var db = NewDb();
@@ -50,6 +153,7 @@ public sealed class BuyoutWorkflowTests
         await using var db = NewDb();
         var (staff, manager, customer, brand, category, location) = await SeedAsync(db);
         var service = new BuyoutService(db, TimeProvider.System);
+        Assert.True((await service.UpdateApprovalConfigAsync(manager, new(false, null, null, null), default)).IsSuccess);
         var inspect = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed inspection", true), default);
         Assert.True(inspect.IsSuccess);
         var created = await service.CreateAsync(staff, new(inspect.Data!.Id, 100000, 200000), default);
@@ -83,6 +187,8 @@ public sealed class BuyoutWorkflowTests
         var inventoryDetail = await new InventoryService(db).DetailAsync(product.Id, default);
         Assert.True(inventoryDetail.IsSuccess);
         Assert.Equal(100000m, inventoryDetail.Data!.PurchasePrice);
+        Assert.Equal(created.Data.BuyoutNumber, inventoryDetail.Data.Product.SourceReference);
+        Assert.Equal(product.Barcode, inventoryDetail.Data.Product.Barcode);
         Assert.Equal(200000m, product.ListedPrice);
         Assert.Equal(ProductStatus.OnSale, product.Status);
         Assert.Equal(ProductApprovalStatus.Approved, product.ApprovalStatus);
@@ -119,6 +225,7 @@ public sealed class BuyoutWorkflowTests
         db.AddRange(role, adminRole, permission, new RolePermission { Role = role, Permission = permission }, new AccountRole { AccountId = manager, Role = role }, new AccountRole { AccountId = noPermission.Id, Role = adminRole });
         await db.SaveChangesAsync();
         var service = new BuyoutService(db, TimeProvider.System);
+        Assert.True((await service.UpdateApprovalConfigAsync(manager, new(false, null, null, null), default)).IsSuccess);
         var inspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
         var proposal = await service.CreateAsync(staff, new(inspection.Data!.Id, 100, 200), default);
         var requestNotification = Assert.Single(db.Notifications);
@@ -144,6 +251,7 @@ public sealed class BuyoutWorkflowTests
         await using var db = NewDb();
         var (staff, manager, customer, brand, category, location) = await SeedAsync(db);
         var service = new BuyoutService(db, TimeProvider.System);
+        Assert.True((await service.UpdateApprovalConfigAsync(manager, new(false, null, null, null), default)).IsSuccess);
         var failedInspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Failed", false), default);
         Assert.False(failedInspection.IsSuccess);
         var inspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
@@ -167,6 +275,7 @@ public sealed class BuyoutWorkflowTests
         await using var db = NewDb();
         var (staff, manager, customer, brand, category, location) = await SeedAsync(db);
         var service = new BuyoutService(db, TimeProvider.System);
+        Assert.True((await service.UpdateApprovalConfigAsync(manager, new(false, null, null, null), default)).IsSuccess);
         var inspection = await service.InspectAsync(staff, new(customer, "Bag", "M", null, 95, brand, category, "Passed", true), default);
         var proposal = await service.CreateAsync(staff, new(inspection.Data!.Id, 100m, 200m), default);
         var approved = await service.ReviewAsync(proposal.Data!.Id, manager, new(proposal.Data.Version, true, null), default);
@@ -190,6 +299,7 @@ public sealed class BuyoutWorkflowTests
         await using (var setup = database.Context())
         {
             (staff, manager, customer, brand, category, location) = await SeedAsync(setup);
+            Assert.True((await new BuyoutService(setup, TimeProvider.System).UpdateApprovalConfigAsync(manager, new(false, null, null, null), default)).IsSuccess);
             var inspected = await new BuyoutService(setup, TimeProvider.System).InspectAsync(staff,
                 new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
             Assert.True(inspected.IsSuccess);
@@ -216,6 +326,14 @@ public sealed class BuyoutWorkflowTests
         await using var verify = database.Context();
         Assert.Equal(1, await verify.Products.CountAsync(p => p.BuyoutId == proposal.Id));
         Assert.Equal(1, await verify.FinancialTransactions.CountAsync(t => t.BuyoutId == proposal.Id));
+        var one = await new BuyoutService(verify, TimeProvider.System).InspectAsync(staff, new(customer, "Coat", "M", null, 90, brand, category, "Passed", true), default);
+        var two = await new BuyoutService(verify, TimeProvider.System).InspectAsync(staff, new(customer, "Bag", "M", null, 90, brand, category, "Passed", true), default);
+        await using var createFirst = database.Context();
+        await using var createSecond = database.Context();
+        var both = await Task.WhenAll(new BuyoutService(createFirst, TimeProvider.System).CreateAsync(staff, new(one.Data!.Id, 100, 200), default),
+            new BuyoutService(createSecond, TimeProvider.System).CreateAsync(staff, new(two.Data!.Id, 100, 200), default));
+        Assert.All(both, result => Assert.True(result.IsSuccess));
+        Assert.NotEqual(both[0].Data!.BuyoutNumber, both[1].Data!.BuyoutNumber);
     }
 
     [Fact]
@@ -298,10 +416,14 @@ public sealed class BuyoutWorkflowTests
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         client.DefaultRequestHeaders.Add("X-Test-Bypass-Csrf", "true");
         var route = $"/api/buyouts/{Guid.NewGuid()}/review";
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/buyouts/approval-config")).StatusCode);
         Assert.Single((await client.GetFromJsonAsync<CategoryResponse[]>("/api/categories"))!);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GenerateAccessToken(customer, ["Customer"], customerSession));
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/buyouts/approval-config")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GenerateAccessToken(staff, ["Staff"], staffSession));
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/buyouts/approval-config")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.PutAsJsonAsync("/api/buyouts/approval-config", new UpdateBuyoutApprovalConfigRequest(true, 500000, null, null))).StatusCode);
         var categories = await client.GetFromJsonAsync<CategoryResponse[]>("/api/categories?activeOnly=true");
         var activeCategory = Assert.Single(categories!);
         Assert.Equal(activeCategoryId, activeCategory.Id);
@@ -318,6 +440,7 @@ public sealed class BuyoutWorkflowTests
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.PostAsJsonAsync(route, new ReviewBuyoutRequest(Guid.NewGuid(), true, null))).StatusCode);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokens.GenerateAccessToken(manager, ["Manager"], managerSession));
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsJsonAsync("/api/buyouts/approval-config", new UpdateBuyoutApprovalConfigRequest(true, 500000, null, "Configuration"))).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync(route, new ReviewBuyoutRequest(Guid.NewGuid(), true, null))).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/categories?activeOnly=true")).StatusCode);
     }

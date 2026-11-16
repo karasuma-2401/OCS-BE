@@ -24,6 +24,11 @@ public sealed class Buyout : BaseEntity
     public DateTimeOffset? PaidAt { get; set; }
     public Guid? PaidByEmployeeId { get; set; }
     public string? RejectionReason { get; set; }
+    public bool IsAutoApproved { get; set; }
+    public string? ApprovalDecisionReason { get; set; }
+    public decimal? AppliedApprovalThreshold { get; set; }
+    public Guid? ApprovalConfigurationVersion { get; set; }
+    public DateTimeOffset? ApprovalDecidedAt { get; set; }
 
     public BuyoutStatus Status { get; set; }
         = BuyoutStatus.Pending;

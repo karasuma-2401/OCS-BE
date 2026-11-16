@@ -18,6 +18,8 @@ public sealed record CreateBuyoutInspectionRequest(
 public sealed record CreateBuyoutRequest(Guid InspectionId, decimal PurchasePrice, decimal ListedPrice);
 public sealed record ReviewBuyoutRequest(Guid ExpectedVersion, bool Approve, string? Reason);
 public sealed record PayBuyoutRequest(Guid ExpectedVersion, Guid StorageLocationId, string PaymentMethod, string? BankTransactionReference, bool CustomerAgreed);
+public sealed record BuyoutApprovalConfig(bool Enabled, decimal? Threshold, Guid? Version, DateTimeOffset? UpdatedAt, Guid? UpdatedBy);
+public sealed record UpdateBuyoutApprovalConfigRequest(bool Enabled, decimal? Threshold, Guid? ExpectedVersion, string? Reason);
 
 public sealed record BuyoutInspectionResponse(Guid Id, Guid CustomerId, string Name, string Size, string? Description,
     int ConditionPercentage, Guid BrandId, Guid CategoryId, string InspectionNotes, Guid InspectedByEmployeeId, DateTimeOffset CreatedAt, bool Available, string CustomerName, string BrandName, string CategoryName);
@@ -25,7 +27,8 @@ public sealed record BuyoutInspectionSnapshot(Guid Id, Guid CustomerId, string N
     int ConditionPercentage, Guid BrandId, Guid CategoryId, string InspectionNotes, Guid InspectedByEmployeeId, DateTimeOffset CreatedAt, string BrandName, string CategoryName);
 public sealed record BuyoutResponse(Guid Id, string BuyoutNumber, Guid CustomerId, Guid InspectionId,
     Guid CreatedByEmployeeId, Guid? ApprovedByEmployeeId, string Status, decimal PurchasePrice, decimal ListedPrice,
-    Guid Version, DateTimeOffset CreatedAt, DateTimeOffset? PaidAt, Guid? PaidByEmployeeId, string? RejectionReason, Guid? ProductId, string? ProductBarcode, BuyoutInspectionSnapshot Inspection, string CustomerName);
+    Guid Version, DateTimeOffset CreatedAt, DateTimeOffset? PaidAt, Guid? PaidByEmployeeId, string? RejectionReason, Guid? ProductId, string? ProductBarcode, BuyoutInspectionSnapshot Inspection, string CustomerName,
+    bool IsAutoApproved, string? ApprovalDecisionReason, decimal? AppliedApprovalThreshold, Guid? ApprovalConfigurationVersion, DateTimeOffset? ApprovalDecidedAt);
 
 public sealed record BuyoutReceiptResponse(Guid BuyoutId, string BuyoutNumber, Guid CustomerId, string CustomerName,
     string ProductName, string Size, int ConditionPercentage, decimal PurchasePrice, decimal ListedPrice,
