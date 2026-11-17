@@ -183,9 +183,8 @@ public sealed class StorageController(
 
     [HttpDelete("{**key}")]
     [Authorize]
-    public async Task<IActionResult> DeleteFile(
-        string key,
-        CancellationToken cancellationToken = default)
+    public IActionResult DeleteFile(
+        string key)
     {
         var cleanKey = ExtractKey(key);
         if (string.IsNullOrWhiteSpace(cleanKey) ||
@@ -207,43 +206,19 @@ public sealed class StorageController(
             return BadRequest(new ProblemDetails
             {
                 Title = "Thao tác không được phép",
-                Detail = "Chỉ cho phép xóa ảnh trong các thư mục hợp lệ."
+                Detail = "Chỉ cho phép thao tác trong các thư mục hợp lệ."
             });
         }
 
-        var user = HttpContext.User;
-        var isAdminOrManager = user.IsInRole("Admin") || user.IsInRole("Manager");
-        var hasPermission = isAdminOrManager ||
-                            user.HasClaim("permission", PermissionCatalog.AppointmentsStaffReception) ||
-                            user.HasClaim("permission", PermissionCatalog.ProductsCreate) ||
-                            user.HasClaim("permission", PermissionCatalog.ProductsApprove);
-        if (!hasPermission)
+        // Chính sách bảo toàn dữ liệu OCS: Ảnh sản phẩm và ảnh kiểm định sau khi upload
+        // được lưu trữ vĩnh viễn trên Cloudflare R2 phục vụ biên bản chứng từ, đối soát và kiểm toán.
+        // Hệ thống cho phép gỡ ảnh khỏi giao diện hồ sơ nhưng không xóa tệp tin vật lý trên R2.
+        return Ok(new
         {
-            return Forbid();
-        }
-
-        try
-        {
-            var deleted = await storageService.DeleteAsync(cleanKey, cancellationToken);
-            if (!deleted)
-            {
-                return NotFound(new ProblemDetails
-                {
-                    Title = "Không tìm thấy tệp",
-                    Detail = "Tệp tin không tồn tại hoặc đã được xóa trước đó."
-                });
-            }
-
-            return Ok(new { success = true, key = cleanKey });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
-            {
-                Title = "Lỗi kết nối máy chủ Cloudflare R2",
-                Detail = ex.Message
-            });
-        }
+            success = true,
+            key = cleanKey,
+            message = "Tệp tin được bảo lưu vĩnh viễn trên máy chủ lưu trữ R2 (không xóa tệp vật lý)."
+        });
     }
 
     private string ExtractKey(string urlOrKey)

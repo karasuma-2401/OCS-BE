@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OCS.Api.Common;
 using OCS.Api.Entities;
 using OCS.Api.Interfaces.Repositories;
@@ -8,7 +9,8 @@ namespace OCS.Api.Services;
 
 public sealed class NotificationService(
     IUnitOfWork unitOfWork,
-    IFcmService? fcmService = null) : INotificationService
+    IFcmService? fcmService = null,
+    ILogger<NotificationService>? logger = null) : INotificationService
 {
     public async Task<Result<NotificationDto>> CreateAsync(CreateNotificationDto dto, CancellationToken cancellationToken = default)
     {
@@ -30,27 +32,94 @@ public sealed class NotificationService(
         unitOfWork.NotificationRepository.Add(notification);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        FcmDispatchResult? pushResult = null;
         if (fcmService is not null)
         {
             try
             {
-                await fcmService.SendPushToUserAsync(
+                var pushData = new Dictionary<string, string>
+                {
+                    ["notificationId"] = notification.Id.ToString(),
+                    ["type"] = dto.Type.ToString(),
+                    ["title"] = dto.Title,
+                    ["body"] = dto.Content,
+                };
+
+                if (!string.IsNullOrWhiteSpace(dto.Link))
+                {
+                    pushData["link"] = dto.Link;
+                    pushData["url"] = dto.Link;
+                }
+
+                if (dto.ExtraData is not null)
+                {
+                    foreach (var (k, v) in dto.ExtraData)
+                    {
+                        if (!string.IsNullOrWhiteSpace(k) && v is not null)
+                        {
+                            pushData[k] = v;
+                        }
+                    }
+                }
+
+                pushResult = await fcmService.SendPushToUserAsync(
                     dto.RecipientAccountId,
                     dto.Title,
                     dto.Content,
-                    new Dictionary<string, string>
-                    {
-                        ["notificationId"] = notification.Id.ToString(),
-                        ["type"] = dto.Type.ToString()
-                    },
+                    pushData,
                     cancellationToken);
+
+                if (logger is not null)
+                {
+                    if (!pushResult.FirebaseConfigured)
+                    {
+                        if (logger.IsEnabled(LogLevel.Information))
+                        {
+                            logger.LogInformation(
+                                "FCM push not dispatched for account {AccountId}: Firebase credentials not configured on server.",
+                                dto.RecipientAccountId);
+                        }
+                    }
+                    else if (pushResult.TargetedDeviceCount == 0)
+                    {
+                        if (logger.IsEnabled(LogLevel.Information))
+                        {
+                            logger.LogInformation(
+                                "FCM push skipped for account {AccountId}: No registered device tokens found. Saved to DB notifications.",
+                                dto.RecipientAccountId);
+                        }
+                    }
+                    else if (pushResult.FailureCount > 0)
+                    {
+                        if (logger.IsEnabled(LogLevel.Warning))
+                        {
+                            logger.LogWarning(
+                                "FCM push dispatched for account {AccountId} with partial/total failures: {SuccessCount}/{TotalCount} succeeded, {FailureCount} failed.",
+                                dto.RecipientAccountId,
+                                pushResult.SuccessCount,
+                                pushResult.TargetedDeviceCount,
+                                pushResult.FailureCount);
+                        }
+                    }
+                    else if (logger.IsEnabled(LogLevel.Information))
+                    {
+                        logger.LogInformation(
+                            "FCM push dispatched successfully to {SuccessCount} device(s) for account {AccountId}.",
+                            pushResult.SuccessCount,
+                            dto.RecipientAccountId);
+                    }
+                }
             }
-            catch
+            catch (Exception ex)
             {
+                logger?.LogError(ex, "Exception occurred while dispatching FCM push notification to account {AccountId}", dto.RecipientAccountId);
+                pushResult = new FcmDispatchResult(0, 0, 1, fcmService.IsConfigured);
             }
         }
 
-        return Result.Success(MapToDto(notification));
+        var dtoResult = MapToDto(notification);
+        dtoResult.PushResult = pushResult;
+        return Result.Success(dtoResult);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> GetForUserAsync(

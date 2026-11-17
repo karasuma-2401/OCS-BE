@@ -24,6 +24,7 @@ public sealed class FcmNotificationService(
     private const string AccessTokenCacheKey = "fcm:oauth:access_token";
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, List<FcmTokenRecord>> InProcessTokenFallback = new();
 
     private readonly FirebaseOptions _options = firebaseOptions.Value;
 
@@ -150,6 +151,20 @@ public sealed class FcmNotificationService(
                 using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
+                var payloadData = data is not null
+                    ? new Dictionary<string, string>(data)
+                    : new Dictionary<string, string>();
+
+                if (!payloadData.ContainsKey("title")) payloadData["title"] = title;
+                if (!payloadData.ContainsKey("body")) payloadData["body"] = body;
+
+                var targetLink = payloadData.TryGetValue("link", out var linkVal) && !string.IsNullOrWhiteSpace(linkVal)
+                    ? linkVal
+                    : (payloadData.TryGetValue("url", out var urlVal) && !string.IsNullOrWhiteSpace(urlVal) ? urlVal : "/");
+
+                payloadData["link"] = targetLink;
+                payloadData["url"] = targetLink;
+
                 var payload = new
                 {
                     message = new
@@ -160,7 +175,37 @@ public sealed class FcmNotificationService(
                             title,
                             body
                         },
-                        data = data ?? new Dictionary<string, string>()
+                        data = payloadData,
+                        webpush = new
+                        {
+                            headers = new Dictionary<string, string>
+                            {
+                                ["Urgency"] = "high",
+                                ["TTL"] = "86400"
+                            },
+                            notification = new
+                            {
+                                title,
+                                body,
+                                icon = "/mascot-logo.png",
+                                badge = "/mascot-logo.png"
+                            },
+                            fcm_options = new
+                            {
+                                link = targetLink
+                            }
+                        },
+                        android = new
+                        {
+                            priority = "high",
+                            notification = new
+                            {
+                                title,
+                                body,
+                                sound = "default",
+                                channel_id = "ocs_notifications"
+                            }
+                        }
                     }
                 };
                 req.Content = JsonContent.Create(payload, options: JsonOptions);
@@ -208,25 +253,35 @@ public sealed class FcmNotificationService(
     private async Task<List<FcmTokenRecord>> LoadTokensAsync(Guid accountId, CancellationToken ct)
     {
         var raw = await cache.GetStringAsync(BuildCacheKey(accountId), ct);
-        if (string.IsNullOrWhiteSpace(raw))
+        if (!string.IsNullOrWhiteSpace(raw))
         {
-            return [];
+            try
+            {
+                var cachedList = JsonSerializer.Deserialize<List<FcmTokenRecord>>(raw, JsonOptions);
+                if (cachedList is not null && cachedList.Count > 0)
+                {
+                    InProcessTokenFallback[accountId] = cachedList;
+                    return cachedList;
+                }
+            }
+            catch
+            {
+            }
         }
 
-        try
+        if (InProcessTokenFallback.TryGetValue(accountId, out var fallbackList) && fallbackList.Count > 0)
         {
-            return JsonSerializer.Deserialize<List<FcmTokenRecord>>(raw, JsonOptions) ?? [];
+            return new List<FcmTokenRecord>(fallbackList);
         }
-        catch
-        {
-            return [];
-        }
+
+        return [];
     }
 
-    private Task SaveTokensAsync(Guid accountId, List<FcmTokenRecord> records, CancellationToken ct)
+    private async Task SaveTokensAsync(Guid accountId, List<FcmTokenRecord> records, CancellationToken ct)
     {
+        InProcessTokenFallback[accountId] = new List<FcmTokenRecord>(records);
         var raw = JsonSerializer.Serialize(records, JsonOptions);
-        return cache.SetStringAsync(
+        await cache.SetStringAsync(
             BuildCacheKey(accountId),
             raw,
             new DistributedCacheEntryOptions

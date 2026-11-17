@@ -13,6 +13,7 @@ public sealed class UnitOfWork(
     INotificationRepository notificationRepository,
     ICustomerProfileRepository customerProfileRepository) : IUnitOfWork
 {
+    public AppDbContext DbContext => dbContext;
     public IProductRepository ProductRepository => productRepository;
     public IAuthRepository AuthRepository => authRepository;
     public IAppointmentRepository AppointmentRepository => appointmentRepository;
