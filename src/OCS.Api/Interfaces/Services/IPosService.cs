@@ -6,11 +6,12 @@ namespace OCS.Api.Interfaces.Services;
 public interface IPosService
 {
     Task<Result<PosProductLookupDto>> LookupPosProductAsync(
-        string identifier, CancellationToken cancellationToken = default);
-   
+        string identifier,
+        CancellationToken cancellationToken = default);
+
     Task<Result<PosCashPaymentResponse>> CheckoutCashAsync(
-        Guid actorAccountId, 
-        PosCashPaymentRequest request, 
+        Guid actorAccountId,
+        PosCashPaymentRequest request,
         CancellationToken cancellationToken = default);
 
     Task<Result<PosInvoiceDetailDto>> GetInvoiceDetailAsync(

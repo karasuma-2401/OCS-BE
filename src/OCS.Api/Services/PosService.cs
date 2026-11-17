@@ -11,7 +11,7 @@ namespace OCS.Api.Services;
 public class PosService(AppDbContext dbContext) : IPosService
 {
     public async Task<Result<PosProductLookupDto>> LookupPosProductAsync(
-        string identifier, 
+        string identifier,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(identifier))
@@ -27,8 +27,8 @@ public class PosService(AppDbContext dbContext) : IPosService
             .Include(p => p.Brand)
             .Include(p => p.Category)
             .Include(p => p.Images)
-            .FirstOrDefaultAsync(p => 
-                p.Barcode == identifier || (isGuid && p.Id == productGuid), 
+            .FirstOrDefaultAsync(
+                p => p.Barcode == identifier || (isGuid && p.Id == productGuid),
                 cancellationToken);
 
         if (product is null)
@@ -48,7 +48,7 @@ public class PosService(AppDbContext dbContext) : IPosService
             _ => $"Sản phẩm không khả dụng để bán (Trạng thái: {product.Status})."
         };
 
-        var coverImage = product.Images.FirstOrDefault(i => i.ImageType == ProductImageType.Cover)?.Url 
+        var coverImage = product.Images.FirstOrDefault(i => i.ImageType == ProductImageType.Cover)?.Url
                          ?? product.Images.FirstOrDefault()?.Url;
 
         var response = new PosProductLookupDto(
@@ -126,7 +126,7 @@ public class PosService(AppDbContext dbContext) : IPosService
             {
                 return Result.Failure<PosCashPaymentResponse>(
                     ApplicationError.Validation(
-                        "POS.INSUFFICIENT_CASH", 
+                        "POS.INSUFFICIENT_CASH",
                         $"Số tiền khách đưa ({request.CashGiven:N0} đ) không đủ để thanh toán ({totalAmount:N0} đ)."));
             }
 
