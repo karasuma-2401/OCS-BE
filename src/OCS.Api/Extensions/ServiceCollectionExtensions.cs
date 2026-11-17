@@ -163,6 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PrivateProductImageStore>();
         services.AddScoped<IPaymentGatewayAdapter, VietQrQuickLinkAdapter>();
         services.AddScoped<IVietQrPaymentService, VietQrPaymentService>();
+        services.AddScoped<IPosService, PosService>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
 

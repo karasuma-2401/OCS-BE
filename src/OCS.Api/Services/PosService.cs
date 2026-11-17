@@ -207,10 +207,21 @@ public class PosService(AppDbContext dbContext) : IPosService
             return Result.Failure<PosCashPaymentResponse>(
                 ApplicationError.Conflict("POS.CONCURRENCY_CONFLICT", "Một hoặc nhiều sản phẩm vừa được thanh toán hoặc cập nhật ở nơi khác. Vui lòng thử lại."));
         }
-        catch (Exception)
+        catch (DbUpdateException dbEx)
         {
             await transaction.RollbackAsync(cancellationToken);
-            throw;
+            var innerMsg = dbEx.InnerException?.Message ?? dbEx.Message;
+            Console.WriteLine($"[POS CHECKOUT DB ERROR] {innerMsg}");
+            return Result.Failure<PosCashPaymentResponse>(
+                ApplicationError.Conflict("POS.DB_UPDATE_ERROR", $"Lỗi cập nhật dữ liệu: {innerMsg}"));
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            var message = ex.InnerException?.Message ?? ex.Message;
+            Console.WriteLine($"[POS CHECKOUT ERROR] {ex}");
+            return Result.Failure<PosCashPaymentResponse>(
+                ApplicationError.Conflict("POS.CHECKOUT_ERROR", $"Không thể hoàn tất thanh toán: {message}"));
         }
     }
 
