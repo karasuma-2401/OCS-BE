@@ -83,6 +83,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    public DbSet<FcmDeviceToken> FcmDeviceTokens => Set<FcmDeviceToken>();
+
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         NormalizeAccountEmails();

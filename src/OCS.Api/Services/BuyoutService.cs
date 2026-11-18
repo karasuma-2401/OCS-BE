@@ -6,10 +6,12 @@ using OCS.Api.Context;
 using OCS.Api.Entities;
 using OCS.Api.Models.Buyouts;
 using OCS.Api.Authorization;
+using OCS.Api.Interfaces.Services;
 
 namespace OCS.Api.Services;
 
-public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
+public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock,
+    IFcmService? fcmService = null, ILogger<BuyoutService>? logger = null)
 {
     private const decimal MaxMoney = 9999999999999999.99m;
 
@@ -101,8 +103,9 @@ public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
             a.AccountRoles.Any(ar => ar.Role.RolePermissions.Any(rp => rp.Permission.Code == PermissionCatalog.ProductsApprove)))
             .Select(a => a.Id).Distinct().ToListAsync(ct);
         var now = clock.GetUtcNow();
+        var notifications = new List<Notification>();
         foreach (var reviewer in reviewers)
-            db.Notifications.Add(new Notification
+            notifications.Add(new Notification
             {
                 RecipientAccountId = reviewer,
                 SenderAccountId = actor,
@@ -112,8 +115,10 @@ public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
                 SentAt = now,
                 CreatedAt = now
             });
+        db.Notifications.AddRange(notifications);
         try { await db.SaveChangesAsync(ct); if (transaction is not null) await transaction.CommitAsync(ct); }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation }) { return Conflict<BuyoutResponse>("Sản phẩm kiểm định đã có phiếu thu mua đang hoạt động."); }
+        foreach (var notification in notifications) await DispatchNotificationAsync(notification, ct);
         return Result.Success(Map(buyout, item, null));
     }
 
@@ -159,7 +164,7 @@ public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
         b.Version = Guid.NewGuid();
         if (!request.Approve) item.IsActive = false;
         var now = clock.GetUtcNow();
-        db.Notifications.Add(new Notification
+        var notification = new Notification
         {
             RecipientAccountId = b.CreatedByEmployeeId,
             SenderAccountId = actor,
@@ -168,10 +173,32 @@ public sealed partial class BuyoutService(AppDbContext db, TimeProvider clock)
             Content = request.Approve ? $"Phiếu {b.BuyoutNumber} đã được duyệt và có thể ghi nhận chi tiền." : $"Phiếu {b.BuyoutNumber} đã bị từ chối. Xem chi tiết để biết lý do.",
             SentAt = now,
             CreatedAt = now
-        });
+        };
+        db.Notifications.Add(notification);
         try { await db.SaveChangesAsync(ct); }
         catch (DbUpdateConcurrencyException) { return Conflict<BuyoutResponse>("Phiếu đã thay đổi. Vui lòng tải lại."); }
+        await DispatchNotificationAsync(notification, ct);
         return Result.Success(Map(b, item, null));
+    }
+
+    private async Task DispatchNotificationAsync(Notification notification, CancellationToken ct)
+    {
+        if (fcmService is null) return;
+        try
+        {
+            await fcmService.SendPushToUserAsync(notification.RecipientAccountId, notification.Title, notification.Content,
+                new Dictionary<string, string>
+                {
+                    ["notificationId"] = notification.Id.ToString(),
+                    ["type"] = notification.Type.ToString(),
+                    ["recipientAccountId"] = notification.RecipientAccountId.ToString(),
+                    ["url"] = "/shop/buyouts"
+                }, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+        {
+            logger?.LogWarning(ex, "Push dispatch failed for buyout notification {NotificationId}", notification.Id);
+        }
     }
 
     public async Task<Result<BuyoutResponse>> PayAsync(Guid id, Guid actor, PayBuyoutRequest request, CancellationToken ct)

@@ -113,7 +113,7 @@ public sealed class NotificationsController(
             RecipientAccountId = userId,
             SenderAccountId = userId,
             Title = "Kiểm tra thông báo OCS",
-            Content = "Hệ thống thông báo thời gian thực và FCM đã sẵn sàng.",
+            Content = "Thông báo thử nghiệm từ hệ thống OCS.",
             Type = NotificationType.System
         }, cancellationToken);
 

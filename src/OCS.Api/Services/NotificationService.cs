@@ -8,7 +8,8 @@ namespace OCS.Api.Services;
 
 public sealed class NotificationService(
     IUnitOfWork unitOfWork,
-    IFcmService? fcmService = null) : INotificationService
+    IFcmService? fcmService = null,
+    ILogger<NotificationService>? logger = null) : INotificationService
 {
     public async Task<Result<NotificationDto>> CreateAsync(CreateNotificationDto dto, CancellationToken cancellationToken = default)
     {
@@ -30,27 +31,30 @@ public sealed class NotificationService(
         unitOfWork.NotificationRepository.Add(notification);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var response = MapToDto(notification);
         if (fcmService is not null)
         {
             try
             {
-                await fcmService.SendPushToUserAsync(
+                response.PushDelivery = await fcmService.SendPushToUserAsync(
                     dto.RecipientAccountId,
                     dto.Title,
                     dto.Content,
                     new Dictionary<string, string>
                     {
                         ["notificationId"] = notification.Id.ToString(),
-                        ["type"] = dto.Type.ToString()
+                        ["type"] = dto.Type.ToString(),
+                        ["recipientAccountId"] = dto.RecipientAccountId.ToString()
                     },
                     cancellationToken);
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
+                logger?.LogWarning(ex, "Push dispatch failed for notification {NotificationId}", notification.Id);
             }
         }
 
-        return Result.Success(MapToDto(notification));
+        return Result.Success(response);
     }
 
     public async Task<IReadOnlyList<NotificationDto>> GetForUserAsync(
@@ -83,8 +87,8 @@ public sealed class NotificationService(
 
     public async Task<Result<bool>> MarkAllAsReadAsync(Guid accountId, CancellationToken cancellationToken = default)
     {
-        var list = await unitOfWork.NotificationRepository.GetByRecipientAccountIdAsync(accountId, 100, cancellationToken);
-        foreach (var noti in list.Where(n => !n.IsRead))
+        var list = await unitOfWork.NotificationRepository.GetUnreadByRecipientAccountIdAsync(accountId, cancellationToken);
+        foreach (var noti in list)
         {
             noti.IsRead = true;
             noti.UpdatedAt = DateTimeOffset.UtcNow;

@@ -1136,6 +1136,33 @@ namespace OCS.Api.Context.Migrations
                     b.ToTable("ExpiryProcessingItems", (string)null);
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.FcmDeviceToken", b =>
+                {
+                    b.Property<string>("Token")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid>("AccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DeviceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("RegisteredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Token");
+
+                    b.HasIndex("AccountId", "LastUsedAt");
+
+                    b.ToTable("FcmDeviceTokens", (string)null);
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.FinancialTransaction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2790,6 +2817,17 @@ namespace OCS.Api.Context.Migrations
                     b.Navigation("ExpiryProcessing");
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("OCS.Api.Entities.FcmDeviceToken", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.FinancialTransaction", b =>

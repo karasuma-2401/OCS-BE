@@ -10,6 +10,8 @@ public sealed class NotificationDto
     public NotificationType Type { get; set; }
     public DateTimeOffset SentAt { get; set; }
     public bool IsRead { get; set; }
+
+    public FcmDispatchResult? PushDelivery { get; set; }
 }
 
 public sealed class CreateNotificationDto

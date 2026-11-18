@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -7,13 +6,17 @@ using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using OCS.Api.Configuration;
+using OCS.Api.Context;
+using OCS.Api.Entities;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Notifications;
 
 namespace OCS.Api.Services;
 
 public sealed class FcmNotificationService(
+    AppDbContext db,
     IDistributedCache cache,
     IHttpClientFactory httpClientFactory,
     IOptions<FirebaseOptions> firebaseOptions,
@@ -44,34 +47,36 @@ public sealed class FcmNotificationService(
         var cleanDeviceType = string.IsNullOrWhiteSpace(deviceType) ? "Web" : deviceType.Trim();
         var now = DateTimeOffset.UtcNow;
 
-        var records = await LoadTokensAsync(accountId, cancellationToken);
-        var existing = records.FirstOrDefault(r => string.Equals(r.Token, cleanToken, StringComparison.Ordinal));
-        if (existing is not null)
+        if (db.Database.IsNpgsql())
         {
-            existing.DeviceType = cleanDeviceType;
-            existing.LastUsedAt = now;
+            // The upsert transfers ownership atomically when accounts register concurrently.
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "FcmDeviceTokens" ("Token", "AccountId", "DeviceType", "RegisteredAt", "LastUsedAt")
+                VALUES ({cleanToken}, {accountId}, {cleanDeviceType}, {now}, {now})
+                ON CONFLICT ("Token") DO UPDATE SET
+                    "AccountId" = EXCLUDED."AccountId", "DeviceType" = EXCLUDED."DeviceType",
+                    "RegisteredAt" = EXCLUDED."RegisteredAt", "LastUsedAt" = EXCLUDED."LastUsedAt"
+                """, cancellationToken);
         }
         else
         {
-            records.Add(new FcmTokenRecord
+            var existing = await db.FcmDeviceTokens.SingleOrDefaultAsync(t => t.Token == cleanToken, cancellationToken);
+            if (existing is null)
             {
-                Token = cleanToken,
-                DeviceType = cleanDeviceType,
-                RegisteredAt = now,
-                LastUsedAt = now
-            });
+                existing = new FcmDeviceToken { Token = cleanToken };
+                db.FcmDeviceTokens.Add(existing);
+            }
+            existing.AccountId = accountId;
+            existing.DeviceType = cleanDeviceType;
+            existing.RegisteredAt = now;
+            existing.LastUsedAt = now;
+            await db.SaveChangesAsync(cancellationToken);
         }
 
-        // Keep most recent 10 tokens per account
-        if (records.Count > 10)
-        {
-            records = records
-                .OrderByDescending(r => r.LastUsedAt)
-                .Take(10)
-                .ToList();
-        }
-
-        await SaveTokensAsync(accountId, records, cancellationToken);
+        var staleTokens = await db.FcmDeviceTokens.Where(t => t.AccountId == accountId)
+            .OrderByDescending(t => t.LastUsedAt).ThenBy(t => t.Token).Skip(10)
+            .Select(t => t.Token).ToListAsync(cancellationToken);
+        await DeleteTokensAsync(accountId, staleTokens, cancellationToken);
     }
 
     public async Task UnregisterTokenAsync(
@@ -84,16 +89,7 @@ public sealed class FcmNotificationService(
             return;
         }
 
-        var cleanToken = token.Trim();
-        var records = await LoadTokensAsync(accountId, cancellationToken);
-        var filtered = records
-            .Where(r => !string.Equals(r.Token, cleanToken, StringComparison.Ordinal))
-            .ToList();
-
-        if (filtered.Count != records.Count)
-        {
-            await SaveTokensAsync(accountId, filtered, cancellationToken);
-        }
+        await DeleteTokensAsync(accountId, [token.Trim()], cancellationToken);
     }
 
     public async Task<IReadOnlyList<FcmTokenRecord>> GetTokensForAccountAsync(
@@ -169,15 +165,12 @@ public sealed class FcmNotificationService(
                 if (res.IsSuccessStatusCode)
                 {
                     successCount++;
-                    record.LastUsedAt = DateTimeOffset.UtcNow;
                 }
                 else
                 {
                     failureCount++;
                     var errorBody = await res.Content.ReadAsStringAsync(cancellationToken);
-                    if (res.StatusCode == HttpStatusCode.NotFound ||
-                        errorBody.Contains("UNREGISTERED", StringComparison.OrdinalIgnoreCase) ||
-                        errorBody.Contains("INVALID_ARGUMENT", StringComparison.OrdinalIgnoreCase))
+                    if (IsUnregisteredToken(errorBody))
                     {
                         invalidTokens.Add(record.Token);
                     }
@@ -189,54 +182,55 @@ public sealed class FcmNotificationService(
                         errorBody);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 failureCount++;
                 logger.LogWarning(ex, "FCM send exception for account {AccountId}", recipientAccountId);
             }
         }
 
-        if (invalidTokens.Count > 0)
-        {
-            records = records.Where(r => !invalidTokens.Contains(r.Token)).ToList();
-        }
-
-        await SaveTokensAsync(recipientAccountId, records, cancellationToken);
-        return new FcmDispatchResult(records.Count + invalidTokens.Count, successCount, failureCount, true);
+        await DeleteTokensAsync(recipientAccountId, invalidTokens, cancellationToken);
+        return new FcmDispatchResult(records.Count, successCount, failureCount, true);
     }
 
     private async Task<List<FcmTokenRecord>> LoadTokensAsync(Guid accountId, CancellationToken ct)
     {
-        var raw = await cache.GetStringAsync(BuildCacheKey(accountId), ct);
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return [];
-        }
+        return await db.FcmDeviceTokens.AsNoTracking().Where(t => t.AccountId == accountId)
+            .Select(t => new FcmTokenRecord
+            {
+                Token = t.Token, DeviceType = t.DeviceType,
+                RegisteredAt = t.RegisteredAt, LastUsedAt = t.LastUsedAt
+            }).ToListAsync(ct);
+    }
 
+    private async Task DeleteTokensAsync(Guid accountId, IReadOnlyCollection<string> tokens, CancellationToken ct)
+    {
+        if (tokens.Count == 0) return;
+        var query = db.FcmDeviceTokens.Where(t => t.AccountId == accountId && tokens.Contains(t.Token));
+        if (db.Database.IsRelational())
+            await query.ExecuteDeleteAsync(ct);
+        else
+        {
+            db.FcmDeviceTokens.RemoveRange(await query.ToListAsync(ct));
+            await db.SaveChangesAsync(ct);
+        }
+    }
+
+    private static bool IsUnregisteredToken(string errorBody)
+    {
         try
         {
-            return JsonSerializer.Deserialize<List<FcmTokenRecord>>(raw, JsonOptions) ?? [];
+            using var document = JsonDocument.Parse(errorBody);
+            if (!document.RootElement.TryGetProperty("error", out var error) ||
+                !error.TryGetProperty("details", out var details) || details.ValueKind != JsonValueKind.Array)
+                return false;
+            return details.EnumerateArray().Any(detail =>
+                detail.TryGetProperty("@type", out var type) &&
+                type.GetString() == "type.googleapis.com/google.firebase.fcm.v1.FcmError" &&
+                detail.TryGetProperty("errorCode", out var code) && code.GetString() == "UNREGISTERED");
         }
-        catch
-        {
-            return [];
-        }
+        catch (JsonException) { return false; }
     }
-
-    private Task SaveTokensAsync(Guid accountId, List<FcmTokenRecord> records, CancellationToken ct)
-    {
-        var raw = JsonSerializer.Serialize(records, JsonOptions);
-        return cache.SetStringAsync(
-            BuildCacheKey(accountId),
-            raw,
-            new DistributedCacheEntryOptions
-            {
-                AbsoluteExpirationRelativeToNow = TimeSpan.FromDays(30)
-            },
-            ct);
-    }
-
-    private static string BuildCacheKey(Guid accountId) => $"fcm:tokens:{accountId:N}";
 
     private async Task<string?> GetGoogleAccessTokenAsync(CancellationToken ct)
     {
@@ -308,7 +302,7 @@ public sealed class FcmNotificationService(
 
             return accessToken;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             logger.LogWarning(ex, "Error generating Firebase OAuth2 token.");
             return null;
