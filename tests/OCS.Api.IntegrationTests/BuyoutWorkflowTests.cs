@@ -21,6 +21,8 @@ using OCS.Api.Contracts.Categories;
 using OCS.Api.Entities;
 using OCS.Api.Models.Buyouts;
 using OCS.Api.Services;
+using OCS.Api.Interfaces.Services;
+using OCS.Api.Models.Notifications;
 
 namespace OCS.Api.IntegrationTests;
 
@@ -224,12 +226,14 @@ public sealed class BuyoutWorkflowTests
         db.EmployeeProfiles.Add(new EmployeeProfile { Id = noPermission.Id, Account = noPermission, Status = EmployeeStatus.Working });
         db.AddRange(role, adminRole, permission, new RolePermission { Role = role, Permission = permission }, new AccountRole { AccountId = manager, Role = role }, new AccountRole { AccountId = noPermission.Id, Role = adminRole });
         await db.SaveChangesAsync();
-        var service = new BuyoutService(db, TimeProvider.System);
+        var fcm = new RecordingFcm(db);
+        var service = new BuyoutService(db, TimeProvider.System, fcm);
         Assert.True((await service.UpdateApprovalConfigAsync(manager, new(false, null, null, null), default)).IsSuccess);
         var inspection = await service.InspectAsync(staff, new(customer, "Jacket", "M", null, 90, brand, category, "Passed", true), default);
         var proposal = await service.CreateAsync(staff, new(inspection.Data!.Id, 100, 200), default);
         var requestNotification = Assert.Single(db.Notifications);
         Assert.Equal(manager, requestNotification.RecipientAccountId);
+        Assert.Equal(manager, Assert.Single(fcm.Recipients));
         Assert.Contains(proposal.Data!.BuyoutNumber, requestNotification.Content);
         var reviewed = await service.ReviewAsync(proposal.Data.Id, manager, new(proposal.Data.Version, true, null), default);
         Assert.True(reviewed.IsSuccess);
@@ -237,12 +241,34 @@ public sealed class BuyoutWorkflowTests
         Assert.Contains(proposal.Data.BuyoutNumber, decisionNotification.Content);
         Assert.False((await service.ReviewAsync(proposal.Data.Id, manager, new(proposal.Data.Version, true, null), default)).IsSuccess);
         Assert.Equal(2, db.Notifications.Count());
+        Assert.Equal(2, fcm.Recipients.Count);
         var secondInspection = await service.InspectAsync(staff, new(customer, "Bag", "S", null, 90, brand, category, "Passed", true), default);
         var secondProposal = await service.CreateAsync(staff, new(secondInspection.Data!.Id, 100, 200), default);
+        fcm.ThrowOnSend = true;
         var rejected = await service.ReviewAsync(secondProposal.Data!.Id, manager, new(secondProposal.Data.Version, false, "Không phù hợp"), default);
         Assert.True(rejected.IsSuccess);
         Assert.Equal(2, db.Notifications.Count(n => n.RecipientAccountId == staff));
         Assert.Contains(db.Notifications, n => n.RecipientAccountId == staff && n.Content.Contains("từ chối"));
+        Assert.Equal(4, fcm.Recipients.Count);
+        Assert.Equal(staff, fcm.Recipients[^1]);
+    }
+
+    private sealed class RecordingFcm(AppDbContext db) : IFcmService
+    {
+        public bool IsConfigured => true;
+        public bool ThrowOnSend { get; set; }
+        public List<Guid> Recipients { get; } = [];
+        public Task RegisterTokenAsync(Guid accountId, string token, string deviceType = "Web", CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task UnregisterTokenAsync(Guid accountId, string token, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<IReadOnlyList<FcmTokenRecord>> GetTokensForAccountAsync(Guid accountId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<FcmTokenRecord>>([]);
+        public Task<FcmDispatchResult> SendPushToUserAsync(Guid recipientAccountId, string title, string body, IReadOnlyDictionary<string, string>? data = null, CancellationToken cancellationToken = default)
+        {
+            var notification = db.Notifications.Single(n => n.Id == Guid.Parse(data!["notificationId"]));
+            Assert.Equal(EntityState.Unchanged, db.Entry(notification).State);
+            Recipients.Add(recipientAccountId);
+            if (ThrowOnSend) throw new HttpRequestException("Simulated FCM failure");
+            return Task.FromResult(new FcmDispatchResult(1, 1, 0, true));
+        }
     }
 
     [Fact]

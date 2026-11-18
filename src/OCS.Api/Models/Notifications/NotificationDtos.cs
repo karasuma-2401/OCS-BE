@@ -10,7 +10,11 @@ public sealed class NotificationDto
     public NotificationType Type { get; set; }
     public DateTimeOffset SentAt { get; set; }
     public bool IsRead { get; set; }
-    public FcmDispatchResult? PushResult { get; set; }
+
+    public FcmDispatchResult? PushDelivery { get; set; }
+
+    // Keep the dev API contract compatible with clients using either response name.
+    public FcmDispatchResult? PushResult { get => PushDelivery; set => PushDelivery = value; }
 }
 
 public sealed class CreateNotificationDto

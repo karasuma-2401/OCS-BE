@@ -62,6 +62,11 @@ public sealed class NotificationService(
                     }
                 }
 
+                // Custom data must not change the notification identity or recipient.
+                pushData["notificationId"] = notification.Id.ToString();
+                pushData["type"] = dto.Type.ToString();
+                pushData["recipientAccountId"] = dto.RecipientAccountId.ToString();
+
                 pushResult = await fcmService.SendPushToUserAsync(
                     dto.RecipientAccountId,
                     dto.Title,
@@ -110,7 +115,7 @@ public sealed class NotificationService(
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 logger?.LogError(ex, "Exception occurred while dispatching FCM push notification to account {AccountId}", dto.RecipientAccountId);
                 pushResult = new FcmDispatchResult(0, 0, 1, fcmService.IsConfigured);
@@ -152,8 +157,8 @@ public sealed class NotificationService(
 
     public async Task<Result<bool>> MarkAllAsReadAsync(Guid accountId, CancellationToken cancellationToken = default)
     {
-        var list = await unitOfWork.NotificationRepository.GetByRecipientAccountIdAsync(accountId, 100, cancellationToken);
-        foreach (var noti in list.Where(n => !n.IsRead))
+        var list = await unitOfWork.NotificationRepository.GetUnreadByRecipientAccountIdAsync(accountId, cancellationToken);
+        foreach (var noti in list)
         {
             noti.IsRead = true;
             noti.UpdatedAt = DateTimeOffset.UtcNow;

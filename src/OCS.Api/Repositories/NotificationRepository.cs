@@ -24,6 +24,10 @@ public sealed class NotificationRepository(AppDbContext dbContext) : INotificati
         dbContext.Notifications
             .CountAsync(n => n.RecipientAccountId == accountId && !n.IsRead, cancellationToken);
 
+    public async Task<IReadOnlyList<Notification>> GetUnreadByRecipientAccountIdAsync(Guid accountId, CancellationToken cancellationToken = default) =>
+        await dbContext.Notifications.Where(n => n.RecipientAccountId == accountId && !n.IsRead)
+            .ToListAsync(cancellationToken);
+
     public Task<Notification?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default) =>
         dbContext.Notifications
             .SingleOrDefaultAsync(n => n.Id == id, cancellationToken);

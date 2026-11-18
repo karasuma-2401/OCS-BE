@@ -8,6 +8,8 @@ public interface INotificationRepository
 
     Task<int> GetUnreadCountAsync(Guid accountId, CancellationToken cancellationToken = default);
 
+    Task<IReadOnlyList<Notification>> GetUnreadByRecipientAccountIdAsync(Guid accountId, CancellationToken cancellationToken = default);
+
     Task<Notification?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     void Add(Notification notification);
