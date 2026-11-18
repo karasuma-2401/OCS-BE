@@ -16,15 +16,31 @@ public sealed class NotificationsController(
     IFcmService fcmService) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetMyNotifications([FromQuery] int limit = 50, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetMyNotifications(
+        [FromQuery] int limit = 50,
+        [FromQuery] bool? unreadOnly = null,
+        [FromQuery] string? category = null,
+        CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var items = await notificationService.GetForUserAsync(userId, limit, cancellationToken);
+        var clampedLimit = Math.Clamp(limit, 1, 200);
+        var items = await notificationService.GetForUserAsync(userId, clampedLimit, cancellationToken);
         var unreadCount = await notificationService.GetUnreadCountAsync(userId, cancellationToken);
+
+        IEnumerable<NotificationDto> filtered = items;
+        if (unreadOnly == true)
+        {
+            filtered = filtered.Where(n => !n.IsRead);
+        }
+
+        if (!string.IsNullOrWhiteSpace(category) && !string.Equals(category, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            filtered = filtered.Where(n => string.Equals(n.Category, category.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
 
         return Ok(new
         {
-            data = items,
+            data = filtered.ToList(),
             unreadCount
         });
     }
@@ -100,7 +116,9 @@ public sealed class NotificationsController(
     }
 
     [HttpPost("fcm/test")]
-    public async Task<IActionResult> SendTestPushNotification(CancellationToken cancellationToken = default)
+    public async Task<IActionResult> SendTestPushNotification(
+        [FromQuery] string? category = null,
+        CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
         if (userId == Guid.Empty)
@@ -108,13 +126,48 @@ public sealed class NotificationsController(
             return Unauthorized();
         }
 
+        var (title, content, type, resolvedCategory) = (category?.Trim()) switch
+        {
+            "Appointment" => (
+                "Nhắc nhở: Lịch hẹn ký gửi sắp diễn ra",
+                "Bạn có lịch hẹn ký gửi mã #APT-2026 tại cửa hàng OCS hôm nay lúc 14:00 - 15:00.",
+                NotificationType.System,
+                "Appointment"),
+            "Consignment" => (
+                "Tiếp nhận ký gửi thành công",
+                "Hợp đồng ký gửi #CN-2026 đã tiếp nhận 5 sản phẩm đạt chuẩn niêm yết tại cửa hàng.",
+                NotificationType.System,
+                "Consignment"),
+            "Buyout" => (
+                "Hoàn tất thu mua sản phẩm",
+                "Phiếu thu mua đứt #BO-2026 đã được phê duyệt với tổng giá trị thanh toán 1.250.000đ.",
+                NotificationType.System,
+                "Buyout"),
+            "Payment" => (
+                "Giải ngân tiền ký gửi thành công",
+                "Khoản thanh toán 850.000đ cho hợp đồng #CN-2026 đã được chuyển khoản qua VietQR.",
+                NotificationType.System,
+                "Payment"),
+            "Promotion" => (
+                "Ưu đãi ký gửi cuối tuần tại OCS",
+                "Giảm 5% phí hoa hồng ký gửi cho các sản phẩm Local Brand & Luxury trong tuần này.",
+                NotificationType.Promotion,
+                "Promotion"),
+            _ => (
+                "Kiểm tra thông báo OCS",
+                "Thông báo thử nghiệm từ hệ thống Notification Design System của OCS.",
+                NotificationType.System,
+                "System")
+        };
+
         var result = await notificationService.CreateAsync(new CreateNotificationDto
         {
             RecipientAccountId = userId,
             SenderAccountId = userId,
-            Title = "Kiểm tra thông báo OCS",
-            Content = "Thông báo thử nghiệm từ hệ thống OCS.",
-            Type = NotificationType.System
+            Title = title,
+            Content = content,
+            Type = type,
+            Category = resolvedCategory
         }, cancellationToken);
 
         return result.ToActionResult(this);
