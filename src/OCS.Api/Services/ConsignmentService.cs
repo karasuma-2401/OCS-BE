@@ -562,7 +562,8 @@ public sealed class ConsignmentService(
                     SenderAccountId = staffId,
                     Title = isBuyout ? "Hoàn tất thu mua sản phẩm" : "Tiếp nhận ký gửi thành công",
                     Content = $"Phiếu {contractNumber} đã tiếp nhận {approvedCount} sản phẩm đạt chuẩn (Tổng niêm yết: {totalEstimatedValue:N0}đ).",
-                    Type = NotificationType.System
+                    Type = NotificationType.System,
+                    Link = "/appointments"
                 }, cancellationToken);
             }
             catch

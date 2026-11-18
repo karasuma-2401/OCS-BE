@@ -10,6 +10,7 @@ public sealed class NotificationDto
     public NotificationType Type { get; set; }
     public DateTimeOffset SentAt { get; set; }
     public bool IsRead { get; set; }
+    public FcmDispatchResult? PushResult { get; set; }
 }
 
 public sealed class CreateNotificationDto
@@ -19,4 +20,6 @@ public sealed class CreateNotificationDto
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public NotificationType Type { get; set; } = NotificationType.System;
+    public string? Link { get; set; }
+    public IReadOnlyDictionary<string, string>? ExtraData { get; set; }
 }

@@ -50,7 +50,8 @@ public sealed partial class AppointmentReminderJob(
                 RecipientAccountId = appointment.CustomerId,
                 Title = "Nhắc nhở: Lịch hẹn ký gửi sắp diễn ra",
                 Content = $"Quý khách có lịch hẹn ký gửi mã {appointment.TrackingNumber} vào khung giờ {startTimeStr} - {endTimeStr} hôm nay tại cửa hàng OCS. Quý khách vui lòng chuẩn bị quần áo và đến đúng giờ để được nhân viên tiếp nhận tốt nhất.",
-                Type = NotificationType.System
+                Type = NotificationType.System,
+                Link = "/appointments"
             }, cancellationToken);
 
             // Record sent timestamp in DB to guarantee no duplicate sending when job runs again
