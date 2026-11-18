@@ -146,6 +146,29 @@ public sealed class FcmNotificationService(
                 using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
                 req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
+                var payloadData = data is not null
+                    ? new Dictionary<string, string>(data)
+                    : new Dictionary<string, string>();
+
+                if (!payloadData.ContainsKey("title")) payloadData["title"] = title;
+                if (!payloadData.ContainsKey("body")) payloadData["body"] = body;
+
+                var targetLink = payloadData.TryGetValue("link", out var linkVal) && !string.IsNullOrWhiteSpace(linkVal)
+                    ? linkVal
+                    : (payloadData.TryGetValue("url", out var urlVal) && !string.IsNullOrWhiteSpace(urlVal) ? urlVal : "/");
+
+                payloadData["link"] = targetLink;
+                payloadData["url"] = targetLink;
+
+                var webPush = new Dictionary<string, object>
+                {
+                    ["headers"] = new Dictionary<string, string> { ["Urgency"] = "high", ["TTL"] = "86400" },
+                    ["notification"] = new { title, body, icon = "/mascot-logo.png", badge = "/mascot-logo.png" }
+                };
+                // Relative application routes are handled by our worker. FCM links require HTTPS.
+                if (Uri.TryCreate(targetLink, UriKind.Absolute, out var absoluteLink) && absoluteLink.Scheme == Uri.UriSchemeHttps)
+                    webPush["fcm_options"] = new { link = targetLink };
+
                 var payload = new
                 {
                     message = new
@@ -156,7 +179,19 @@ public sealed class FcmNotificationService(
                             title,
                             body
                         },
-                        data = data ?? new Dictionary<string, string>()
+                        data = payloadData,
+                        webpush = webPush,
+                        android = new
+                        {
+                            priority = "high",
+                            notification = new
+                            {
+                                title,
+                                body,
+                                sound = "default",
+                                channel_id = "ocs_notifications"
+                            }
+                        }
                     }
                 };
                 req.Content = JsonContent.Create(payload, options: JsonOptions);

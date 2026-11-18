@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Caching.Distributed;
@@ -140,6 +141,45 @@ public sealed class FcmNotificationTests
         await Service(dbA).UnregisterTokenAsync(a, "shared-token");
         Assert.Empty(await Service(dbA).GetTokensForAccountAsync(a));
         Assert.Single(await Service(dbB).GetTokensForAccountAsync(b));
+    }
+
+    [Theory]
+    [InlineData("/", false)]
+    [InlineData("/appointments", false)]
+    [InlineData("https://example.com/appointments", true)]
+    public async Task MergePreservesCustomPayloadLinksAndBothDispatchResponseNames(string link, bool hasFcmLink)
+    {
+        await using var db = new AppDbContext(DatabaseOptions());
+        var id = Guid.NewGuid();
+        var handler = new MockHandler();
+        var fcm = Service(db, handler);
+        await fcm.RegisterTokenAsync(id, "browser-token");
+        var result = await Notifications(db, fcm).CreateAsync(new CreateNotificationDto
+        {
+            RecipientAccountId = id, Title = "Test", Content = "Body", Link = link,
+            ExtraData = new Dictionary<string, string>
+            {
+                ["appointmentId"] = "appointment-123",
+                ["recipientAccountId"] = "incorrect-recipient",
+                ["notificationId"] = "incorrect-notification"
+            }
+        });
+        Assert.True(result.IsSuccess);
+        Assert.Same(result.Data!.PushDelivery, result.Data.PushResult);
+        Assert.Equal(1, result.Data.PushResult!.SuccessCount);
+        using var document = JsonDocument.Parse(handler.RequestBody!);
+        var message = document.RootElement.GetProperty("message");
+        var data = message.GetProperty("data");
+        Assert.Equal(id.ToString(), data.GetProperty("recipientAccountId").GetString());
+        Assert.Equal(result.Data.Id.ToString(), data.GetProperty("notificationId").GetString());
+        Assert.Equal("appointment-123", data.GetProperty("appointmentId").GetString());
+        Assert.Equal(link, data.GetProperty("url").GetString());
+        Assert.Equal(link, data.GetProperty("link").GetString());
+        var webPush = message.GetProperty("webpush");
+        Assert.Equal("high", webPush.GetProperty("headers").GetProperty("Urgency").GetString());
+        Assert.Equal(hasFcmLink, webPush.TryGetProperty("fcm_options", out var options));
+        if (hasFcmLink) Assert.Equal(link, options.GetProperty("link").GetString());
+        Assert.Equal("high", message.GetProperty("android").GetProperty("priority").GetString());
     }
 
     [Fact]

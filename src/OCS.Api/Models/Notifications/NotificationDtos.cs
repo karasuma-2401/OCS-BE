@@ -12,6 +12,9 @@ public sealed class NotificationDto
     public bool IsRead { get; set; }
 
     public FcmDispatchResult? PushDelivery { get; set; }
+
+    // Keep the dev API contract compatible with clients using either response name.
+    public FcmDispatchResult? PushResult { get => PushDelivery; set => PushDelivery = value; }
 }
 
 public sealed class CreateNotificationDto
@@ -21,4 +24,6 @@ public sealed class CreateNotificationDto
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public NotificationType Type { get; set; } = NotificationType.System;
+    public string? Link { get; set; }
+    public IReadOnlyDictionary<string, string>? ExtraData { get; set; }
 }

@@ -1,4 +1,6 @@
 # Gitleaks ignore list
 # False positive: Scaffold comment describing DB column rules
 3393f3d615a9a3ec758d5190acd3c726334d47eb:src/OCS.Infrastructure/Persistence/Config/RegistrationGrantConfig.cs:generic-api-key:2
+# False positive: Dummy private key template string in example file
+d303676d5f2095ec231a4c847dcedda7b83b5e01:.env.example:private-key:39
 

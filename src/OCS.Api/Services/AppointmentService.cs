@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using OCS.Api.Authorization;
 using OCS.Api.Common;
 using OCS.Api.Consts;
 using OCS.Api.Context;
@@ -21,9 +22,11 @@ public sealed class AppointmentService(
     public AppointmentService(
         IUnitOfWork unitOfWork,
         INotificationService notificationService)
-        : this(unitOfWork, notificationService, null!, Microsoft.Extensions.Logging.Abstractions.NullLogger<AppointmentService>.Instance)
+        : this(unitOfWork, notificationService, (unitOfWork as Repositories.UnitOfWork)?.DbContext!, Microsoft.Extensions.Logging.Abstractions.NullLogger<AppointmentService>.Instance)
     {
     }
+
+    private AppDbContext? TargetDbContext => dbContext ?? (unitOfWork as Repositories.UnitOfWork)?.DbContext;
 
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> SlotLocks = new();
 
@@ -147,7 +150,8 @@ public sealed class AppointmentService(
                 RecipientAccountId = customerId,
                 Title = "Đặt lịch hẹn ký gửi thành công",
                 Content = $"Lịch hẹn ký gửi mã {created.TrackingNumber} đã được xác nhận vào ngày {created.AppointmentDate:dd/MM/yyyy} khung giờ {slot.StartTime:HH\\:mm} - {slot.EndTime:HH\\:mm}. Số lượng dự kiến: {created.EstimatedItemCount} món.",
-                Type = NotificationType.System
+                Type = NotificationType.System,
+                Link = "/appointments"
             }, cancellationToken);
             await unitOfWork.CommitTransactionAsync(cancellationToken);
         }
@@ -161,15 +165,23 @@ public sealed class AppointmentService(
             slotLock.Release();
         }
 
-        created.TimeSlot = slot;
+        // Clear ChangeTracker so no untracked graph entities (like slot) are accidentally inserted
+        TargetDbContext?.ChangeTracker.Clear();
 
         await NotifyStoreStaffAsync(
             customerId,
-            "Có lịch hẹn ký gửi mới",
+            "Lịch hẹn ký gửi mới",
             customerDisplay => $"Khách hàng {customerDisplay} vừa đặt lịch hẹn ký gửi mã {created.TrackingNumber} vào ngày {created.AppointmentDate:dd/MM/yyyy} khung giờ {slot.StartTime:HH\\:mm} - {slot.EndTime:HH\\:mm} (Dự kiến {created.EstimatedItemCount} món).",
             cancellationToken);
 
-        return Result.Success(MapToDto(created));
+        var dto = MapToDto(created);
+        var startTime = slot.StartTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        var endTime = slot.EndTime.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        dto.TimeSlotDisplay = $"{startTime} - {endTime}";
+        dto.StartTime = startTime;
+        dto.EndTime = endTime;
+
+        return Result.Success(dto);
     }
 
     public async Task<Result<IReadOnlyList<AppointmentDto>>> GetCustomerHistoryAsync(
@@ -244,7 +256,8 @@ public sealed class AppointmentService(
             RecipientAccountId = customerId,
             Title = "Hủy lịch hẹn thành công",
             Content = $"Lịch hẹn ký gửi mã {appointment.TrackingNumber} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được hủy theo yêu cầu.",
-            Type = NotificationType.System
+            Type = NotificationType.System,
+            Link = "/appointments"
         }, cancellationToken);
 
         await NotifyStoreStaffAsync(
@@ -316,34 +329,56 @@ public sealed class AppointmentService(
         }
         appointment.UpdatedAt = DateTimeOffset.UtcNow;
 
-        unitOfWork.AppointmentRepository.Update(appointment);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var recipientCustomerId = appointment.Customer?.Account?.Id
+            ?? appointment.Customer?.Id
+            ?? appointment.CustomerId;
+
         var statusVi = GetStatusDisplayNameVi(request.Status);
+        var cancelReason = !string.IsNullOrWhiteSpace(request.Reason)
+            ? request.Reason.Trim()
+            : (!string.IsNullOrWhiteSpace(appointment.CancellationReason)
+                ? appointment.CancellationReason.Trim()
+                : "Theo yêu cầu của khách hàng hoặc lý do vận hành của cửa hàng");
+
         var statusMessage = request.Status switch
         {
             AppointmentStatus.CheckedIn => "Cửa hàng đã xác nhận quý khách đã có mặt tại quầy. Nhân viên đang chuẩn bị tiếp nhận đồ.",
-            AppointmentStatus.NoShow => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được ghi nhận: Không đến theo giờ hẹn.",
-            AppointmentStatus.Cancelled => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã bị hủy bởi cửa hàng. Lý do: {request.Reason ?? "Không có"}.",
-            AppointmentStatus.Completed => "Quá trình tiếp nhận và lập hợp đồng ký gửi cho lịch hẹn của quý khách đã hoàn tất.",
-            AppointmentStatus.Scheduled => $"Lịch hẹn ký gửi ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được chuyển về trạng thái: Đã đặt lịch.",
-            _ => $"Trạng thái lịch hẹn ký gửi của bạn đã được cập nhật thành: {statusVi}."
+            AppointmentStatus.NoShow => $"Lịch hẹn ký gửi mã {appointment.TrackingNumber} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được ghi nhận: Không đến theo giờ hẹn.",
+            AppointmentStatus.Cancelled => $"Lịch hẹn ký gửi mã {appointment.TrackingNumber} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã bị hủy bởi cửa hàng. Lý do: {cancelReason}.",
+            AppointmentStatus.Completed => $"Quá trình tiếp nhận và lập hợp đồng ký gửi cho lịch hẹn mã {appointment.TrackingNumber} của quý khách đã hoàn tất.",
+            AppointmentStatus.Scheduled => $"Lịch hẹn ký gửi mã {appointment.TrackingNumber} ngày {appointment.AppointmentDate:dd/MM/yyyy} đã được chuyển về trạng thái: Đã đặt lịch.",
+            _ => $"Trạng thái lịch hẹn ký gửi mã {appointment.TrackingNumber} của bạn đã được cập nhật thành: {statusVi}."
         };
+
+        var notificationTitle = request.Status switch
+        {
+            AppointmentStatus.Cancelled => "Cửa hàng đã hủy lịch hẹn ký gửi",
+            AppointmentStatus.CheckedIn => "Xác nhận đã có mặt tại quầy",
+            AppointmentStatus.NoShow => "Ghi nhận không đến lịch hẹn",
+            AppointmentStatus.Completed => "Hoàn tất tiếp nhận ký gửi",
+            _ => "Cập nhật trạng thái lịch hẹn"
+        };
+
+        // Clear ChangeTracker so no existing tracked entity graphs interfere with the notification insert
+        TargetDbContext?.ChangeTracker.Clear();
 
         try
         {
             await notificationService.CreateAsync(new CreateNotificationDto
             {
-                RecipientAccountId = appointment.CustomerId,
-                SenderAccountId = staffId != Guid.Empty ? staffId : null,
-                Title = "Cập nhật trạng thái lịch hẹn",
+                RecipientAccountId = recipientCustomerId,
+                SenderAccountId = null,
+                Title = notificationTitle,
                 Content = statusMessage,
-                Type = NotificationType.System
+                Type = NotificationType.System,
+                Link = "/appointments"
             }, cancellationToken);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to send appointment status notification for appointment {AppointmentId}", appointment.Id);
+            logger.LogError(ex, "Failed to send appointment status notification for appointment {AppointmentId} to customer {CustomerId}", appointment.Id, recipientCustomerId);
         }
 
         return Result.Success(MapToDto(appointment));
@@ -389,28 +424,49 @@ public sealed class AppointmentService(
         Func<string, string> contentFactory,
         CancellationToken cancellationToken)
     {
-        if (dbContext is null) return;
+        var targetDb = TargetDbContext;
+        if (targetDb is null)
+        {
+            logger.LogWarning("DbContext is null. Cannot query staff accounts for appointment notification.");
+            return;
+        }
 
         try
         {
-            var customerAccount = await dbContext.Accounts
+            var customerAccount = await targetDb.Accounts
                 .AsNoTracking()
                 .FirstOrDefaultAsync(a => a.Id == customerId, cancellationToken);
-            var customerName = customerAccount?.FullName ?? "Khách hàng";
+
+            var customerName = customerAccount?.FullName;
+            if (string.IsNullOrWhiteSpace(customerName))
+            {
+                customerName = customerAccount?.Username ?? "Khách hàng";
+            }
+
             var customerPhone = customerAccount?.PhoneNumber;
             var customerDisplay = !string.IsNullOrWhiteSpace(customerPhone)
                 ? $"{customerName} ({customerPhone})"
                 : customerName;
 
-            var staffRoleIds = new[] { Role.StaffRoleId, Role.ManagerRoleId, Role.AdminRoleId };
+            var staffRoleGuids = new[]
+            {
+                Role.StaffRoleId,
+                Role.ManagerRoleId,
+                Role.AdminRoleId
+            };
+            var staffRoleCodes = new[] { "Staff", "Manager", "Admin", "staff", "manager", "admin" };
 
-            var roleStaffIds = await dbContext.AccountRoles
+            // 1. Nhân sự theo vai trò Staff, Manager, Admin
+            var roleStaffIds = await targetDb.AccountRoles
                 .AsNoTracking()
-                .Where(ar => staffRoleIds.Contains(ar.RoleId))
+                .Where(ar => staffRoleGuids.Contains(ar.RoleId) ||
+                             staffRoleCodes.Contains(ar.Role.Code) ||
+                             staffRoleCodes.Contains(ar.Role.Name))
                 .Select(ar => ar.AccountId)
                 .ToListAsync(cancellationToken);
 
-            var internalStaffIds = await dbContext.Accounts
+            // 2. Tài khoản nội bộ hoặc có hồ sơ nhân sự
+            var internalStaffIds = await targetDb.Accounts
                 .AsNoTracking()
                 .Where(a => a.Status == AccountStatus.Active &&
                             (a.AccountType == AccountType.Internal || a.EmployeeProfile != null))
@@ -419,14 +475,16 @@ public sealed class AppointmentService(
 
             var recipientIds = roleStaffIds
                 .Concat(internalStaffIds)
+                .Where(id => id != customerId)
                 .Distinct()
                 .ToList();
 
+            // 3. Fallback: Nếu không tìm thấy bằng vai trò, lấy tất cả tài khoản active khác customerId
             if (recipientIds.Count == 0)
             {
-                recipientIds = await dbContext.Accounts
+                recipientIds = await targetDb.Accounts
                     .AsNoTracking()
-                    .Where(a => a.Status == AccountStatus.Active)
+                    .Where(a => a.Status == AccountStatus.Active && a.Id != customerId)
                     .Select(a => a.Id)
                     .ToListAsync(cancellationToken);
             }
@@ -435,14 +493,22 @@ public sealed class AppointmentService(
 
             foreach (var staffAccountId in recipientIds)
             {
-                await notificationService.CreateAsync(new CreateNotificationDto
+                try
                 {
-                    RecipientAccountId = staffAccountId,
-                    SenderAccountId = customerId != staffAccountId ? customerId : null,
-                    Title = title,
-                    Content = content,
-                    Type = NotificationType.System
-                }, cancellationToken);
+                    await notificationService.CreateAsync(new CreateNotificationDto
+                    {
+                        RecipientAccountId = staffAccountId,
+                        SenderAccountId = null, // System notification: avoid FK constraint issues
+                        Title = title,
+                        Content = content,
+                        Type = NotificationType.System,
+                        Link = "/shop/consignment"
+                    }, cancellationToken);
+                }
+                catch (Exception createEx)
+                {
+                    logger.LogError(createEx, "Failed to create notification for staff account {StaffAccountId}", staffAccountId);
+                }
             }
         }
         catch (Exception ex)
