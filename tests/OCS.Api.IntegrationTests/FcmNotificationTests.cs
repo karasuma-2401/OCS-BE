@@ -156,7 +156,10 @@ public sealed class FcmNotificationTests
         await fcm.RegisterTokenAsync(id, "browser-token");
         var result = await Notifications(db, fcm).CreateAsync(new CreateNotificationDto
         {
-            RecipientAccountId = id, Title = "Test", Content = "Body", Link = link,
+            RecipientAccountId = id,
+            Title = "Test",
+            Content = "Body",
+            Link = link,
             ExtraData = new Dictionary<string, string>
             {
                 ["appointmentId"] = "appointment-123",
@@ -190,7 +193,7 @@ public sealed class FcmNotificationTests
         var fcm = Service(db, new MockHandler { Timeout = true });
         await fcm.RegisterTokenAsync(id, "browser-token");
         var result = await Notifications(db, fcm).CreateAsync(new CreateNotificationDto
-            { RecipientAccountId = id, Title = "Test", Content = "Body" });
+        { RecipientAccountId = id, Title = "Test", Content = "Body" });
         Assert.True(result.IsSuccess);
         Assert.Single(db.Notifications);
         Assert.Equal(1, result.Data!.PushDelivery!.FailureCount);

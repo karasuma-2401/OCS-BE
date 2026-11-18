@@ -233,8 +233,10 @@ public sealed class FcmNotificationService(
         return await db.FcmDeviceTokens.AsNoTracking().Where(t => t.AccountId == accountId)
             .Select(t => new FcmTokenRecord
             {
-                Token = t.Token, DeviceType = t.DeviceType,
-                RegisteredAt = t.RegisteredAt, LastUsedAt = t.LastUsedAt
+                Token = t.Token,
+                DeviceType = t.DeviceType,
+                RegisteredAt = t.RegisteredAt,
+                LastUsedAt = t.LastUsedAt
             }).ToListAsync(ct);
     }
 
