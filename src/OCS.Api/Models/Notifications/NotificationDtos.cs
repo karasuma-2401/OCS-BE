@@ -8,6 +8,8 @@ public sealed class NotificationDto
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public NotificationType Type { get; set; }
+    public string Category { get; set; } = "System";
+    public string? Link { get; set; }
     public DateTimeOffset SentAt { get; set; }
     public bool IsRead { get; set; }
 
@@ -24,6 +26,7 @@ public sealed class CreateNotificationDto
     public string Title { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public NotificationType Type { get; set; } = NotificationType.System;
+    public string? Category { get; set; }
     public string? Link { get; set; }
     public IReadOnlyDictionary<string, string>? ExtraData { get; set; }
 }

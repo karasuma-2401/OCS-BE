@@ -32,6 +32,8 @@ public sealed class NotificationService(
         unitOfWork.NotificationRepository.Add(notification);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
+        var (resolvedCategory, resolvedLink) = ResolveCategoryAndLink(notification, dto.Category, dto.Link);
+
         FcmDispatchResult? pushResult = null;
         if (fcmService is not null)
         {
@@ -41,6 +43,7 @@ public sealed class NotificationService(
                 {
                     ["notificationId"] = notification.Id.ToString(),
                     ["type"] = dto.Type.ToString(),
+                    ["category"] = resolvedCategory,
                     ["title"] = dto.Title,
                     ["body"] = dto.Content,
                 };
@@ -122,7 +125,7 @@ public sealed class NotificationService(
             }
         }
 
-        var dtoResult = MapToDto(notification);
+        var dtoResult = MapToDto(notification, resolvedCategory, resolvedLink);
         dtoResult.PushResult = pushResult;
         return Result.Success(dtoResult);
     }
@@ -133,7 +136,7 @@ public sealed class NotificationService(
         CancellationToken cancellationToken = default)
     {
         var list = await unitOfWork.NotificationRepository.GetByRecipientAccountIdAsync(accountId, limit, cancellationToken);
-        return list.Select(MapToDto).ToList();
+        return list.Select(n => MapToDto(n)).ToList();
     }
 
     public Task<int> GetUnreadCountAsync(Guid accountId, CancellationToken cancellationToken = default) =>
@@ -169,13 +172,95 @@ public sealed class NotificationService(
         return Result.Success(true);
     }
 
-    private static NotificationDto MapToDto(Notification n) => new()
+    private static NotificationDto MapToDto(
+        Notification n,
+        string? explicitCategory = null,
+        string? explicitLink = null)
     {
-        Id = n.Id,
-        Title = n.Title,
-        Content = n.Content,
-        Type = n.Type,
-        SentAt = n.SentAt,
-        IsRead = n.IsRead
-    };
+        var (category, link) = ResolveCategoryAndLink(n, explicitCategory, explicitLink);
+        return new()
+        {
+            Id = n.Id,
+            Title = n.Title,
+            Content = n.Content,
+            Type = n.Type,
+            Category = category,
+            Link = link,
+            SentAt = n.SentAt,
+            IsRead = n.IsRead
+        };
+    }
+
+    private static (string Category, string? Link) ResolveCategoryAndLink(
+        Notification n,
+        string? explicitCategory = null,
+        string? explicitLink = null)
+    {
+        var titleLower = (n.Title ?? string.Empty).ToLowerInvariant();
+        var contentLower = (n.Content ?? string.Empty).ToLowerInvariant();
+        var combined = $"{titleLower} {contentLower}";
+
+        string category;
+        if (!string.IsNullOrWhiteSpace(explicitCategory))
+        {
+            category = explicitCategory.Trim();
+        }
+        else if (n.Type == Consts.NotificationType.Promotion ||
+                 combined.Contains("ưu đãi", StringComparison.Ordinal) ||
+                 combined.Contains("khuyến mãi", StringComparison.Ordinal) ||
+                 combined.Contains("voucher", StringComparison.Ordinal))
+        {
+            category = "Promotion";
+        }
+        else if (combined.Contains("thu mua", StringComparison.Ordinal) ||
+                 combined.Contains("buyout", StringComparison.Ordinal))
+        {
+            category = "Buyout";
+        }
+        else if (combined.Contains("thanh toán", StringComparison.Ordinal) ||
+                 combined.Contains("giải ngân", StringComparison.Ordinal) ||
+                 combined.Contains("quyết toán", StringComparison.Ordinal) ||
+                 combined.Contains("hóa đơn", StringComparison.Ordinal) ||
+                 combined.Contains("vietqr", StringComparison.Ordinal))
+        {
+            category = "Payment";
+        }
+        else if (combined.Contains("lịch hẹn", StringComparison.Ordinal) ||
+                 combined.Contains("đặt lịch", StringComparison.Ordinal) ||
+                 combined.Contains("khung giờ", StringComparison.Ordinal) ||
+                 combined.Contains("có mặt tại quầy", StringComparison.Ordinal))
+        {
+            category = "Appointment";
+        }
+        else if (combined.Contains("ký gửi", StringComparison.Ordinal) ||
+                 combined.Contains("hợp đồng", StringComparison.Ordinal) ||
+                 combined.Contains("tiếp nhận", StringComparison.Ordinal))
+        {
+            category = "Consignment";
+        }
+        else
+        {
+            category = "System";
+        }
+
+        string? link = !string.IsNullOrWhiteSpace(explicitLink) ? explicitLink.Trim() : null;
+        if (string.IsNullOrWhiteSpace(link))
+        {
+            var isStaffTargeted = titleLower.StartsWith("khách ", StringComparison.Ordinal) ||
+                                  contentLower.Contains("của khách ", StringComparison.Ordinal) ||
+                                  combined.Contains("cần duyệt", StringComparison.Ordinal);
+
+            link = category switch
+            {
+                "Appointment" => isStaffTargeted ? "/shop/consignment" : "/appointments",
+                "Consignment" => isStaffTargeted ? "/shop/consignment" : "/my-consignments",
+                "Buyout" => isStaffTargeted ? "/shop/buyout" : "/my-consignments",
+                "Payment" => isStaffTargeted ? "/shop/settlement" : "/my-consignments",
+                "Promotion" => "/catalog",
+                _ => null
+            };
+        }
+
+        return (category, link);
+    }
 }
