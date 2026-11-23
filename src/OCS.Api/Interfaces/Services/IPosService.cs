@@ -14,6 +14,11 @@ public interface IPosService
         PosCashPaymentRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<Result<Guid>> PrepareVietQrInvoiceAsync(
+        Guid actorAccountId,
+        PosVietQrCheckoutRequest request,
+        CancellationToken cancellationToken = default);
+
     Task<Result<PosInvoiceDetailDto>> GetInvoiceDetailAsync(
         string invoiceIdOrNumber,
         CancellationToken cancellationToken = default);

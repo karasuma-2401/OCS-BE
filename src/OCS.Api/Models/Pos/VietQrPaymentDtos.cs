@@ -1,5 +1,9 @@
 namespace OCS.Api.Models.Pos;
 
+public sealed record PosVietQrCheckoutRequest(
+    List<Guid> ProductIds,
+    bool ForceNew = false);
+
 public sealed record InitiateVietQrPaymentRequest(
     Guid SaleInvoiceId,
     bool ForceNew = false);
