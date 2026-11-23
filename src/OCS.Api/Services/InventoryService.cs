@@ -122,6 +122,7 @@ public sealed class InventoryService(AppDbContext db)
         if (product is null) return Missing<InventoryProductDto>();
         if (request.ExpectedVersion == Guid.Empty || product.InventoryVersion != request.ExpectedVersion) return Conflict();
         if (product.Status != ProductStatus.PendingProcessing || product.ApprovalStatus != ProductApprovalStatus.Approved ||
+            (product.ConsignmentContract is { } contract && contract.EndsAt <= DateTimeOffset.UtcNow) ||
             !ValidSource(product) || product.StorageLocation is not { IsActive: true } ||
             (product.SourceType == ProductSourceType.Consignment &&
              (product.AgreedListedPrice != product.ListedPrice || string.IsNullOrWhiteSpace(product.AgreementEvidence))))

@@ -985,6 +985,64 @@ namespace OCS.Api.Context.Migrations
                     b.ToTable("CustomerProfiles", (string)null);
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.DonationReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ContractNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Evidence")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid>("ExpiryProcessingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("HandledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HandledByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ProductsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ReceiptNumber")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<string>("RecipientOrganization")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExpiryProcessingId");
+
+                    b.HasIndex("HandledByEmployeeId");
+
+                    b.HasIndex("ReceiptNumber")
+                        .IsUnique();
+
+                    b.ToTable("DonationReceipts", (string)null);
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.EarlyWithdrawal", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1085,7 +1143,7 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTimeOffset>("CollectionDeadline")
+                    b.Property<DateTimeOffset?>("CollectionDeadline")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("ConfirmedAt")
@@ -1094,8 +1152,20 @@ namespace OCS.Api.Context.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("ProcessedByEmployeeId")
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("ProcessedByEmployeeId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("RecipientOrganization")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1107,12 +1177,24 @@ namespace OCS.Api.Context.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<DateTimeOffset?>("UnclaimedApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UnclaimedApprovedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("UnclaimedBasis")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ProcessedByEmployeeId");
+
+                    b.HasIndex("UnclaimedApprovedByEmployeeId");
 
                     b.ToTable("ExpiryProcessings", null, t =>
                         {
@@ -1128,7 +1210,27 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid>("ProductId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Evidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("HandledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HandledByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RecipientOrganization")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.HasKey("ExpiryProcessingId", "ProductId");
+
+                    b.HasIndex("HandledByEmployeeId");
 
                     b.HasIndex("ProductId")
                         .IsUnique();
@@ -1861,6 +1963,34 @@ namespace OCS.Api.Context.Migrations
                             Code = "customers.update",
                             Description = "Cập nhật thông tin liên hệ và nhận tiền của khách.",
                             Name = "Cập nhật hồ sơ khách"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000032"),
+                            Code = "expiry.read",
+                            Description = "Xem phiếu xử lý hàng ký gửi hết hạn.",
+                            Name = "Xem hàng hết hạn"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000033"),
+                            Code = "expiry.return",
+                            Description = "Xác nhận bàn giao hàng cho người ký gửi.",
+                            Name = "Giao trả hàng hết hạn"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000034"),
+                            Code = "expiry.donate",
+                            Description = "Xác nhận bàn giao cho tổ chức nhận.",
+                            Name = "Bàn giao hàng quyên góp"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000000035"),
+                            Code = "expiry.mark-unclaimed",
+                            Description = "Duyệt chuyển hàng không nhận sang quyên góp.",
+                            Name = "Duyệt hàng không nhận"
                         });
                 });
 
@@ -2265,6 +2395,26 @@ namespace OCS.Api.Context.Migrations
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000032")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000033")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000034")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000035")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000015")
                         },
                         new
@@ -2336,6 +2486,21 @@ namespace OCS.Api.Context.Migrations
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000028")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000032")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000033")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000034")
                         },
                         new
                         {
@@ -2740,6 +2905,23 @@ namespace OCS.Api.Context.Migrations
                     b.Navigation("Account");
                 });
 
+            modelBuilder.Entity("OCS.Api.Entities.DonationReceipt", b =>
+                {
+                    b.HasOne("OCS.Api.Entities.ExpiryProcessing", "ExpiryProcessing")
+                        .WithMany()
+                        .HasForeignKey("ExpiryProcessingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", null)
+                        .WithMany()
+                        .HasForeignKey("HandledByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("ExpiryProcessing");
+                });
+
             modelBuilder.Entity("OCS.Api.Entities.EarlyWithdrawal", b =>
                 {
                     b.HasOne("OCS.Api.Entities.CustomerProfile", "Customer")
@@ -2794,8 +2976,12 @@ namespace OCS.Api.Context.Migrations
                     b.HasOne("OCS.Api.Entities.EmployeeProfile", "ProcessedByEmployee")
                         .WithMany()
                         .HasForeignKey("ProcessedByEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", null)
+                        .WithMany()
+                        .HasForeignKey("UnclaimedApprovedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ProcessedByEmployee");
                 });
@@ -2807,6 +2993,11 @@ namespace OCS.Api.Context.Migrations
                         .HasForeignKey("ExpiryProcessingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", null)
+                        .WithMany()
+                        .HasForeignKey("HandledByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("OCS.Api.Entities.Product", "Product")
                         .WithMany()

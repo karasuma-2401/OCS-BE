@@ -178,6 +178,10 @@ public sealed class VietQrPaymentService(
                 ApplicationError.Validation("POS.INVALID_TRANSACTION_ID", "Mã giao dịch thanh toán không hợp lệ."));
         }
 
+        await using var reconciliation = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
+            : null;
+
         var transaction = await db.FinancialTransactions
             .Include(x => x.SaleInvoice)
                 .ThenInclude(i => i!.Lines)
@@ -208,6 +212,9 @@ public sealed class VietQrPaymentService(
                 {
                     if (providerStatus.Status == FinancialTransactionStatus.Success)
                     {
+                        if (await HasUnavailableProductsAsync(invoice, now, cancellationToken))
+                            return Result.Failure<VietQrPaymentSessionDto>(ApplicationError.Conflict(
+                                "POS.PAYMENT_PRODUCT_CONFLICT", "Đã nhận thanh toán cho sản phẩm không còn bán được; cần đối soát thủ công."));
                         await CompletePaymentReconciliationAsync(
                             transaction,
                             invoice,
@@ -236,6 +243,7 @@ public sealed class VietQrPaymentService(
         if (hasChanges)
         {
             await db.SaveChangesAsync(cancellationToken);
+            if (reconciliation is not null) await reconciliation.CommitAsync(cancellationToken);
         }
 
         return Result.Success(Map(transaction, invoice, now));
@@ -361,6 +369,9 @@ public sealed class VietQrPaymentService(
             anyExtractedReference = true;
             firstExtractedReference ??= references[0];
 
+            await using var reconciliation = db.Database.IsRelational()
+                ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
+                : null;
             var transaction = await db.FinancialTransactions
                 .Include(x => x.SaleInvoice)
                     .ThenInclude(i => i!.Lines)
@@ -407,8 +418,12 @@ public sealed class VietQrPaymentService(
                 item.Id?.ToString(),
                 $"WH-{now:yyyyMMddHHmmss}");
 
+            if (await HasUnavailableProductsAsync(invoice, now, cancellationToken))
+                return Result.Failure<VietQrWebhookProcessResultDto>(ApplicationError.Conflict(
+                    "POS.PAYMENT_PRODUCT_CONFLICT", "Đã nhận thanh toán cho sản phẩm không còn bán được; cần đối soát thủ công."));
             await CompletePaymentReconciliationAsync(transaction, invoice, bankRef, now, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
+            if (reconciliation is not null) await reconciliation.CommitAsync(cancellationToken);
 
             return Result.Success(new VietQrWebhookProcessResultDto(
                 Processed: true,
@@ -487,6 +502,15 @@ public sealed class VietQrPaymentService(
         }
 
         return await GetStatusAsync(transactionId, cancellationToken);
+    }
+
+    private Task<bool> HasUnavailableProductsAsync(SaleInvoice invoice, DateTimeOffset now,
+        CancellationToken ct)
+    {
+        var productIds = invoice.Lines.Select(line => line.ProductId).ToArray();
+        return db.Products.AnyAsync(x => productIds.Contains(x.Id) &&
+            (x.Status != ProductStatus.OnSale ||
+             x.ConsignmentContract != null && x.ConsignmentContract.EndsAt <= now), ct);
     }
 
     private async Task CompletePaymentReconciliationAsync(

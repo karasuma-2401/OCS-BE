@@ -27,6 +27,7 @@ public class PosService(AppDbContext dbContext) : IPosService
             .Include(p => p.Brand)
             .Include(p => p.Category)
             .Include(p => p.Images)
+            .Include(p => p.ConsignmentContract)
             .FirstOrDefaultAsync(
                 p => p.Barcode == identifier || (isGuid && p.Id == productGuid),
                 cancellationToken);
@@ -36,8 +37,9 @@ public class PosService(AppDbContext dbContext) : IPosService
             return Result.Failure<PosProductLookupDto>(ApplicationError.NotFound("Pos.ProductNotFound", "Không tìm thấy sản phẩm với mã này."));
         }
 
-        bool canAddToCart = product.Status == ProductStatus.OnSale;
-        string? rejectionReason = product.Status switch
+        bool contractExpired = product.ConsignmentContract is { } contract && contract.EndsAt <= DateTimeOffset.UtcNow;
+        bool canAddToCart = product.Status == ProductStatus.OnSale && !contractExpired;
+        string? rejectionReason = contractExpired ? "Sản phẩm đã hết hạn ký gửi, không thể bán." : product.Status switch
         {
             ProductStatus.OnSale => null,
             ProductStatus.Sold => "Sản phẩm này đã được bán.",
@@ -93,7 +95,7 @@ public class PosService(AppDbContext dbContext) : IPosService
 
         var employee = validation.Data!;
         await using var transaction = dbContext.Database.IsRelational()
-            ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+            ? await dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
             : null;
 
         try
@@ -232,7 +234,7 @@ public class PosService(AppDbContext dbContext) : IPosService
 
         var employee = validation.Data!;
         await using var transaction = dbContext.Database.IsRelational()
-            ? await dbContext.Database.BeginTransactionAsync(cancellationToken)
+            ? await dbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
             : null;
 
         try
@@ -350,6 +352,7 @@ public class PosService(AppDbContext dbContext) : IPosService
         CancellationToken cancellationToken)
     {
         var products = await dbContext.Products
+            .Include(p => p.ConsignmentContract)
             .Where(p => productIds.Contains(p.Id))
             .ToListAsync(cancellationToken);
 
@@ -359,7 +362,9 @@ public class PosService(AppDbContext dbContext) : IPosService
                 ApplicationError.NotFound("POS.PRODUCT_NOT_FOUND", "Một số sản phẩm không tồn tại trong hệ thống."));
         }
 
-        var invalidProducts = products.Where(p => p.Status != ProductStatus.OnSale).ToList();
+        var now = DateTimeOffset.UtcNow;
+        var invalidProducts = products.Where(p => p.Status != ProductStatus.OnSale ||
+            p.ConsignmentContract is { } contract && contract.EndsAt <= now).ToList();
         if (invalidProducts.Count != 0)
         {
             var names = string.Join(", ", invalidProducts.Select(p => p.Name));

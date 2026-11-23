@@ -25,6 +25,10 @@ public static class PermissionCatalog
     public const string ProductsLocation = "products.location.update";
     public const string ProductsLocationsManage = "products.locations.manage";
     public const string ProductsPrice = "products.price.update";
+    public const string ExpiryRead = "expiry.read";
+    public const string ExpiryReturn = "expiry.return";
+    public const string ExpiryDonate = "expiry.donate";
+    public const string ExpiryMarkUnclaimed = "expiry.mark-unclaimed";
     public const string ScreenPos = "screens.pos";
     public const string ScreenInventory = "screens.inventory";
     public const string ScreenConsignment = "screens.consignment";
@@ -66,7 +70,11 @@ public static class PermissionCatalog
         new(ProductsLocation, "Chuyển vị trí sản phẩm", "Cập nhật vị trí lưu kho.", 28),
         new(ProductsLocationsManage, "Quản lý vị trí kho", "Tạo vị trí lưu kho.", 29),
         new(ProductsPrice, "Đổi giá hàng mua đứt", "Cập nhật giá hàng mua đứt.", 30),
-        new(CustomersUpdate, "Cập nhật hồ sơ khách", "Cập nhật thông tin liên hệ và nhận tiền của khách.", 31)
+        new(CustomersUpdate, "Cập nhật hồ sơ khách", "Cập nhật thông tin liên hệ và nhận tiền của khách.", 31),
+        new(ExpiryRead, "Xem hàng hết hạn", "Xem phiếu xử lý hàng ký gửi hết hạn.", 32),
+        new(ExpiryReturn, "Giao trả hàng hết hạn", "Xác nhận bàn giao hàng cho người ký gửi.", 33),
+        new(ExpiryDonate, "Bàn giao hàng quyên góp", "Xác nhận bàn giao cho tổ chức nhận.", 34),
+        new(ExpiryMarkUnclaimed, "Duyệt hàng không nhận", "Duyệt chuyển hàng không nhận sang quyên góp.", 35)
     ];
 
     public static readonly IReadOnlySet<string> AdminOnly = new HashSet<string>(StringComparer.Ordinal)
@@ -87,13 +95,13 @@ public static class PermissionCatalog
             [
                 CustomersRead, CustomersUpdate, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
                 AppointmentsStaffRead, AppointmentsStaffUpdate, AppointmentsStaffReception,
-                ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
+                ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ExpiryRead, ExpiryReturn, ExpiryDonate, ExpiryMarkUnclaimed, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
                 ScreenSettlement, ScreenReports, ScreenAccounts
             ],
             ["Staff"] =
             [
                 CustomersRead, CustomersUpdate, AppointmentsStaffRead, AppointmentsStaffUpdate,
-                AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ScreenPos, ScreenInventory,
+                AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ExpiryRead, ExpiryReturn, ExpiryDonate, ScreenPos, ScreenInventory,
                 ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports
             ],
             ["Customer"] = [AppointmentsCreate, AppointmentsOwnRead, AppointmentsOwnCancel]
@@ -115,7 +123,7 @@ public static class PermissionCatalog
         "Staff" => !permissionCode.StartsWith("appointments.own.", StringComparison.Ordinal)
             && permissionCode != AppointmentsCreate && !AdminOnly.Contains(permissionCode)
             && !permissionCode.StartsWith("accounts.", StringComparison.Ordinal)
-            && permissionCode != ScreenAccounts,
+            && permissionCode != ScreenAccounts && permissionCode != ExpiryMarkUnclaimed,
         _ => false
     });
 
