@@ -73,6 +73,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 
     public DbSet<ExpiryProcessingItem> ExpiryProcessingItems => Set<ExpiryProcessingItem>();
 
+    public DbSet<DonationReceipt> DonationReceipts => Set<DonationReceipt>();
+
     public DbSet<EarlyWithdrawal> EarlyWithdrawals => Set<EarlyWithdrawal>();
 
     public DbSet<EarlyWithdrawalItem> EarlyWithdrawalItems => Set<EarlyWithdrawalItem>();

@@ -58,6 +58,24 @@ if (args.Contains("--apply-migrations", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--inspect-expiry-demo", StringComparer.Ordinal))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<ExpiryDemoSeeder>().InspectAsync();
+    return;
+}
+
+if (args.Contains("--seed-expiry-demo", StringComparer.Ordinal))
+{
+    if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
+        throw new InvalidOperationException("Expiry demo seeding is only allowed in Development or Testing.");
+
+    await using var scope = app.Services.CreateAsyncScope();
+    var seeded = await scope.ServiceProvider.GetRequiredService<ExpiryDemoSeeder>().SeedAsync();
+    Console.WriteLine($"Expiry demo records ready: {seeded} processing cases.");
+    return;
+}
+
 if (args.Contains("--seed-demo", StringComparer.Ordinal) || args.Contains("--seed-inventory-locations", StringComparer.Ordinal))
 {
     if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))

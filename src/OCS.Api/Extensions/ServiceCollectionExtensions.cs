@@ -149,6 +149,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAccountManagementService, AccountManagementService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<InventoryService>();
+        services.AddScoped<ExpiryProcessingService>();
+        services.AddScoped<ExpiryProcessingJob>();
         services.AddScoped<BuyoutService>();
         services.AddScoped<IFcmService, FcmNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
@@ -166,6 +168,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPosService, PosService>();
         services.AddScoped<IAppointmentReminderJob, AppointmentReminderJob>();
         services.AddScoped<DevelopmentDataSeeder>();
+        services.AddScoped<ExpiryDemoSeeder>();
 
         services.AddAntiforgery(options =>
         {
@@ -466,6 +469,10 @@ public static class ServiceCollectionExtensions
                     "appointment-reminder-job",
                     job => job.ExecuteAsync(CancellationToken.None),
                     "*/15 * * * *");
+                RecurringJob.AddOrUpdate<ExpiryProcessingJob>(
+                    "consignment-expiry-job",
+                    job => job.ExecuteAsync(CancellationToken.None),
+                    "* * * * *");
             }
             catch
             {

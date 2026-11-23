@@ -11,7 +11,8 @@ public sealed record ConsignmentProductResponse(
     decimal ListedPrice,
     decimal? AgreedCommissionRate,
     decimal? EstimatedPayout,
-    bool DetailAvailable = true);
+    bool DetailAvailable = true,
+    DateTimeOffset? HandledAt = null);
 
 /// <summary>Thong tin theo doi mot hop dong ky gui cua khach hang.</summary>
 /// <param name="EstimatedPayout">Tong du kien cho tat ca san pham; null neu co san pham thieu uoc tinh.</param>
@@ -27,7 +28,10 @@ public sealed record ConsignmentTrackingResponse(
     IReadOnlyList<ConsignmentProductResponse> Products,
     decimal? EstimatedPayout,
     decimal SettledAmount,
-    ConsignmentDocumentMetadata? ContractDocument = null);
+    ConsignmentDocumentMetadata? ContractDocument = null,
+    string? ExpiryProcessingType = null,
+    string? ExpiryProcessingStatus = null,
+    DateTimeOffset? CollectionDeadline = null);
 
 public sealed record ConsignmentDocumentMetadata(string FileName, string ContentType, DateTimeOffset? UploadedAt);
 
@@ -35,4 +39,6 @@ public sealed record ConsignmentProductDetailResponse(
     Guid Id, string Barcode, string Name, string Status, decimal ListedPrice,
     decimal? AgreedCommissionRate, decimal? EstimatedPayout, string? Description,
     string? BrandName, string? CategoryName, string? Size, string? Condition,
-    IReadOnlyList<string> ImageUrls);
+    IReadOnlyList<string> ImageUrls, DateTimeOffset? HandledAt = null,
+    string? ExpiryProcessingType = null, string? ExpiryProcessingStatus = null,
+    DateTimeOffset? CollectionDeadline = null);

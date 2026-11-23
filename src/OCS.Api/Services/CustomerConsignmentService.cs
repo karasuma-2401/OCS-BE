@@ -84,6 +84,21 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
     private async Task<ConsignmentTrackingResponse[]> MapContractsAsync(List<ConsignmentContract> contracts, CancellationToken cancellationToken)
     {
         var contractIds = contracts.Select(c => c.Id).ToArray();
+        var expiryItems = await db.ExpiryProcessingItems.AsNoTracking()
+            .Where(i => i.Product.ConsignmentContractId != null && contractIds.Contains(i.Product.ConsignmentContractId.Value))
+            .Select(i => new
+            {
+                i.ProductId,
+                i.HandledAt,
+                i.Product.ConsignmentContractId,
+                i.ExpiryProcessing.Type,
+                i.ExpiryProcessing.Status,
+                i.ExpiryProcessing.CollectionDeadline
+            })
+            .ToListAsync(cancellationToken);
+        var expiryByProduct = expiryItems.ToDictionary(i => i.ProductId);
+        var expiryByContract = expiryItems.GroupBy(i => i.ConsignmentContractId!.Value)
+            .ToDictionary(g => g.Key, g => g.First());
         var documents = await db.ConsignmentDocuments.AsNoTracking()
             .Where(d => contractIds.Contains(d.ContractId))
             .Select(d => new { d.ContractId, d.FileName, d.ContentType, d.UploadedAt })
@@ -102,7 +117,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             var products = c.Products.OrderBy(p => p.Name).ThenBy(p => p.Id).Select(p =>
                 new ConsignmentProductResponse(p.Id, p.Barcode, p.Name, p.Status.ToString(), p.ListedPrice,
                     p.AgreedCommissionRate,
-                    p.AgreedCommissionRate is null ? null : p.CalculateEstimatedConsignorPayout())).ToArray();
+                    p.AgreedCommissionRate is null ? null : p.CalculateEstimatedConsignorPayout(),
+                    HandledAt: expiryByProduct.GetValueOrDefault(p.Id)?.HandledAt)).ToArray();
             // Tong du kien tinh cho moi san pham, khong tru cac khoan da quyet toan.
             // Tong la null neu thieu uoc tinh cua bat ky san pham nao.
             var estimatesComplete = products.All(p => p.EstimatedPayout.HasValue);
@@ -113,7 +129,10 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                 c.Payouts.Where(p => p.Status == PayoutStatus.Completed).Sum(p => p.TotalAmount),
                 documents.TryGetValue(c.Id, out var document)
                     ? new ConsignmentDocumentMetadata(document.FileName, document.ContentType, document.UploadedAt)
-                    : generatedMetadata.GetValueOrDefault(c.Id) ?? (contractService is null ? null : new ConsignmentDocumentMetadata($"ban-xem-{c.Id}.pdf", "application/pdf", null)));
+                    : generatedMetadata.GetValueOrDefault(c.Id) ?? (contractService is null ? null : new ConsignmentDocumentMetadata($"ban-xem-{c.Id}.pdf", "application/pdf", null)),
+                expiryByContract.TryGetValue(c.Id, out var expiry) ? expiry.Type.ToString() : null,
+                expiryByContract.TryGetValue(c.Id, out expiry) ? expiry.Status.ToString() : null,
+                expiryByContract.TryGetValue(c.Id, out expiry) ? expiry.CollectionDeadline : null);
         }).ToArray();
     }
     public async Task<bool> IsActiveCustomerAsync(Guid customerId, CancellationToken cancellationToken)
@@ -152,6 +171,15 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             .SingleOrDefaultAsync(p => p.Id == productId && p.ConsignmentContractId == contractId &&
                 p.ConsignmentContract != null && p.ConsignmentContract.CustomerId == customerId, ct);
         if (product is null) return null;
+        var expiry = await db.ExpiryProcessingItems.AsNoTracking()
+            .Where(i => i.ProductId == productId)
+            .Select(i => new
+            {
+                i.HandledAt,
+                i.ExpiryProcessing.Type,
+                i.ExpiryProcessing.Status,
+                i.ExpiryProcessing.CollectionDeadline
+            }).SingleOrDefaultAsync(ct);
         var imageUrls = product.Images.Where(i => i.ImageType is ProductImageType.Cover or ProductImageType.Detail)
             .Where(i => images?.GetKey(i.Url) is not null).OrderBy(i => i.SortOrder).ThenBy(i => i.Id)
             .Select(i => $"/api/customers/me/consignments/{contractId}/products/{productId}/images/{i.Id}").ToArray();
@@ -159,7 +187,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             product.ListedPrice, product.AgreedCommissionRate,
             product.AgreedCommissionRate is null ? null : product.CalculateEstimatedConsignorPayout(),
             product.Description, product.Brand?.Name, product.Category?.Name, product.Size,
-            $"{product.ConditionPercentage}%", imageUrls);
+            $"{product.ConditionPercentage}%", imageUrls, expiry?.HandledAt,
+            expiry?.Type.ToString(), expiry?.Status.ToString(), expiry?.CollectionDeadline);
     }
     public async Task<(byte[] Content, string ContentType)?> GetImageAsync(Guid customerId, Guid contractId, Guid productId, Guid imageId, CancellationToken ct)
     {
