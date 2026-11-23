@@ -12,7 +12,9 @@ namespace OCS.Api.Controllers;
 [Route("api/pos")]
 [Authorize(Roles = "Admin,Manager,Staff")]
 [Authorize(Policy = PermissionCatalog.ScreenPos)]
-public class PosController(IPosService posService) : ControllerBase
+public class PosController(
+    IPosService posService,
+    IVietQrPaymentService vietQrPaymentService) : ControllerBase
 {
     [HttpGet("lookup/{identifier}")]
     [ProducesResponseType(typeof(PosProductLookupDto), StatusCodes.Status200OK)]
@@ -40,6 +42,33 @@ public class PosController(IPosService posService) : ControllerBase
 
         var result = await posService.CheckoutCashAsync(actor, request, cancellationToken);
         return result.ToActionResult(this);
+    }
+
+    [HttpPost("checkout/vietqr")]
+    [ProducesResponseType(typeof(VietQrPaymentSessionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> CheckoutVietQr(
+        [FromBody] PosVietQrCheckoutRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (Actor() is not Guid actor)
+        {
+            return Unauthorized();
+        }
+
+        var invoiceResult = await posService.PrepareVietQrInvoiceAsync(actor, request, cancellationToken);
+        if (!invoiceResult.IsSuccess)
+        {
+            return invoiceResult.ToActionResult(this);
+        }
+
+        var sessionResult = await vietQrPaymentService.InitiateAsync(
+            actor,
+            new InitiateVietQrPaymentRequest(invoiceResult.Data, request.ForceNew),
+            cancellationToken);
+        return sessionResult.ToActionResult(this);
     }
 
     [HttpGet("invoices/{invoiceIdOrNumber}")]
