@@ -35,8 +35,13 @@ public sealed class ExpiryDemoSeeder(AppDbContext db, SystemAuditContext auditCo
     {
         var ids = Enumerable.Range(1, 20).Select(n => Id(1, n)).ToArray();
         var contracts = await db.ConsignmentContracts.AsNoTracking().Where(x => ids.Contains(x.Id))
-            .Select(x => new { x.Id, x.ContractNumber, x.CustomerNameSnapshot,
-                Products = x.Products.Select(p => new { p.Barcode, p.Status }).ToArray() }).ToListAsync(ct);
+            .Select(x => new
+            {
+                x.Id,
+                x.ContractNumber,
+                x.CustomerNameSnapshot,
+                Products = x.Products.Select(p => new { p.Barcode, p.Status }).ToArray()
+            }).ToListAsync(ct);
         foreach (var contract in contracts.OrderBy(x => x.ContractNumber))
         {
             var process = await db.ExpiryProcessings.AsNoTracking()
@@ -235,8 +240,11 @@ public sealed class ExpiryDemoSeeder(AppDbContext db, SystemAuditContext auditCo
         line.Note = donated ? "Đã bàn giao tại điểm tiếp nhận." : "Khách đã kiểm tra và nhận lại hàng.";
         db.ProductStatusHistories.Add(new ProductStatusHistory
         {
-            ProductId = product.Id, PreviousStatus = ProductStatus.Expired, NewStatus = product.Status,
-            OccurredAt = line.HandledAt.Value, ChangedByAccountId = actorId,
+            ProductId = product.Id,
+            PreviousStatus = ProductStatus.Expired,
+            NewStatus = product.Status,
+            OccurredAt = line.HandledAt.Value,
+            ChangedByAccountId = actorId,
             Reason = donated ? $"Bàn giao quyên góp theo {process.Evidence}" : "Bàn giao trả người ký gửi"
         });
     }
@@ -245,10 +253,16 @@ public sealed class ExpiryDemoSeeder(AppDbContext db, SystemAuditContext auditCo
     {
         db.DonationReceipts.Add(new DonationReceipt
         {
-            Id = Id(5, slot), ExpiryProcessingId = process.Id, ReceiptNumber = $"QG-2026-{900 + slot:0000}",
-            ContractNumber = contract.ContractNumber, CustomerName = contract.CustomerNameSnapshot,
-            RecipientOrganization = process.RecipientOrganization!, Evidence = process.Evidence!, Note = process.Note,
-            HandledByEmployeeId = actorId, HandledAt = now.AddHours(-6),
+            Id = Id(5, slot),
+            ExpiryProcessingId = process.Id,
+            ReceiptNumber = $"QG-2026-{900 + slot:0000}",
+            ContractNumber = contract.ContractNumber,
+            CustomerName = contract.CustomerNameSnapshot,
+            RecipientOrganization = process.RecipientOrganization!,
+            Evidence = process.Evidence!,
+            Note = process.Note,
+            HandledByEmployeeId = actorId,
+            HandledAt = now.AddHours(-6),
             ProductsJson = JsonSerializer.Serialize(contract.Products.Where(p => p.Status == ProductStatus.Donated)
                 .OrderBy(p => p.Barcode).Select(p =>
                     new DonationReceiptProductDto(p.Id, p.Barcode, p.Name, p.ListedPrice)).ToArray())

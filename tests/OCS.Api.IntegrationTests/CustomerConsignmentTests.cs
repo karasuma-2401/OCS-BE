@@ -67,16 +67,25 @@ public sealed class CustomerConsignmentTests
         var owner = Guid.NewGuid();
         var other = Guid.NewGuid();
         db.Accounts.AddRange(Customer(owner), Customer(other));
-        var contract = new ConsignmentContract { CustomerId = owner, ContractNumber = "OWN-EXP",
-            EndsAt = DateTimeOffset.UtcNow.AddDays(-2), ExpiryHandling = ExpiryHandling.Return };
+        var contract = new ConsignmentContract
+        {
+            CustomerId = owner,
+            ContractNumber = "OWN-EXP",
+            EndsAt = DateTimeOffset.UtcNow.AddDays(-2),
+            ExpiryHandling = ExpiryHandling.Return
+        };
         var foreign = new ConsignmentContract { CustomerId = other, ContractNumber = "OTHER-EXP" };
         var product = new Product { Name = "Áo", Barcode = "BC-OWN" };
         product.AssignConsignmentTerms(contract.Id, 1000, new Brand { DefaultCommissionRate = 20 });
         product.Status = ProductStatus.Expired;
         contract.Products.Add(product);
         db.ConsignmentContracts.AddRange(contract, foreign);
-        var processing = new ExpiryProcessing { Type = ExpiryProcessingType.Return,
-            CollectionDeadline = DateTimeOffset.UtcNow.AddDays(1), UnclaimedBasis = "Nội bộ" };
+        var processing = new ExpiryProcessing
+        {
+            Type = ExpiryProcessingType.Return,
+            CollectionDeadline = DateTimeOffset.UtcNow.AddDays(1),
+            UnclaimedBasis = "Nội bộ"
+        };
         processing.Items.Add(new ExpiryProcessingItem { ProductId = product.Id, Product = product });
         db.ExpiryProcessings.Add(processing);
         await db.SaveChangesAsync();

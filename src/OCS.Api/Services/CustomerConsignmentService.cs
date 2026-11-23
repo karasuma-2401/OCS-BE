@@ -86,8 +86,15 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
         var contractIds = contracts.Select(c => c.Id).ToArray();
         var expiryItems = await db.ExpiryProcessingItems.AsNoTracking()
             .Where(i => i.Product.ConsignmentContractId != null && contractIds.Contains(i.Product.ConsignmentContractId.Value))
-            .Select(i => new { i.ProductId, i.HandledAt, i.Product.ConsignmentContractId,
-                i.ExpiryProcessing.Type, i.ExpiryProcessing.Status, i.ExpiryProcessing.CollectionDeadline })
+            .Select(i => new
+            {
+                i.ProductId,
+                i.HandledAt,
+                i.Product.ConsignmentContractId,
+                i.ExpiryProcessing.Type,
+                i.ExpiryProcessing.Status,
+                i.ExpiryProcessing.CollectionDeadline
+            })
             .ToListAsync(cancellationToken);
         var expiryByProduct = expiryItems.ToDictionary(i => i.ProductId);
         var expiryByContract = expiryItems.GroupBy(i => i.ConsignmentContractId!.Value)
@@ -166,8 +173,13 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
         if (product is null) return null;
         var expiry = await db.ExpiryProcessingItems.AsNoTracking()
             .Where(i => i.ProductId == productId)
-            .Select(i => new { i.HandledAt, i.ExpiryProcessing.Type, i.ExpiryProcessing.Status,
-                i.ExpiryProcessing.CollectionDeadline }).SingleOrDefaultAsync(ct);
+            .Select(i => new
+            {
+                i.HandledAt,
+                i.ExpiryProcessing.Type,
+                i.ExpiryProcessing.Status,
+                i.ExpiryProcessing.CollectionDeadline
+            }).SingleOrDefaultAsync(ct);
         var imageUrls = product.Images.Where(i => i.ImageType is ProductImageType.Cover or ProductImageType.Detail)
             .Where(i => images?.GetKey(i.Url) is not null).OrderBy(i => i.SortOrder).ThenBy(i => i.Id)
             .Select(i => $"/api/customers/me/consignments/{contractId}/products/{productId}/images/{i.Id}").ToArray();

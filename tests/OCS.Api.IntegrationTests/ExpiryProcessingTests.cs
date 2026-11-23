@@ -29,8 +29,12 @@ public sealed class ExpiryProcessingTests
         var category = new Category { Name = "Áo" };
         var contract = new ConsignmentContract
         {
-            ContractNumber = "KG-01", SignedAt = now.AddDays(-60), EndsAt = now.AddDays(-2),
-            ExpiryHandling = handling, CustomerNameSnapshot = "Khách", Status = ConsignmentContractStatus.Active
+            ContractNumber = "KG-01",
+            SignedAt = now.AddDays(-60),
+            EndsAt = now.AddDays(-2),
+            ExpiryHandling = handling,
+            CustomerNameSnapshot = "Khách",
+            Status = ConsignmentContractStatus.Active
         };
         var products = Enumerable.Range(1, 2).Select(i =>
         {

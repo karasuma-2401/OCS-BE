@@ -129,8 +129,11 @@ public sealed class ExpiryProcessingService(AppDbContext db, TimeProvider clock,
             line.Product.UpdatedAt = now;
             db.ProductStatusHistories.Add(new ProductStatusHistory
             {
-                ProductId = line.ProductId, PreviousStatus = ProductStatus.Expired,
-                NewStatus = line.Product.Status, ChangedByAccountId = actor, OccurredAt = now,
+                ProductId = line.ProductId,
+                PreviousStatus = ProductStatus.Expired,
+                NewStatus = line.Product.Status,
+                ChangedByAccountId = actor,
+                OccurredAt = now,
                 Reason = donate ? $"Bàn giao quyên góp cho {organization!.Trim()}" : "Bàn giao trả khách ký gửi"
             });
         }
@@ -282,8 +285,11 @@ public sealed class ExpiryProcessingService(AppDbContext db, TimeProvider clock,
                     processing.Items.Add(new ExpiryProcessingItem { ProductId = product.Id, Product = product });
                 db.ProductStatusHistories.Add(new ProductStatusHistory
                 {
-                    ProductId = product.Id, PreviousStatus = ProductStatus.OnSale,
-                    NewStatus = ProductStatus.Expired, OccurredAt = now, Reason = "Hợp đồng ký gửi hết hạn"
+                    ProductId = product.Id,
+                    PreviousStatus = ProductStatus.OnSale,
+                    NewStatus = ProductStatus.Expired,
+                    OccurredAt = now,
+                    Reason = "Hợp đồng ký gửi hết hạn"
                 });
             }
         }
@@ -303,9 +309,13 @@ public sealed class ExpiryProcessingService(AppDbContext db, TimeProvider clock,
         if (contract?.CustomerId is not Guid recipient) return;
         db.Notifications.Add(new Notification
         {
-            Id = DeterministicId(processing.Id, key), RecipientAccountId = recipient,
-            Title = title, Content = content, Type = NotificationType.System,
-            SentAt = clock.GetUtcNow(), CreatedAt = clock.GetUtcNow()
+            Id = DeterministicId(processing.Id, key),
+            RecipientAccountId = recipient,
+            Title = title,
+            Content = content,
+            Type = NotificationType.System,
+            SentAt = clock.GetUtcNow(),
+            CreatedAt = clock.GetUtcNow()
         });
     }
 
