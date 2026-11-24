@@ -275,6 +275,30 @@ public sealed class EarlyWithdrawalTests
     }
 
     [Fact]
+    public async Task FutureExpiryDoesNotMakePendingProcessingProductsEligibleAndTrackingExplainsWhy()
+    {
+        var (db, service, customer, _, product) = Setup();
+        await using var cleanup = db;
+        var contract = await db.ConsignmentContracts.SingleAsync();
+        contract.EndsAt = DateTimeOffset.UtcNow.AddMonths(2);
+        var pending = await db.Products.SingleAsync();
+        pending.Status = ProductStatus.PendingProcessing;
+        await db.SaveChangesAsync();
+        var tracking = new CustomerConsignmentService(db, new OCS.Api.Repositories.CustomerProfileRepository(db));
+        var detail = (await tracking.GetProductAsync(customer, contract.Id, product.Id, default))!;
+        Assert.False(detail.CanWithdrawEarly);
+        Assert.Contains("Chờ xử lý", detail.EarlyWithdrawalBlockReason);
+        Assert.Empty((await service.EligibleAsync(customer, default)).Data!);
+        var listed = Assert.Single(Assert.Single((await tracking.GetAsync(customer, default))!).Products);
+        Assert.Equal(detail.EarlyWithdrawalBlockReason, listed.EarlyWithdrawalBlockReason);
+        pending.OfferForSale();
+        await db.SaveChangesAsync();
+        var ready = (await tracking.GetProductAsync(customer, contract.Id, product.Id, default))!;
+        Assert.True(ready.CanWithdrawEarly); Assert.Null(ready.EarlyWithdrawalBlockReason);
+        Assert.Equal(product.Id, Assert.Single((await service.EligibleAsync(customer, default)).Data!).ProductId);
+    }
+
+    [Fact]
     public async Task EligibleProductsNeverExposeAnotherCustomersProducts()
     {
         var (db, service, _, _, product) = Setup();

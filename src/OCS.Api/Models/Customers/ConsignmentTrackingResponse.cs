@@ -15,7 +15,8 @@ public sealed record ConsignmentProductResponse(
     DateTimeOffset? HandledAt = null,
     bool CanWithdrawEarly = false,
     decimal? EarlyWithdrawalFee = null,
-    ConsignmentWithdrawalInfo? Withdrawal = null);
+    ConsignmentWithdrawalInfo? Withdrawal = null,
+    string? EarlyWithdrawalBlockReason = null);
 
 public sealed record ConsignmentWithdrawalInfo(Guid Id, string Status, string PaymentStatus,
     string? DecisionNote, DateTimeOffset RequestedAt);
@@ -48,4 +49,5 @@ public sealed record ConsignmentProductDetailResponse(
     IReadOnlyList<string> ImageUrls, DateTimeOffset? HandledAt = null,
     string? ExpiryProcessingType = null, string? ExpiryProcessingStatus = null,
     DateTimeOffset? CollectionDeadline = null,
-    bool CanWithdrawEarly = false, decimal? EarlyWithdrawalFee = null, ConsignmentWithdrawalInfo? Withdrawal = null);
+    bool CanWithdrawEarly = false, decimal? EarlyWithdrawalFee = null, ConsignmentWithdrawalInfo? Withdrawal = null,
+    string? EarlyWithdrawalBlockReason = null);

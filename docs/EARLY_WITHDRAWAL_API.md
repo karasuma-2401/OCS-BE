@@ -122,7 +122,9 @@ Response phiếu bổ sung `customerName`, `customerPhone`; item bổ sung `cont
 - Dùng component chung, token màu/font/spacing của dự án; có trạng thái tải, trống, lỗi, và xử lý 409 bằng tải lại phiếu.
 - Trang rút hàng dùng cùng thẻ thống kê và bố cục tìm kiếm/bộ lọc với Quản lý kho. Có lọc nhanh bằng thẻ, chip điều kiện, xóa từng điều kiện hoặc tất cả, và tổng số dòng/phân trang từ server. Bấm dòng chỉ đánh dấu bằng vạch dọc; nút Chi tiết mới mở popup. Các endpoint search/summary không cần migration database mới.
 
-API ký gửi danh sách/tìm kiếm/chi tiết sản phẩm bổ sung `canWithdrawEarly`, `earlyWithdrawalFee` và `withdrawal` (yêu cầu gần nhất: `id`, `status`, `paymentStatus`, `decisionNote`, `requestedAt`). Bảng Theo dõi ký gửi tổng hợp trạng thái các món, chi tiết hiển thị từng món kèm tiến trình rút: chờ duyệt, chờ thu phí, chờ bàn giao, từ chối và lý do, đã hủy, đã bàn giao. Trạng thái sản phẩm vẫn là `OnSale` trong lúc chờ/giữ hàng, đổi sang `EarlyWithdrawn` sau bàn giao. Trang ký gửi tải lại khi quay lại/focus và mỗi 30 giây.
+API ký gửi danh sách/tìm kiếm/chi tiết sản phẩm bổ sung `canWithdrawEarly`, `earlyWithdrawalFee`, `earlyWithdrawalBlockReason` (lý do cụ thể khi không được rút) và `withdrawal` (yêu cầu gần nhất: `id`, `status`, `paymentStatus`, `decisionNote`, `requestedAt`). Bảng Theo dõi ký gửi tổng hợp trạng thái các món, chi tiết hiển thị từng món kèm tiến trình rút: chờ duyệt, chờ thu phí, chờ bàn giao, từ chối và lý do, đã hủy, đã bàn giao. Trạng thái sản phẩm vẫn là `OnSale` trong lúc chờ/giữ hàng, đổi sang `EarlyWithdrawn` sau bàn giao. Trang ký gửi tải lại khi quay lại/focus và mỗi 30 giây.
+
+Món `PendingProcessing` chưa được đưa lên bán nên chưa rút sớm được, kể cả hạn ký gửi vẫn ở tương lai và đã có tỷ lệ hoa hồng. Nhân viên hoàn tất quy trình xử lý kho và chuyển sang `OnSale` qua chức năng hiện có thì món mới được xét rút. Giao diện nêu rõ trạng thái đang chặn thay vì dùng thông báo điều kiện chung.
 
 | HTTP | Ý nghĩa |
 |---|---|

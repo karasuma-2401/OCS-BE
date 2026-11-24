@@ -136,7 +136,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                     HandledAt: expiryByProduct.GetValueOrDefault(p.Id)?.HandledAt,
                     CanWithdrawEarly: p.CanRequestEarlyWithdrawal(now) && !activeWithdrawalIds.Contains(p.Id),
                     EarlyWithdrawalFee: p.AgreedCommissionRate is >= 0 and <= 100 ? p.CalculateEarlyWithdrawalFee() : null,
-                    Withdrawal: withdrawalByProduct.GetValueOrDefault(p.Id))).ToArray();
+                    Withdrawal: withdrawalByProduct.GetValueOrDefault(p.Id),
+                    EarlyWithdrawalBlockReason: WithdrawalBlockReason(p, withdrawalByProduct.GetValueOrDefault(p.Id), activeWithdrawalIds.Contains(p.Id), now))).ToArray();
             // Tong du kien tinh cho moi san pham, khong tru cac khoan da quyet toan.
             // Tong la null neu thieu uoc tinh cua bat ky san pham nao.
             var estimatesComplete = products.All(p => p.EstimatedPayout.HasValue);
@@ -157,6 +158,15 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
     {
         var account = await customerProfiles.GetSelfProfileAsync(customerId, cancellationToken);
         return account?.CustomerProfile?.Status == CustomerStatus.Active;
+    }
+
+    private static string? WithdrawalBlockReason(Product product, ConsignmentWithdrawalInfo? withdrawal, bool hasActiveRequest, DateTimeOffset now)
+    {
+        if (product.Status == ProductStatus.OnSale && hasActiveRequest)
+            return withdrawal?.Status == "Approved"
+                ? withdrawal.PaymentStatus == "Paid" ? "Yêu cầu rút món này đã được xử lý phí và đang chờ bàn giao." : "Yêu cầu rút món này đã được duyệt, đang chờ thu phí và bàn giao."
+                : "Món này đã có yêu cầu rút đang chờ duyệt. Bạn có thể xem tiến trình tại Theo dõi yêu cầu.";
+        return product.GetEarlyWithdrawalBlockReason(now);
     }
 
     private static ConsignmentDocumentMetadata? DocumentMetadata(Guid contractId, byte[] content, DateTimeOffset createdAt)
@@ -214,7 +224,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             $"{product.ConditionPercentage}%", imageUrls, expiry?.HandledAt,
             expiry?.Type.ToString(), expiry?.Status.ToString(), expiry?.CollectionDeadline,
             product.CanRequestEarlyWithdrawal((clock ?? TimeProvider.System).GetUtcNow()) && withdrawal?.Status is not ("Pending" or "Approved"),
-            product.AgreedCommissionRate is >= 0 and <= 100 ? product.CalculateEarlyWithdrawalFee() : null, withdrawal);
+            product.AgreedCommissionRate is >= 0 and <= 100 ? product.CalculateEarlyWithdrawalFee() : null, withdrawal,
+            WithdrawalBlockReason(product, withdrawal, withdrawal?.Status is "Pending" or "Approved", (clock ?? TimeProvider.System).GetUtcNow()));
     }
     public async Task<(byte[] Content, string ContentType)?> GetImageAsync(Guid customerId, Guid contractId, Guid productId, Guid imageId, CancellationToken ct)
     {
