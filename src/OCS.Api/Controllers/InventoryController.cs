@@ -19,6 +19,10 @@ public sealed class InventoryController(InventoryService inventory) : Controller
     public async Task<IActionResult> List([FromQuery] InventoryQuery query, CancellationToken ct) =>
         (await inventory.ListAsync(query, ct)).ToActionResult(this);
 
+    [HttpGet("summary")]
+    [Authorize(Policy = PermissionCatalog.ProductsRead)]
+    public async Task<IActionResult> Summary(CancellationToken ct) => Ok(await inventory.SummaryAsync(ct));
+
     [HttpGet("{id:guid}")]
     [Authorize(Policy = PermissionCatalog.ProductsRead)]
     public async Task<IActionResult> Detail(Guid id, CancellationToken ct) =>
@@ -52,6 +56,16 @@ public sealed class InventoryController(InventoryService inventory) : Controller
     [Authorize(Policy = PermissionCatalog.ProductsLocation)]
     public async Task<IActionResult> ChangeLocation(Guid id, InventoryLocationRequest request, CancellationToken ct) =>
         Actor() is Guid actor ? (await inventory.ChangeLocationAsync(id, actor, request, ct)).ToActionResult(this) : Unauthorized();
+
+    [HttpPut("bulk-location")]
+    [Authorize(Policy = PermissionCatalog.ProductsLocation)]
+    public async Task<IActionResult> BulkChangeLocation(BulkInventoryLocationRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await inventory.BulkChangeLocationAsync(actor, request, ct)).ToActionResult(this) : Unauthorized();
+
+    [HttpPost("bulk-offer")]
+    [Authorize(Policy = PermissionCatalog.ProductsOffer)]
+    public async Task<IActionResult> BulkOffer(BulkInventoryOfferRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await inventory.BulkOfferAsync(actor, request, ct)).ToActionResult(this) : Unauthorized();
 
     [HttpPut("{id:guid}/price")]
     [Authorize(Policy = PermissionCatalog.ProductsPrice)]
