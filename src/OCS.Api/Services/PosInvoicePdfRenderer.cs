@@ -81,7 +81,7 @@ public static class PosInvoicePdfRenderer
         int index = 1;
         foreach (var item in invoice.Items)
         {
-            graphics.DrawString(index.ToString(), regularFont, XBrushes.Black, new XPoint(margin, y + 10));
+            graphics.DrawString(index.ToString(CultureInfo.InvariantCulture), regularFont, XBrushes.Black, new XPoint(margin, y + 10));
 
             var productName = item.Name;
             if (!string.IsNullOrWhiteSpace(item.Size))

@@ -12,7 +12,7 @@ public sealed class PayoutDetailConfig : IEntityTypeConfiguration<PayoutDetail>
         {
             table.HasCheckConstraint(
                 "CK_PayoutDetails_Type",
-                "\"Type\" IN ('Commission', 'Compensation', 'ServiceFee')");
+                "\"Type\" IN ('Commission', 'Compensation', 'ServiceFee', 'SaleProceeds')");
             table.HasCheckConstraint(
                 "CK_PayoutDetails_Source",
                 "NOT (\"ProductId\" IS NOT NULL AND \"IncidentReportId\" IS NOT NULL)");
@@ -23,6 +23,7 @@ public sealed class PayoutDetailConfig : IEntityTypeConfiguration<PayoutDetail>
         builder.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Description).HasMaxLength(1000).IsRequired();
         builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.IsReleased).HasDefaultValue(false);
 
         builder.HasOne(x => x.Payout)
             .WithMany(x => x.Details)
@@ -38,5 +39,12 @@ public sealed class PayoutDetailConfig : IEntityTypeConfiguration<PayoutDetail>
             .WithMany()
             .HasForeignKey(x => x.IncidentReportId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => new { x.ProductId, x.Type })
+            .IsUnique()
+            .HasFilter("\"ProductId\" IS NOT NULL AND NOT \"IsReleased\"");
+        builder.HasIndex(x => x.IncidentReportId)
+            .IsUnique()
+            .HasFilter("\"IncidentReportId\" IS NOT NULL AND NOT \"IsReleased\"");
     }
 }

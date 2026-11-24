@@ -14,12 +14,15 @@ public sealed class IncidentReportConfig : IEntityTypeConfiguration<IncidentRepo
             table.HasCheckConstraint(
                 "CK_IncidentReports_Enums",
                 "\"Type\" IN ('Lost', 'Damaged', 'TagSwapped') " +
-                "AND \"Status\" IN ('Pending', 'Approved', 'Compensated')");
+                "AND \"Status\" IN ('Pending', 'Approved', 'Compensated', 'NeedsRecheck')");
         });
 
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.CompensationAmount).HasPrecision(18, 2);
+        builder.Property(x => x.Description).HasMaxLength(2000).IsRequired();
+        builder.Property(x => x.EvidenceUrls).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb").IsRequired();
+        builder.Property(x => x.ReviewNote).HasMaxLength(1000);
         builder.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);

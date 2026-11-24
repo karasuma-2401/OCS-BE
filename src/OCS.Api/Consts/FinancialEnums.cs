@@ -10,15 +10,25 @@ public enum InvoicePaymentStatus
 public enum PayoutStatus
 {
     Pending = 0,
-    Transferred = 1,
-    Completed = 2
+    Approved = 1,
+    Transferred = 2,
+    Completed = 3,
+    Rejected = 4
+}
+
+public enum PayoutDisputeStatus
+{
+    Open = 0,
+    Resolved = 1,
+    Rejected = 2
 }
 
 public enum PayoutLineType
 {
     Commission = 0,
     Compensation = 1,
-    ServiceFee = 2
+    ServiceFee = 2,
+    SaleProceeds = 3
 }
 
 public enum FinancialTransactionType

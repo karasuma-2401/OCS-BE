@@ -19,6 +19,8 @@ services:
     env_file:
       - path: .env
         required: false
+    volumes:
+      - api_data_protection_keys:/root/.aspnet/DataProtection-Keys
     environment:
       Redis__ConnectionString: redis:6379
     depends_on:
@@ -41,3 +43,4 @@ services:
 
 volumes:
   redis_data:
+  api_data_protection_keys:
