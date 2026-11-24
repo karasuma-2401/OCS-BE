@@ -9,6 +9,7 @@ public sealed class EarlyWithdrawalItem
     public decimal ListedPrice { get; set; }
 
     public decimal PenaltyAmount { get; set; }
+    public decimal PenaltyRate { get; set; }
 
     public EarlyWithdrawal EarlyWithdrawal { get; set; } = null!;
 

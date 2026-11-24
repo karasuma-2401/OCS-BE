@@ -78,4 +78,14 @@ public sealed record VietQrWebhookProcessResultDto(
     Guid? SaleInvoiceId,
     string? InvoiceNumber,
     string? InvoicePaymentStatus,
-    string Message);
+    string Message,
+    Guid? EarlyWithdrawalId = null);
+
+public sealed record InitiateWithdrawalVietQrRequest(bool ForceNew = false);
+
+public sealed record WithdrawalVietQrSessionDto(
+    Guid TransactionId, Guid EarlyWithdrawalId, string RequestNumber, string Amount,
+    string PaymentReference, string TransferContent, string BankCode, string BankAccountNumber,
+    string BankAccountHolderName, string QrCodeUrl, string QrPayload, string ProviderName,
+    string Status, string PaymentStatus, bool IsExpired, DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt, int RemainingSeconds);

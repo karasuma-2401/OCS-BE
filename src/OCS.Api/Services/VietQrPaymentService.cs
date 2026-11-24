@@ -13,7 +13,7 @@ using OCS.Api.Models.Pos;
 
 namespace OCS.Api.Services;
 
-public sealed class VietQrPaymentService(
+public sealed partial class VietQrPaymentService(
     AppDbContext db,
     IPaymentGatewayAdapter paymentGatewayAdapter,
     IOptions<VietQrOptions> options,
@@ -373,6 +373,7 @@ public sealed class VietQrPaymentService(
                 ? await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken)
                 : null;
             var transaction = await db.FinancialTransactions
+                .Include(x => x.EarlyWithdrawal).ThenInclude(w => w!.Items).ThenInclude(i => i.Product)
                 .Include(x => x.SaleInvoice)
                     .ThenInclude(i => i!.Lines)
                         .ThenInclude(l => l.Product)
@@ -381,6 +382,15 @@ public sealed class VietQrPaymentService(
                             && references.Contains(x.PaymentReference))
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync(cancellationToken);
+
+            if (transaction?.EarlyWithdrawal is not null)
+            {
+                var result = await ReconcileWithdrawalWebhookAsync(transaction, item, now, cancellationToken);
+                if (!result.IsSuccess) return result;
+                if (!await SaveWithdrawalPaymentAsync(reconciliation, cancellationToken))
+                    return Result.Failure<VietQrWebhookProcessResultDto>(WithdrawalQrConflict());
+                return result;
+            }
 
             if (transaction is null || transaction.SaleInvoice is null)
             {
@@ -478,7 +488,7 @@ public sealed class VietQrPaymentService(
                 x => x.Id == transactionId && x.PaymentMethod == PaymentMethod.VietQr,
                 cancellationToken);
 
-        if (transaction is null || string.IsNullOrWhiteSpace(transaction.PaymentReference))
+        if (transaction is null || transaction.SaleInvoiceId is null || string.IsNullOrWhiteSpace(transaction.PaymentReference))
         {
             return Result.Failure<VietQrPaymentSessionDto>(
                 ApplicationError.NotFound("POS.PAYMENT_NOT_FOUND", "Không tìm thấy giao dịch thanh toán VietQR."));
@@ -509,7 +519,7 @@ public sealed class VietQrPaymentService(
     {
         var productIds = invoice.Lines.Select(line => line.ProductId).ToArray();
         return db.Products.AnyAsync(x => productIds.Contains(x.Id) &&
-            (x.Status != ProductStatus.OnSale ||
+            (x.Status != ProductStatus.OnSale || x.IsReservedForWithdrawal ||
              x.ConsignmentContract != null && x.ConsignmentContract.EndsAt <= now), ct);
     }
 

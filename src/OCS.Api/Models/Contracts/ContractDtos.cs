@@ -7,6 +7,7 @@ public sealed record CreateContractRequest
 {
     public Guid? AppointmentId { get; init; }
     public Guid? CustomerId { get; init; }
+    [Range(0, 100)] public decimal? EarlyWithdrawalFeeRate { get; init; }
     public Guid? RequestId { get; init; }
     public ContractGuestRequest? Guest { get; init; }
     public ContractCustomerDetailsRequest? CustomerDetails { get; init; }
@@ -100,7 +101,7 @@ public sealed record ContractOptionsResponse(IReadOnlyList<ContractOption> Brand
 public sealed record ContractResponse(
     Guid Id, string ContractNumber, Guid? CustomerId, Guid? AppointmentId,
     Guid CreatedByEmployeeId, DateTimeOffset SignedAt, DateTimeOffset EndsAt,
-    string ExpiryHandling, string Status);
+    string ExpiryHandling, string Status, decimal? EarlyWithdrawalFeeRate = null);
 
 public sealed record ContractListItem(Guid Id, string ContractNumber, string? CustomerName, DateTimeOffset SignedAt, bool HasPdf, string? Status = null);
 
@@ -141,4 +142,4 @@ public sealed record ContractDetailDto(
     string? Title = null,
     string? OrganizationName = null,
     string? HeaderText = null,
-    string? FooterText = null);
+    string? FooterText = null, decimal? EarlyWithdrawalFeeRate = null);

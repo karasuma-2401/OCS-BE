@@ -8,7 +8,7 @@ using OCS.Api.Models.Customers;
 
 namespace OCS.Api.Services;
 
-public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfileRepository customerProfiles, PrivateProductImageStore? images = null, IContractService? contractService = null)
+public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfileRepository customerProfiles, PrivateProductImageStore? images = null, IContractService? contractService = null, TimeProvider? clock = null)
 {
     private static readonly TimeZoneInfo VietnamTimeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Ho_Chi_Minh");
 
@@ -22,7 +22,6 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
         var contracts = await db.ConsignmentContracts.AsNoTracking()
             .Where(c => c.CustomerId == customerId)
             .Include(c => c.Products)
-            .Include(c => c.Payouts)
             .AsSplitQuery()
             .OrderByDescending(c => c.SignedAt).ThenBy(c => c.Id)
             .ToListAsync(cancellationToken);
@@ -65,7 +64,7 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
 
         var total = await filtered.CountAsync(ct);
         var offset = (long)(request.Page - 1) * request.PageSize;
-        var contracts = offset >= total ? [] : await filtered.Include(c => c.Products).Include(c => c.Payouts).AsSplitQuery()
+        var contracts = offset >= total ? [] : await filtered.Include(c => c.Products).AsSplitQuery()
             .OrderByDescending(c => c.SignedAt).ThenBy(c => c.Id)
             .Skip((int)offset).Take(request.PageSize).ToListAsync(ct);
         var items = await MapContractsAsync(contracts, ct);
@@ -84,6 +83,27 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
     private async Task<ConsignmentTrackingResponse[]> MapContractsAsync(List<ConsignmentContract> contracts, CancellationToken cancellationToken)
     {
         var contractIds = contracts.Select(c => c.Id).ToArray();
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
+        var withdrawals = await db.EarlyWithdrawalItems.AsNoTracking()
+            .Where(i => i.Product.ConsignmentContractId != null && contractIds.Contains(i.Product.ConsignmentContractId.Value) &&
+                i.EarlyWithdrawal.CustomerId == i.Product.ConsignmentContract!.CustomerId)
+            .Select(i => new
+            {
+                i.ProductId,
+                Info = new ConsignmentWithdrawalInfo(i.EarlyWithdrawalId,
+                i.EarlyWithdrawal.Status, i.EarlyWithdrawal.PaymentStatus.ToString(), i.EarlyWithdrawal.DecisionNote, i.EarlyWithdrawal.RequestedAt)
+            })
+            .ToListAsync(cancellationToken);
+        var withdrawalByProduct = withdrawals.GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.Info.Status is "Pending" or "Approved")
+                .ThenByDescending(i => i.Info.RequestedAt).ThenByDescending(i => i.Info.Id).First().Info);
+        var activeWithdrawalIds = withdrawals.Where(i => i.Info.Status is "Pending" or "Approved").Select(i => i.ProductId).ToHashSet();
+        // Customer tracking needs only completed totals, not internal payout/approver records.
+        var settledByContract = await db.Payouts.AsNoTracking()
+            .Where(p => contractIds.Contains(p.ConsignmentContractId) && p.Status == PayoutStatus.Completed)
+            .GroupBy(p => p.ConsignmentContractId)
+            .Select(g => new { ContractId = g.Key, Total = g.Sum(p => p.TotalAmount) })
+            .ToDictionaryAsync(p => p.ContractId, p => p.Total, cancellationToken);
         var expiryItems = await db.ExpiryProcessingItems.AsNoTracking()
             .Where(i => i.Product.ConsignmentContractId != null && contractIds.Contains(i.Product.ConsignmentContractId.Value))
             .Select(i => new
@@ -118,7 +138,11 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                 new ConsignmentProductResponse(p.Id, p.Barcode, p.Name, p.Status.ToString(), p.ListedPrice,
                     p.AgreedCommissionRate,
                     p.AgreedCommissionRate is null ? null : p.CalculateEstimatedConsignorPayout(),
-                    HandledAt: expiryByProduct.GetValueOrDefault(p.Id)?.HandledAt)).ToArray();
+                    HandledAt: expiryByProduct.GetValueOrDefault(p.Id)?.HandledAt,
+                    CanWithdrawEarly: p.CanRequestEarlyWithdrawal(now) && !activeWithdrawalIds.Contains(p.Id),
+                    EarlyWithdrawalFee: p.AgreedCommissionRate is >= 0 and <= 100 ? p.CalculateEarlyWithdrawalFee() : null,
+                    Withdrawal: withdrawalByProduct.GetValueOrDefault(p.Id),
+                    EarlyWithdrawalBlockReason: WithdrawalBlockReason(p, withdrawalByProduct.GetValueOrDefault(p.Id), activeWithdrawalIds.Contains(p.Id), now))).ToArray();
             // Tong du kien tinh cho moi san pham, khong tru cac khoan da quyet toan.
             // Tong la null neu thieu uoc tinh cua bat ky san pham nao.
             var estimatesComplete = products.All(p => p.EstimatedPayout.HasValue);
@@ -126,7 +150,7 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                 c.EndsAt, c.Status.ToString(), c.ExpiryHandling.ToString(), products,
                 estimatesComplete ? products.Sum(p => p.EstimatedPayout!.Value) : null,
                 // Chi cong quyet toan hoan tat; Pending va Transferred chua duoc tinh.
-                c.Payouts.Where(p => p.Status == PayoutStatus.Completed).Sum(p => p.TotalAmount),
+                settledByContract.GetValueOrDefault(c.Id),
                 documents.TryGetValue(c.Id, out var document)
                     ? new ConsignmentDocumentMetadata(document.FileName, document.ContentType, document.UploadedAt)
                     : generatedMetadata.GetValueOrDefault(c.Id) ?? (contractService is null ? null : new ConsignmentDocumentMetadata($"ban-xem-{c.Id}.pdf", "application/pdf", null)),
@@ -139,6 +163,15 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
     {
         var account = await customerProfiles.GetSelfProfileAsync(customerId, cancellationToken);
         return account?.CustomerProfile?.Status == CustomerStatus.Active;
+    }
+
+    private static string? WithdrawalBlockReason(Product product, ConsignmentWithdrawalInfo? withdrawal, bool hasActiveRequest, DateTimeOffset now)
+    {
+        if (product.Status == ProductStatus.OnSale && hasActiveRequest)
+            return withdrawal?.Status == "Approved"
+                ? withdrawal.PaymentStatus == "Paid" ? "Yêu cầu rút món này đã được xử lý phí và đang chờ bàn giao." : "Yêu cầu rút món này đã được duyệt, đang chờ thu phí và bàn giao."
+                : "Món này đã có yêu cầu rút đang chờ duyệt. Bạn có thể xem tiến trình tại Theo dõi yêu cầu.";
+        return product.GetEarlyWithdrawalBlockReason(now);
     }
 
     private static ConsignmentDocumentMetadata? DocumentMetadata(Guid contractId, byte[] content, DateTimeOffset createdAt)
@@ -167,10 +200,17 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
 
     public async Task<ConsignmentProductDetailResponse?> GetProductAsync(Guid customerId, Guid contractId, Guid productId, CancellationToken ct)
     {
-        var product = await db.Products.AsNoTracking().Include(p => p.Brand).Include(p => p.Category).Include(p => p.Images)
+        var product = await db.Products.AsNoTracking().Include(p => p.Brand).Include(p => p.Category).Include(p => p.Images).Include(p => p.ConsignmentContract)
             .SingleOrDefaultAsync(p => p.Id == productId && p.ConsignmentContractId == contractId &&
                 p.ConsignmentContract != null && p.ConsignmentContract.CustomerId == customerId, ct);
         if (product is null) return null;
+        var withdrawal = await db.EarlyWithdrawalItems.AsNoTracking()
+            .Where(i => i.ProductId == productId && i.EarlyWithdrawal.CustomerId == customerId)
+            .OrderByDescending(i => i.EarlyWithdrawal.Status == "Pending" || i.EarlyWithdrawal.Status == "Approved")
+            .ThenByDescending(i => i.EarlyWithdrawal.RequestedAt).ThenByDescending(i => i.EarlyWithdrawalId)
+            .Select(i => new ConsignmentWithdrawalInfo(i.EarlyWithdrawalId, i.EarlyWithdrawal.Status,
+                i.EarlyWithdrawal.PaymentStatus.ToString(), i.EarlyWithdrawal.DecisionNote, i.EarlyWithdrawal.RequestedAt))
+            .FirstOrDefaultAsync(ct);
         var expiry = await db.ExpiryProcessingItems.AsNoTracking()
             .Where(i => i.ProductId == productId)
             .Select(i => new
@@ -188,7 +228,10 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             product.AgreedCommissionRate is null ? null : product.CalculateEstimatedConsignorPayout(),
             product.Description, product.Brand?.Name, product.Category?.Name, product.Size,
             $"{product.ConditionPercentage}%", imageUrls, expiry?.HandledAt,
-            expiry?.Type.ToString(), expiry?.Status.ToString(), expiry?.CollectionDeadline);
+            expiry?.Type.ToString(), expiry?.Status.ToString(), expiry?.CollectionDeadline,
+            product.CanRequestEarlyWithdrawal((clock ?? TimeProvider.System).GetUtcNow()) && withdrawal?.Status is not ("Pending" or "Approved"),
+            product.AgreedCommissionRate is >= 0 and <= 100 ? product.CalculateEarlyWithdrawalFee() : null, withdrawal,
+            WithdrawalBlockReason(product, withdrawal, withdrawal?.Status is "Pending" or "Approved", (clock ?? TimeProvider.System).GetUtcNow()));
     }
     public async Task<(byte[] Content, string ContentType)?> GetImageAsync(Guid customerId, Guid contractId, Guid productId, Guid imageId, CancellationToken ct)
     {

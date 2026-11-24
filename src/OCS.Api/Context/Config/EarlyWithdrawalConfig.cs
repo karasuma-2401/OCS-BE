@@ -10,6 +10,7 @@ public sealed class EarlyWithdrawalConfig : IEntityTypeConfiguration<EarlyWithdr
     {
         builder.ToTable("EarlyWithdrawals", table =>
         {
+            table.HasCheckConstraint("CK_EarlyWithdrawals_Status", "\"Status\" IN ('Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed', 'Legacy')");
             table.HasCheckConstraint("CK_EarlyWithdrawals_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
             table.HasCheckConstraint(
                 "CK_EarlyWithdrawals_PaymentStatus",
@@ -17,6 +18,14 @@ public sealed class EarlyWithdrawalConfig : IEntityTypeConfiguration<EarlyWithdr
         });
 
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.Status).HasMaxLength(20);
+        builder.Property(x => x.Reason).HasMaxLength(1000);
+        builder.Property(x => x.DecisionNote).HasMaxLength(1000);
+        builder.Property(x => x.HandoverEvidence).HasMaxLength(1000);
+        builder.Property(x => x.Version).IsConcurrencyToken();
+        builder.HasIndex(x => new { x.CustomerId, x.RequestedAt });
+        builder.HasOne<EmployeeProfile>().WithMany().HasForeignKey(x => x.PaidByEmployeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<EmployeeProfile>().WithMany().HasForeignKey(x => x.HandedOverByEmployeeId).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.Id).ValueGeneratedNever();
         builder.Property(x => x.TotalPenaltyAmount).HasPrecision(18, 2);
         builder.Property(x => x.PaymentStatus).HasConversion<string>().HasMaxLength(20);

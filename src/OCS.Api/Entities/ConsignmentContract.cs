@@ -6,6 +6,7 @@ namespace OCS.Api.Entities;
 public sealed class ConsignmentContract : BaseEntity
 {
     public string ContractNumber { get; set; } = string.Empty;
+    public decimal? EarlyWithdrawalFeeRate { get; set; }
 
     public Guid? CustomerId { get; set; }
 

@@ -271,7 +271,8 @@ public sealed class ContractServiceTests
         Assert.Equal(15.25m, product.AgreedCommissionRate);
         var document = await db.ContractDocuments.SingleAsync();
         Assert.Equal(contract.Id, document.ContractId);
-        Assert.Null(document.Terms);
+        Assert.Contains("tỷ lệ hoa hồng đã thỏa thuận của sản phẩm", document.Terms);
+        Assert.Equal(contract.TermsSnapshot, document.Terms);
         using (var snapshot = System.Text.Json.JsonDocument.Parse(document.Content))
         {
             Assert.Equal(product.Name, snapshot.RootElement.GetProperty("products")[0].GetProperty("name").GetString());

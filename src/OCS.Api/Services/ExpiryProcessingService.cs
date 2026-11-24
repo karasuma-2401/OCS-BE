@@ -245,7 +245,7 @@ public sealed class ExpiryProcessingService(AppDbContext db, TimeProvider clock,
             }
         }
         var products = await db.Products.Include(x => x.ConsignmentContract)
-            .Where(x => x.Status == ProductStatus.OnSale && x.ConsignmentContractId != null &&
+            .Where(x => x.Status == ProductStatus.OnSale && !x.IsReservedForWithdrawal && x.ConsignmentContractId != null &&
                 x.ConsignmentContract!.EndsAt <= now).ToListAsync(ct);
         if (products.Count == 0)
         {

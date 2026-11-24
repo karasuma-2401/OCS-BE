@@ -97,7 +97,10 @@ public sealed class ContractTemplateTests
         Assert.True((await contracts.CreateAsync(contractRequest, employee.Id, default)).IsSuccess);
         var document = await db.ContractDocuments.SingleAsync();
         var oldSnapshot = document.Content.ToArray();
-        Assert.Equal("Điều khoản đầu", document.Terms);
+        const string withdrawalFeeTerms = "Phí rút hàng sớm của mỗi sản phẩm bằng giá niêm yết nhân với tỷ lệ hoa hồng đã thỏa thuận của sản phẩm trên hợp đồng; làm tròn đến 2 chữ số thập phân.";
+        var oldTerms = $"Điều khoản đầu\n{withdrawalFeeTerms}";
+        Assert.Equal(oldTerms, document.Terms);
+        Assert.Equal(oldTerms, (await db.ConsignmentContracts.SingleAsync()).TermsSnapshot);
         Assert.Equal(firstVersion.ToString("N"), document.TemplateVersion);
         template.Version = Guid.NewGuid();
         template.Title = "Mẫu mới";
@@ -108,7 +111,13 @@ public sealed class ContractTemplateTests
         Assert.Equal("CONTRACT_TEMPLATE.CHANGED", stale.Error!.Code);
         var next = await contracts.CreateAsync(contractRequest with { RequestId = Guid.NewGuid(), TemplateVersion = template.Version }, employee.Id, default);
         Assert.True(next.IsSuccess);
-        Assert.Contains(await db.ContractDocuments.ToListAsync(), d => d.TemplateVersion == template.Version.ToString("N") && d.Terms == "Điều khoản mới");
+        var newTerms = $"Điều khoản mới\n{withdrawalFeeTerms}";
+        Assert.Contains(await db.ContractDocuments.ToListAsync(), d => d.TemplateVersion == template.Version.ToString("N") && d.Terms == newTerms);
+        Assert.Contains(await db.ConsignmentContracts.ToListAsync(), c => c.TermsSnapshot == newTerms);
+        var unchanged = await db.ContractDocuments.AsNoTracking().SingleAsync(d => d.ContractId == document.ContractId);
+        Assert.Equal(oldSnapshot, unchanged.Content);
+        Assert.Equal(oldTerms, unchanged.Terms);
+        Assert.Contains(await db.ConsignmentContracts.AsNoTracking().ToListAsync(), c => c.TermsSnapshot == oldTerms);
     }
 
     [Fact]

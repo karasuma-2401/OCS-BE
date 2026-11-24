@@ -49,6 +49,7 @@ public sealed class Product : BaseEntity
     public ProductApprovalStatus ApprovalStatus { get; set; } = ProductApprovalStatus.Pending;
 
     public Guid InventoryVersion { get; set; } = Guid.NewGuid();
+    public bool IsReservedForWithdrawal { get; set; }
 
     public decimal? PurchasePrice { get; private set; }
 
@@ -184,5 +185,38 @@ public sealed class Product : BaseEntity
             ListedPrice * AgreedCommissionRate.Value / 100m,
             0,
             MidpointRounding.AwayFromZero);
+    }
+
+    public bool CanRequestEarlyWithdrawal(DateTimeOffset now) => GetEarlyWithdrawalBlockReason(now) is null;
+
+    public string? GetEarlyWithdrawalBlockReason(DateTimeOffset now)
+    {
+        if (SourceType != ProductSourceType.Consignment) return "Món này không phải hàng ký gửi.";
+        if (Status != ProductStatus.OnSale)
+            return Status switch
+            {
+                ProductStatus.PendingProcessing => "Món này đang Chờ xử lý, chưa được đưa lên bán. Cửa hàng cần hoàn tất xử lý và chuyển món sang Đang bán trước khi bạn có thể rút sớm.",
+                ProductStatus.Sold => "Món này đã bán nên không thể rút sớm.",
+                ProductStatus.Expired => "Món này đã hết hạn ký gửi. Vui lòng theo dõi quy trình xử lý hàng hết hạn.",
+                ProductStatus.EarlyWithdrawn => "Món này đã được bàn giao cho bạn qua yêu cầu rút sớm.",
+                ProductStatus.Returned => "Món này đã được trả lại cho bạn.",
+                ProductStatus.Donated => "Món này đã được quyên góp nên không thể rút sớm.",
+                _ => "Món này không còn ở trạng thái Đang bán nên không thể rút sớm."
+            };
+        if (IsReservedForWithdrawal) return "Món này đang được giữ để bàn giao theo yêu cầu rút hàng đã duyệt.";
+        if (AgreedCommissionRate is not (>= 0 and <= 100))
+            return "Món này chưa có tỷ lệ hoa hồng đã thỏa thuận hợp lệ. Vui lòng liên hệ cửa hàng để đối chiếu hợp đồng.";
+        if (ConsignmentContract is not { Status: ConsignmentContractStatus.Active })
+            return "Hợp đồng của món này không còn hiệu lực nên không thể rút sớm.";
+        if (ConsignmentContract.SignedAt > now) return "Hợp đồng chưa đến thời điểm bắt đầu ký gửi nên chưa thể rút sớm.";
+        if (ConsignmentContract.EndsAt <= now) return "Hợp đồng đã hết thời hạn ký gửi. Vui lòng theo dõi quy trình xử lý hàng hết hạn.";
+        return null;
+    }
+
+    public decimal CalculateEarlyWithdrawalFee()
+    {
+        if (SourceType != ProductSourceType.Consignment || AgreedCommissionRate is not (>= 0 and <= 100))
+            throw new InvalidOperationException("The product must have an agreed consignment commission rate.");
+        return decimal.Round(ListedPrice * AgreedCommissionRate.Value / 100m, 2, MidpointRounding.AwayFromZero);
     }
 }

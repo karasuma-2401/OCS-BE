@@ -25,6 +25,10 @@ public static class PermissionCatalog
     public const string ProductsLocation = "products.location.update";
     public const string ProductsLocationsManage = "products.locations.manage";
     public const string ProductsPrice = "products.price.update";
+    public const string WithdrawalRead = "withdrawals.read";
+    public const string WithdrawalApprove = "withdrawals.approve";
+    public const string WithdrawalPayment = "withdrawals.payment";
+    public const string WithdrawalHandover = "withdrawals.handover";
     public const string ExpiryRead = "expiry.read";
     public const string ExpiryReturn = "expiry.return";
     public const string ExpiryDonate = "expiry.donate";
@@ -40,6 +44,10 @@ public static class PermissionCatalog
 
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
+        new(WithdrawalRead, "Xem yêu cầu rút sớm", "Xem yêu cầu rút hàng sớm.", 1001),
+        new(WithdrawalApprove, "Duyệt rút sớm", "Duyệt và từ chối yêu cầu rút sớm.", 1002),
+        new(WithdrawalPayment, "Thu phí rút sớm", "Ghi nhận thu đủ phí rút sớm.", 1003),
+        new(WithdrawalHandover, "Giao hàng rút sớm", "Xác nhận giao hàng rút sớm.", 1004),
         new(CustomersRead, "Xem hồ sơ khách", "Tra cứu hồ sơ khách hàng.", 1),
         new(AccountsCreate, "Tạo tài khoản nội bộ", "Cấp tài khoản nhân viên.", 2),
         new(AppointmentsCreate, "Đặt lịch ký gửi", "Khách hàng tạo lịch hẹn của mình.", 3),
@@ -93,14 +101,14 @@ public static class PermissionCatalog
             ["Admin"] = RequiredAdminCodes.ToArray(),
             ["Manager"] =
             [
-                CustomersRead, CustomersUpdate, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
+                WithdrawalRead, WithdrawalApprove, WithdrawalPayment, WithdrawalHandover, CustomersRead, CustomersUpdate, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
                 AppointmentsStaffRead, AppointmentsStaffUpdate, AppointmentsStaffReception,
                 ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ExpiryRead, ExpiryReturn, ExpiryDonate, ExpiryMarkUnclaimed, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
                 ScreenSettlement, ScreenReports, ScreenAccounts
             ],
             ["Staff"] =
             [
-                CustomersRead, CustomersUpdate, AppointmentsStaffRead, AppointmentsStaffUpdate,
+                WithdrawalRead, WithdrawalApprove, WithdrawalPayment, WithdrawalHandover, CustomersRead, CustomersUpdate, AppointmentsStaffRead, AppointmentsStaffUpdate,
                 AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ExpiryRead, ExpiryReturn, ExpiryDonate, ScreenPos, ScreenInventory,
                 ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports
             ],

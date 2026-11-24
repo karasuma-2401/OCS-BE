@@ -29,6 +29,41 @@ namespace OCS.Api.IntegrationTests;
 public sealed class CustomerConsignmentTests
 {
     [Fact]
+    public async Task ListAndSearch_AggregateCompletedPayoutsPerContractWithoutLoadingPayoutEntities()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var owner = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        db.Accounts.AddRange(Customer(owner), Customer(other));
+        var paid = new ConsignmentContract { CustomerId = owner, ContractNumber = "PAID" };
+        var pending = new ConsignmentContract { CustomerId = owner, ContractNumber = "PENDING" };
+        var empty = new ConsignmentContract { CustomerId = owner, ContractNumber = "EMPTY" };
+        var foreign = new ConsignmentContract { CustomerId = other, ContractNumber = "FOREIGN" };
+        paid.Payouts.Add(new Payout { TotalAmount = 125, Status = PayoutStatus.Completed });
+        paid.Payouts.Add(new Payout { TotalAmount = 175, Status = PayoutStatus.Completed });
+        paid.Payouts.Add(new Payout { TotalAmount = 999, Status = PayoutStatus.Transferred });
+        pending.Payouts.Add(new Payout { TotalAmount = 500, Status = PayoutStatus.Pending });
+        foreign.Payouts.Add(new Payout { TotalAmount = 5000, Status = PayoutStatus.Completed });
+        db.ConsignmentContracts.AddRange(paid, pending, empty, foreign);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+        var service = new CustomerConsignmentService(db, new CustomerProfileRepository(db));
+
+        var all = (await service.GetAsync(owner, default))!;
+        Assert.Equal(3, all.Length);
+        Assert.Equal(300m, all.Single(c => c.ContractId == paid.Id).SettledAmount);
+        Assert.All(all.Where(c => c.ContractId != paid.Id), c => Assert.Equal(0m, c.SettledAmount));
+        var search = (await service.SearchAsync(owner, new ConsignmentSearchRequest { Query = "PAID", PageSize = 1 }, default))!;
+        Assert.Equal(300m, Assert.Single(search.Items).SettledAmount);
+        Assert.Equal(300m, search.Overview.SettledAmount);
+        var noMatches = (await service.SearchAsync(owner, new ConsignmentSearchRequest { Query = "missing" }, default))!;
+        Assert.Empty(noMatches.Items);
+        Assert.Equal(300m, noMatches.Overview.SettledAmount);
+        Assert.Empty(db.ChangeTracker.Entries<Payout>());
+    }
+
+    [Fact]
     public async Task Get_OnlyReturnsOwnersContracts_AndCompletedSettlements()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;

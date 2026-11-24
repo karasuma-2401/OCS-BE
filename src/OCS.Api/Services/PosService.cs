@@ -38,8 +38,8 @@ public class PosService(AppDbContext dbContext) : IPosService
         }
 
         bool contractExpired = product.ConsignmentContract is { } contract && contract.EndsAt <= DateTimeOffset.UtcNow;
-        bool canAddToCart = product.Status == ProductStatus.OnSale && !contractExpired;
-        string? rejectionReason = contractExpired ? "Sản phẩm đã hết hạn ký gửi, không thể bán." : product.Status switch
+        bool canAddToCart = product.Status == ProductStatus.OnSale && !contractExpired && !product.IsReservedForWithdrawal;
+        string? rejectionReason = product.IsReservedForWithdrawal ? "Sản phẩm đã được giữ để rút sớm." : contractExpired ? "Sản phẩm đã hết hạn ký gửi, không thể bán." : product.Status switch
         {
             ProductStatus.OnSale => null,
             ProductStatus.Sold => "Sản phẩm này đã được bán.",
@@ -363,7 +363,7 @@ public class PosService(AppDbContext dbContext) : IPosService
         }
 
         var now = DateTimeOffset.UtcNow;
-        var invalidProducts = products.Where(p => p.Status != ProductStatus.OnSale ||
+        var invalidProducts = products.Where(p => p.Status != ProductStatus.OnSale || p.IsReservedForWithdrawal ||
             p.ConsignmentContract is { } contract && contract.EndsAt <= now).ToList();
         if (invalidProducts.Count != 0)
         {

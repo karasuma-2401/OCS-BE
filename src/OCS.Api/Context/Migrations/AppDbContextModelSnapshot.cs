@@ -705,6 +705,10 @@ namespace OCS.Api.Context.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
+                    b.Property<decimal?>("EarlyWithdrawalFeeRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.Property<string>("EmployeeNameSnapshot")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -774,6 +778,8 @@ namespace OCS.Api.Context.Migrations
                             t.HasCheckConstraint("CK_ConsignmentContracts_Dates", "\"EndsAt\" > \"SignedAt\"");
 
                             t.HasCheckConstraint("CK_ConsignmentContracts_Enums", "\"Status\" IN ('Active', 'Completed', 'Cancelled')\r\nAND \"ExpiryHandling\" IN ('Return', 'Donate')");
+
+                            t.HasCheckConstraint("CK_ConsignmentContracts_WithdrawalFeeRate", "\"EarlyWithdrawalFeeRate\" IS NULL OR \"EarlyWithdrawalFeeRate\" BETWEEN 0 AND 100");
                         });
                 });
 
@@ -1048,10 +1054,33 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("HandedOverAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("HandedOverByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HandoverEvidence")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("PaidByEmployeeId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("PaymentStatus")
@@ -1059,8 +1088,21 @@ namespace OCS.Api.Context.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
-                    b.Property<Guid>("ProcessedByEmployeeId")
+                    b.Property<Guid?>("ProcessedByEmployeeId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<decimal>("TotalPenaltyAmount")
                         .HasPrecision(18, 2)
@@ -1069,15 +1111,25 @@ namespace OCS.Api.Context.Migrations
                     b.Property<DateTimeOffset?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("CustomerId");
+                    b.HasIndex("HandedOverByEmployeeId");
+
+                    b.HasIndex("PaidByEmployeeId");
 
                     b.HasIndex("ProcessedByEmployeeId");
+
+                    b.HasIndex("CustomerId", "RequestedAt");
 
                     b.ToTable("EarlyWithdrawals", null, t =>
                         {
                             t.HasCheckConstraint("CK_EarlyWithdrawals_PaymentStatus", "\"PaymentStatus\" IN ('Unpaid', 'Partial', 'Paid')");
+
+                            t.HasCheckConstraint("CK_EarlyWithdrawals_Status", "\"Status\" IN ('Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed', 'Legacy')");
 
                             t.HasCheckConstraint("CK_EarlyWithdrawals_TotalPenalty", "\"TotalPenaltyAmount\" >= 0");
                         });
@@ -1099,16 +1151,21 @@ namespace OCS.Api.Context.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal>("PenaltyRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)");
+
                     b.HasKey("EarlyWithdrawalId", "ProductId");
 
-                    b.HasIndex("ProductId")
-                        .IsUnique();
+                    b.HasIndex("ProductId");
 
                     b.ToTable("EarlyWithdrawalItems", null, t =>
                         {
                             t.HasCheckConstraint("CK_EarlyWithdrawalItems_ListedPrice", "\"ListedPrice\" >= 0");
 
                             t.HasCheckConstraint("CK_EarlyWithdrawalItems_Penalty", "\"PenaltyAmount\" >= 0");
+
+                            t.HasCheckConstraint("CK_EarlyWithdrawalItems_Rate", "\"PenaltyRate\" BETWEEN 0 AND 100");
                         });
                 });
 
@@ -1749,6 +1806,34 @@ namespace OCS.Api.Context.Migrations
                     b.HasData(
                         new
                         {
+                            Id = new Guid("30000000-0000-0000-0000-000000001001"),
+                            Code = "withdrawals.read",
+                            Description = "Xem yêu cầu rút hàng sớm.",
+                            Name = "Xem yêu cầu rút sớm"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000001002"),
+                            Code = "withdrawals.approve",
+                            Description = "Duyệt và từ chối yêu cầu rút sớm.",
+                            Name = "Duyệt rút sớm"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000001003"),
+                            Code = "withdrawals.payment",
+                            Description = "Ghi nhận thu đủ phí rút sớm.",
+                            Name = "Thu phí rút sớm"
+                        },
+                        new
+                        {
+                            Id = new Guid("30000000-0000-0000-0000-000000001004"),
+                            Code = "withdrawals.handover",
+                            Description = "Xác nhận giao hàng rút sớm.",
+                            Name = "Giao hàng rút sớm"
+                        },
+                        new
+                        {
                             Id = new Guid("30000000-0000-0000-0000-000000000001"),
                             Code = "customers.read",
                             Description = "Tra cứu hồ sơ khách hàng.",
@@ -2051,6 +2136,9 @@ namespace OCS.Api.Context.Migrations
                         .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsReservedForWithdrawal")
+                        .HasColumnType("boolean");
+
                     b.Property<decimal>("ListedPrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -2315,6 +2403,26 @@ namespace OCS.Api.Context.Migrations
                         new
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001001")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001002")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001003")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001004")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000001")
                         },
                         new
@@ -2446,6 +2554,26 @@ namespace OCS.Api.Context.Migrations
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000001"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000022")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001001")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001002")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001003")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000001004")
                         },
                         new
                         {
@@ -2930,11 +3058,20 @@ namespace OCS.Api.Context.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", null)
+                        .WithMany()
+                        .HasForeignKey("HandedOverByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", null)
+                        .WithMany()
+                        .HasForeignKey("PaidByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OCS.Api.Entities.EmployeeProfile", "ProcessedByEmployee")
                         .WithMany()
                         .HasForeignKey("ProcessedByEmployeeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Customer");
 
