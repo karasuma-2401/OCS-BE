@@ -155,3 +155,50 @@ dotnet test tests/OCS.Api.IntegrationTests/OCS.Api.IntegrationTests.csproj --no-
 ```
 
 Kiểm thử bao gồm phí được chốt, làm tròn, quyền sở hữu, gửi trùng, hủy/gửi lại, duyệt, chặn POS, sai tiền, thu trùng, bàn giao trước khi thu, bàn giao trùng, miễn phí và giải phóng hàng khi từ chối. Các kiểm thử nghiệp vụ dùng EF InMemory; không thay thế kiểm thử đồng thời trên PostgreSQL thật.
+
+`EarlyWithdrawalHttpTests` kiểm tra qua pipeline HTTP thật của ứng dụng (JWT, phân quyền, binding/validation DTO và audit) với database InMemory riêng: gửi yêu cầu, duyệt, ghi nhận phí, bàn giao, từ chối, hủy và các trường hợp dữ liệu thiếu/quá dài trả 400. Các attribute validation của DTO record đặt trên tham số constructor; không dùng target `property:` vì MVC sẽ báo lỗi 500 khi bind request.
+
+## Gửi lại sau khi hủy hoặc bị từ chối (25/11/2026)
+
+- Migration `20261124175037_AllowEarlyWithdrawalResubmission` đổi index `EarlyWithdrawalItems.ProductId` từ unique sang thường. Khóa chính `(EarlyWithdrawalId, ProductId)` vẫn chặn lặp món trong cùng phiếu. Không xóa phiếu cũ, lịch sử, phí hoặc dữ liệu sản phẩm.
+- Chỉ `Pending`/`Approved` chặn yêu cầu mới. Sau `Cancelled`/`Rejected`, server kiểm tra lại chủ sở hữu, trạng thái còn bán, hạn/trạng thái hợp đồng, tỷ lệ phí và giữ hàng; yêu cầu nhiều món thất bại toàn bộ nếu có một món không hợp lệ.
+- Transaction Serializable và `Product.InventoryVersion` vẫn bảo vệ việc gửi đồng thời. Xung đột phiên bản, serialization failure hoặc deadlock khi ghi trả 409 để tải lại; không tự lặp thu phí/bàn giao. Một món đã bàn giao không được tạo yêu cầu mới.
+- Theo dõi ký gửi ưu tiên phiếu đang xử lý, rồi mới xét thời điểm gửi và ID. Vì vậy các phiếu cũ cùng thời điểm không che mất yêu cầu đang chờ duyệt.
+- Phiếu đã hủy/bị từ chối có nút **Chọn món để gửi lại**. Màn hình chuyển về tab Rút hàng, tải lại danh sách, chọn những món còn hợp lệ và báo số món không còn hợp lệ. Khách kiểm tra phí, chọn lý do và xác nhận mới tạo phiếu mới; không dùng lại phí/ID phiếu cũ.
+- Chặn bấm gửi hai lần. Khi gặp 404/409 phải tải lại/chọn lại. Nếu mất kết nối hoặc server trả 5xx, hiển thị chưa xác định được kết quả, khóa gửi lại trên hộp thoại hiện tại và cung cấp nút kiểm tra lịch sử để tránh gửi lặp sau khi server đã ghi thành công.
+
+Triển khai cần chạy migration ở trên rồi khởi động lại backend. Nếu rollback khi đã có nhiều phiếu cho cùng sản phẩm, unique index cũ không thể tạo lại; không xóa lịch sử để ép rollback.
+
+Đã áp dụng migration này vào database đang cấu hình ngày 25/11/2026. Kiểm tra trực tiếp xác nhận index không còn unique và không có sản phẩm với nhiều phiếu `Pending`/`Approved` đồng thời. Backend đang chạy cần khởi động lại để nạp code mới; không cần chạy lại migration trên database này.
+
+Kiểm thử hồi quy: HTTP gửi → hủy/từ chối → gửi lại, giữ nguyên phiếu cũ, 409 khi gửi trùng/thuộc phiếu kết thúc; kiểm thử nghiệp vụ lặp nhiều lần, phí, quyền sở hữu, hợp đồng hết hạn/ngừng hiệu lực và sản phẩm đã bán. Frontend kiểm tra chọn lại một phần, chống double click, 409, 500 và mất mạng. Build production dùng `npm.cmd run build`.
+
+`EarlyWithdrawalPostgresTests` dùng `OCS_TEST_POSTGRES` và **chỉ tạo bảng TEMP trong kết nối riêng**, `search_path=pg_temp`, không sửa schema/dữ liệu ứng dụng. Hai test kiểm tra SQL migration thực tế (lỗi unique trước sửa, thành công sau sửa, vẫn chặn lặp dòng) và service thật từ hủy/gửi lại đến duyệt/thu phí/bàn giao. Không thay thế stress test đồng thời nhiều kết nối.
+
+```powershell
+dotnet test tests/OCS.Api.IntegrationTests/OCS.Api.IntegrationTests.csproj --no-restore -c WithdrawalResubmitVerify -p:UseAppHost=false --filter FullyQualifiedName~EarlyWithdrawal
+```
+
+Chỉ chạy filter `FullyQualifiedName~EarlyWithdrawalPostgresTests` khi dùng kết nối cho bộ test TEMP; các bộ test PostgreSQL khác của dự án có thể yêu cầu quyền tạo database riêng.
+
+Kết quả xác minh bản sửa: 20 test backend nghiệp vụ/HTTP, 2 test PostgreSQL TEMP và 12 test frontend liên quan đều đạt; TypeScript và Vite production build thành công.
+
+## Bố cục theo dõi yêu cầu
+
+## Thu phí rút hàng bằng VietQR
+
+- Nhân viên chọn **Chuyển khoản VietQR → Mở VietQR** trong bước thu phí. Dùng lại popup POS (QR, thông tin ngân hàng, nội dung chuyển khoản, đếm ngược, kiểm tra trạng thái), bộ tạo QR và webhook đã có. Có thể chọn tiền mặt để xác nhận thủ công. Không hiển thị nút giả lập webhook trong luồng rút hàng.
+- `POST /api/early-withdrawals/{id}/payment/vietqr`, body `{ "forceNew": false }`: tạo hoặc dùng lại phiên còn hiệu lực. `forceNew: true` tạo mã tham chiếu mới và đánh dấu phiên cũ Failed.
+- `GET /api/early-withdrawals/{id}/payment/vietqr/{transactionId}`: lấy trạng thái, ràng buộc giao dịch thuộc đúng yêu cầu. Cả hai endpoint yêu cầu quyền `withdrawals.payment` và tài khoản nhân viên đang hoạt động.
+- Phí lấy từ snapshot của yêu cầu đã duyệt, chưa thanh toán và còn giữ đủ hàng. Giao dịch thu nhập liên kết `EarlyWithdrawalId`; không tạo hóa đơn bán hàng. Không cần migration mới.
+- Webhook ngân hàng hiện có đối soát theo mã tham chiếu; chỉ ghi Paid khi số tiền đúng phí. Quét mã/mở QR không được tính là thanh toán. Webhook gửi lặp không tạo thêm khoản thu; nhận đủ phí vẫn giữ sản phẩm OnSale và reserved, bước bàn giao mới đổi EarlyWithdrawn.
+- Đóng popup không hủy phiên. Mở lại dùng cùng phiên còn hạn. Trong lúc QR còn hiệu lực, API chặn thu tiền thủ công và từ chối yêu cầu để tránh thu trùng; kiểm tra thanh toán hoặc chờ hết hạn trước khi đổi cách xử lý.
+- Webhook đến muộn của mã hết hạn/đã thay thế chỉ được thu nếu yêu cầu vẫn Approved và chưa thu phí. Nếu đã thu bằng cách khác hoặc đã kết thúc, API trả lỗi đối soát, không tự mở lại yêu cầu. Chuyển thiếu/thừa tiền cần đối soát thủ công.
+- Dùng cấu hình ngân hàng và webhook VietQR của POS. Để tự cập nhật khi chuyển khoản thật, dịch vụ ngân hàng phải gửi webhook đã xác thực đến backend. Không bổ sung endpoint giả lập thanh toán rút hàng.
+- Kiểm tra: 36 test backend liên quan đạt, 2 test PostgreSQL bỏ qua khi thiếu cấu hình DB kiểm thử; test frontend rút hàng và production build đạt. Chưa xác minh giao dịch ngân hàng thật.
+
+### Bảng theo dõi
+
+Bảng khách hàng/nhân viên được rút gọn còn mã/ngày gửi, tên món đầu tiên và mã hợp đồng (kèm số món còn lại), badge trạng thái, số tiền và nhãn thu phí ngắn. Tên món dài được rút gọn một dòng. Lý do rút/từ chối, hướng dẫn bước tiếp theo, toàn bộ sản phẩm và mốc thu phí/bàn giao nằm trong popup Chi tiết. Màn hình nhỏ dùng thẻ gọn với cùng thông tin; nhân viên thấy thêm tên/số điện thoại khách. Chọn dòng chỉ đánh dấu, nút Chi tiết mở popup.
+
+Bảng dùng các nhãn ngắn “Chưa thu phí”, “Đã thu phí”, “Thu một phần”, “Miễn phí”, “Không thu phí”. Phiếu hủy/từ chối chưa thu ghi “Không thu phí”; số tiền màu phụ là phí lưu trên phiếu cũ. Popup giải thích rõ chờ duyệt chưa đến bước thu, đã duyệt chờ thu, hoặc phiếu kết thúc không cần đóng phí. Dữ liệu đã thu một phần/đủ phí vẫn được thể hiện đúng nếu tồn tại trên phiếu kết thúc. Không thay đổi công thức phí, API hoặc database cho phần bố cục này.

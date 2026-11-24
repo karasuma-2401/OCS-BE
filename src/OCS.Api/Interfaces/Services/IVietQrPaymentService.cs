@@ -5,6 +5,8 @@ namespace OCS.Api.Interfaces.Services;
 
 public interface IVietQrPaymentService
 {
+    Task<Result<WithdrawalVietQrSessionDto>> InitiateWithdrawalAsync(Guid withdrawalId, Guid actorAccountId, bool forceNew, CancellationToken ct = default);
+    Task<Result<WithdrawalVietQrSessionDto>> GetWithdrawalStatusAsync(Guid withdrawalId, Guid transactionId, Guid actorAccountId, CancellationToken ct = default);
     Task<Result<VietQrPaymentSessionDto>> InitiateAsync(
         Guid actorAccountId,
         InitiateVietQrPaymentRequest request,

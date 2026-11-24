@@ -91,7 +91,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                 i.EarlyWithdrawal.Status, i.EarlyWithdrawal.PaymentStatus.ToString(), i.EarlyWithdrawal.DecisionNote, i.EarlyWithdrawal.RequestedAt) })
             .ToListAsync(cancellationToken);
         var withdrawalByProduct = withdrawals.GroupBy(i => i.ProductId)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.Info.RequestedAt).ThenByDescending(i => i.Info.Id).First().Info);
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.Info.Status is "Pending" or "Approved")
+                .ThenByDescending(i => i.Info.RequestedAt).ThenByDescending(i => i.Info.Id).First().Info);
         var activeWithdrawalIds = withdrawals.Where(i => i.Info.Status is "Pending" or "Approved").Select(i => i.ProductId).ToHashSet();
         // Customer tracking needs only completed totals, not internal payout/approver records.
         var settledByContract = await db.Payouts.AsNoTracking()
@@ -201,7 +202,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
         if (product is null) return null;
         var withdrawal = await db.EarlyWithdrawalItems.AsNoTracking()
             .Where(i => i.ProductId == productId && i.EarlyWithdrawal.CustomerId == customerId)
-            .OrderByDescending(i => i.EarlyWithdrawal.RequestedAt).ThenByDescending(i => i.EarlyWithdrawalId)
+            .OrderByDescending(i => i.EarlyWithdrawal.Status == "Pending" || i.EarlyWithdrawal.Status == "Approved")
+            .ThenByDescending(i => i.EarlyWithdrawal.RequestedAt).ThenByDescending(i => i.EarlyWithdrawalId)
             .Select(i => new ConsignmentWithdrawalInfo(i.EarlyWithdrawalId, i.EarlyWithdrawal.Status,
                 i.EarlyWithdrawal.PaymentStatus.ToString(), i.EarlyWithdrawal.DecisionNote, i.EarlyWithdrawal.RequestedAt))
             .FirstOrDefaultAsync(ct);

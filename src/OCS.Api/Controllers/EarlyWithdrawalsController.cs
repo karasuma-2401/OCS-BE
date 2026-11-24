@@ -5,13 +5,21 @@ using OCS.Api.Authorization;
 using OCS.Api.Extensions;
 using OCS.Api.Models.Products;
 using OCS.Api.Services;
+using OCS.Api.Interfaces.Services;
+using OCS.Api.Models.Pos;
 
 namespace OCS.Api.Controllers;
 
 [ApiController, Route("api/early-withdrawals"), Authorize(Roles = "Admin,Manager,Staff")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class EarlyWithdrawalsController(EarlyWithdrawalService service) : ControllerBase
+public sealed class EarlyWithdrawalsController(EarlyWithdrawalService service, IVietQrPaymentService vietQr) : ControllerBase
 {
+    [HttpPost("{id:guid}/payment/vietqr"), Authorize(Policy = PermissionCatalog.WithdrawalPayment)]
+    public async Task<IActionResult> InitiateVietQr(Guid id, InitiateWithdrawalVietQrRequest request, CancellationToken ct) => Actor() is Guid actor
+        ? (await vietQr.InitiateWithdrawalAsync(id, actor, request.ForceNew, ct)).ToActionResult(this) : Unauthorized();
+    [HttpGet("{id:guid}/payment/vietqr/{transactionId:guid}"), Authorize(Policy = PermissionCatalog.WithdrawalPayment)]
+    public async Task<IActionResult> VietQrStatus(Guid id, Guid transactionId, CancellationToken ct) => Actor() is Guid actor
+        ? (await vietQr.GetWithdrawalStatusAsync(id, transactionId, actor, ct)).ToActionResult(this) : Unauthorized();
     [HttpGet("summary"), Authorize(Policy = PermissionCatalog.WithdrawalRead)]
     public async Task<IActionResult> Summary(CancellationToken ct) => (await service.SummaryAsync(null, ct)).ToActionResult(this);
     [HttpGet("search"), Authorize(Policy = PermissionCatalog.WithdrawalRead)]

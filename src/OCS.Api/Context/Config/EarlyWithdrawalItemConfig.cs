@@ -21,6 +21,8 @@ public sealed class EarlyWithdrawalItemConfig : IEntityTypeConfiguration<EarlyWi
         builder.Property(x => x.PenaltyRate).HasPrecision(5, 2);
         builder.HasOne(x => x.EarlyWithdrawal).WithMany(x => x.Items).HasForeignKey(x => x.EarlyWithdrawalId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(x => x.ProductId).IsUnique();
+        // A product may have cancelled/rejected requests in its history. The composite
+        // key prevents duplicate lines; the service serializes active requests via InventoryVersion.
+        builder.HasIndex(x => x.ProductId);
     }
 }

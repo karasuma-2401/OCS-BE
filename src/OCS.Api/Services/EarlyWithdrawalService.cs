@@ -108,7 +108,8 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
             .Where(x => request.ProductIds.Contains(x.Id) && x.ConsignmentContract != null && x.ConsignmentContract.CustomerId == customer).ToListAsync(ct);
         if (products.Count != request.ProductIds.Length) return Missing();
         var now = clock.GetUtcNow();
-        if (products.Any(x => !Available(x, now))) return Conflict("Chỉ được rút hàng ký gửi còn bán trong thời hạn hợp đồng.");
+        var unavailable = products.FirstOrDefault(x => !Available(x, now));
+        if (unavailable is not null) return Conflict($"{unavailable.Name}: {unavailable.GetEarlyWithdrawalBlockReason(now)}");
         if (await db.EarlyWithdrawalItems.AnyAsync(x => request.ProductIds.Contains(x.ProductId) &&
             (x.EarlyWithdrawal.Status == "Pending" || x.EarlyWithdrawal.Status == "Approved"), ct))
             return Conflict("Sản phẩm đã có yêu cầu rút sớm đang xử lý.");
@@ -171,6 +172,7 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
             case "reject":
                 if (!Text(note)) return Invalid();
                 if (row.Status is not ("Pending" or "Approved") || row.PaidAt.HasValue) return Conflict("Không thể từ chối phiếu đã thu phí hoặc đã kết thúc.");
+                if (await HasActiveQrAsync(row.Id, now, ct)) return Conflict("Phiên VietQR vẫn còn hiệu lực. Kiểm tra thanh toán hoặc chờ mã hết hạn trước khi từ chối.");
                 row.Status = "Rejected";
                 row.DecisionNote = note!.Trim();
                 row.ProcessedByEmployeeId = actor;
@@ -183,6 +185,7 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
             case "pay":
                 if (row.Status != "Approved" || row.PaymentStatus == InvoicePaymentStatus.Paid || row.TotalPenaltyAmount <= 0)
                     return Conflict("Phiếu phải được duyệt và chưa thu phí.");
+                if (await HasActiveQrAsync(row.Id, now, ct)) return Conflict("Phiên VietQR vẫn còn hiệu lực. Kiểm tra thanh toán hoặc chờ mã hết hạn trước khi thu bằng phương thức khác.");
                 if (payment is null || payment.Amount != row.TotalPenaltyAmount ||
                     payment.PaymentMethod is not ("Cash" or "BankTransfer") || payment.Reference?.Length > 64 ||
                     payment.PaymentMethod == "BankTransfer" && string.IsNullOrWhiteSpace(payment.Reference)) return Invalid();
@@ -234,8 +237,8 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
             db.ChangeTracker.Clear();
             return false;
         }
-        catch (Exception ex) when (ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } ||
-            ex is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure } })
+        catch (Exception ex) when (ex is PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } ||
+            ex is DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.DeadlockDetected } })
         {
             if (tx is not null) await tx.RollbackAsync(ct);
             db.ChangeTracker.Clear();
@@ -244,6 +247,9 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
     }
 
     private static bool Available(Product p, DateTimeOffset now) => p.CanRequestEarlyWithdrawal(now);
+    private Task<bool> HasActiveQrAsync(Guid id, DateTimeOffset now, CancellationToken ct) => db.FinancialTransactions.AnyAsync(
+        t => t.EarlyWithdrawalId == id && t.PaymentMethod == PaymentMethod.VietQr && t.Status == FinancialTransactionStatus.Pending &&
+            (!t.ExpiresAt.HasValue || t.ExpiresAt > now), ct);
     private static bool Text(string? text) => !string.IsNullOrWhiteSpace(text) && text.Length <= 1000;
     private static Result<EarlyWithdrawalDto> Missing() => Result.Failure<EarlyWithdrawalDto>(ApplicationError.NotFound("WITHDRAWAL.NOT_FOUND", "Không tìm thấy yêu cầu hoặc sản phẩm."));
     private static Result<EarlyWithdrawalDto> Invalid() => Result.Failure<EarlyWithdrawalDto>(ApplicationError.Validation("WITHDRAWAL.INVALID", "Thông tin yêu cầu không hợp lệ."));

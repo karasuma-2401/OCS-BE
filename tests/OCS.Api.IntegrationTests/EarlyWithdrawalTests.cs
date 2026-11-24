@@ -8,8 +8,85 @@ using OCS.Api.Services;
 
 namespace OCS.Api.IntegrationTests;
 
-public sealed class EarlyWithdrawalTests
+public sealed partial class EarlyWithdrawalTests
 {
+    [Fact]
+    public void ProductIndexAllowsHistoryButCompositeKeyStillRejectsDuplicateLines()
+    {
+        using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql("Host=localhost;Database=model_only;Username=test;Password=test").Options);
+        var entity = db.Model.FindEntityType(typeof(EarlyWithdrawalItem))!;
+        Assert.False(Assert.Single(entity.GetIndexes(), index => index.Properties.Select(p => p.Name).SequenceEqual(["ProductId"])).IsUnique);
+        Assert.Equal(new[] { "EarlyWithdrawalId", "ProductId" }, entity.FindPrimaryKey()!.Properties.Select(p => p.Name));
+        Assert.True(db.Model.FindEntityType(typeof(Product))!.FindProperty(nameof(Product.InventoryVersion))!.IsConcurrencyToken);
+        var migration = new OCS.Api.Context.Migrations.AllowEarlyWithdrawalResubmission();
+        var index = Assert.Single(migration.UpOperations.OfType<Microsoft.EntityFrameworkCore.Migrations.Operations.CreateIndexOperation>());
+        Assert.False(index.IsUnique);
+        Assert.Equal("EarlyWithdrawalItems", index.Table);
+        Assert.Equal(new[] { "ProductId" }, index.Columns);
+    }
+
+    [Fact]
+    public async Task RepeatedCancellationAndRejectionKeepHistoryAndTrackingUsesTheActiveRequest()
+    {
+        var (db, service, customer, employee, product) = Setup();
+        await using var cleanup = db;
+        var history = new List<Guid>();
+        var tracking = new CustomerConsignmentService(db, new OCS.Api.Repositories.CustomerProfileRepository(db));
+        for (var i = 0; i < 4; i++)
+        {
+            var request = await service.CreateAsync(customer, new([product.Id], $"Lần {i}"), default);
+            Assert.True(request.IsSuccess); history.Add(request.Data!.Id);
+            Assert.Equal(12345.68m, request.Data.TotalPenaltyAmount);
+            Assert.Empty((await service.EligibleAsync(customer, default)).Data!);
+            // Same fixed clock for every request: active state must win over GUID ordering.
+            var detail = (await tracking.GetProductAsync(customer, product.ConsignmentContractId!.Value, product.Id, default))!;
+            Assert.Equal(request.Data.Id, detail.Withdrawal!.Id); Assert.False(detail.CanWithdrawEarly);
+            var listed = Assert.Single(Assert.Single((await tracking.GetAsync(customer, default))!).Products);
+            Assert.Equal(detail.Withdrawal.Id, listed.Withdrawal!.Id);
+            Assert.False((await service.CreateAsync(customer, new([product.Id], "Trùng"), default)).IsSuccess);
+            if (i % 2 == 0)
+                Assert.True((await service.CancelAsync(request.Data.Id, customer, default)).IsSuccess);
+            else
+            {
+                Assert.True((await service.ApproveAsync(request.Data.Id, employee, default)).IsSuccess);
+                Assert.False((await service.CancelAsync(request.Data.Id, customer, default)).IsSuccess);
+                Assert.True((await service.RejectAsync(request.Data.Id, employee, new("Khách cần đổi lịch"), default)).IsSuccess);
+            }
+            Assert.Single((await service.EligibleAsync(customer, default)).Data!);
+            Assert.False((await db.Products.SingleAsync()).IsReservedForWithdrawal);
+            Assert.False((await service.ApproveAsync(request.Data.Id, employee, default)).IsSuccess);
+            Assert.False((await service.CancelAsync(request.Data.Id, customer, default)).IsSuccess);
+        }
+        Assert.Equal(4, history.Distinct().Count());
+        Assert.Equal(4, await db.EarlyWithdrawalItems.CountAsync());
+        Assert.Empty(await db.FinancialTransactions.ToListAsync());
+        Assert.Empty(await db.ProductStatusHistories.ToListAsync());
+    }
+
+    [Theory]
+    [InlineData("sold")]
+    [InlineData("expired")]
+    [InlineData("inactive")]
+    public async Task ResubmissionRevalidatesProductAndContractAndDoesNotCreatePartialRequest(string change)
+    {
+        var (db, service, customer, _, product) = Setup();
+        await using var cleanup = db;
+        var first = (await service.CreateAsync(customer, new([product.Id], "Rút"), default)).Data!;
+        await service.CancelAsync(first.Id, customer, default);
+        var contract = await db.ConsignmentContracts.SingleAsync();
+        var brand = await db.Brands.SingleAsync();
+        var other = new Product { Name = "Món khác", BrandId = brand.Id, CategoryId = product.CategoryId };
+        other.AssignConsignmentTerms(contract.Id, 20000, brand); other.OfferForSale(); db.Products.Add(other);
+        if (change == "sold") (await db.Products.SingleAsync()).Status = ProductStatus.Sold;
+        else if (change == "expired") contract.EndsAt = DateTimeOffset.UtcNow.AddDays(-1);
+        else contract.Status = ConsignmentContractStatus.Completed;
+        await db.SaveChangesAsync();
+        Assert.False((await service.CreateAsync(customer, new([product.Id, other.Id], "Gửi lại"), default)).IsSuccess);
+        Assert.Equal(1, await db.EarlyWithdrawals.CountAsync());
+        Assert.Equal(1, await db.EarlyWithdrawalItems.CountAsync());
+    }
+
     [Fact]
     public async Task SearchAndSummaryRespectCustomerScopeAndFilterBeforePagination()
     {
