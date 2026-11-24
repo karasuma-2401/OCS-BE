@@ -24,7 +24,10 @@ public sealed class InventoryService(AppDbContext db)
         if (!string.IsNullOrWhiteSpace(request.Q))
         {
             var keyword = request.Q.Trim().ToLowerInvariant();
-            query = query.Where(x => x.Barcode.ToLower() == keyword || x.Name.ToLower().Contains(keyword));
+            query = query.Where(x =>
+                x.Barcode.ToLower().Contains(keyword) ||
+                x.Name.ToLower().Contains(keyword) ||
+                x.Brand.Name.ToLower().Contains(keyword));
         }
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
@@ -38,11 +41,44 @@ public sealed class InventoryService(AppDbContext db)
                 return Result.Failure<PagedResponse<InventoryProductDto>>(ApplicationError.Validation("INVENTORY.APPROVAL", "Trạng thái duyệt không hợp lệ."));
             query = query.Where(x => x.ApprovalStatus == approval);
         }
-        if (request.LocationId.HasValue) query = query.Where(x => x.StorageLocationId == request.LocationId);
+        if (!string.IsNullOrWhiteSpace(request.SourceType))
+        {
+            if (!Enum.TryParse<ProductSourceType>(request.SourceType, true, out var sourceType) || !Enum.IsDefined(sourceType))
+                return Result.Failure<PagedResponse<InventoryProductDto>>(ApplicationError.Validation("INVENTORY.SOURCE_TYPE", "Nguồn hàng không hợp lệ."));
+            query = query.Where(x => x.SourceType == sourceType);
+        }
+        if (request.UnassignedLocation == true)
+            query = query.Where(x => x.StorageLocationId == null);
+        else if (request.LocationId.HasValue)
+            query = query.Where(x => x.StorageLocationId == request.LocationId);
+
         var count = await query.CountAsync(ct);
-        var products = await query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id)
-            .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToListAsync(ct);
+        var ordered = (request.Sort?.Trim().ToLowerInvariant()) switch
+        {
+            "price_asc" => query.OrderBy(x => x.ListedPrice).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id),
+            "price_desc" => query.OrderByDescending(x => x.ListedPrice).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id),
+            "condition_desc" => query.OrderByDescending(x => x.ConditionPercentage).ThenByDescending(x => x.CreatedAt).ThenBy(x => x.Id),
+            "name_asc" => query.OrderBy(x => x.Name).ThenBy(x => x.Id),
+            _ => query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.Id),
+        };
+        var products = await ordered.Skip((request.Page - 1) * request.PageSize).Take(request.PageSize).ToListAsync(ct);
         return Result.Success(new PagedResponse<InventoryProductDto>(products.Select(Map).ToArray(), request.Page, request.PageSize, count));
+    }
+
+    public async Task<InventorySummaryDto> SummaryAsync(CancellationToken ct)
+    {
+        var buckets = await db.Products.AsNoTracking()
+            .GroupBy(x => new { x.Status, x.ApprovalStatus, HasLocation = x.StorageLocationId != null })
+            .Select(g => new { g.Key.Status, g.Key.ApprovalStatus, g.Key.HasLocation, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return new InventorySummaryDto(
+            TotalCount: buckets.Sum(x => x.Count),
+            PendingApprovalCount: buckets.Where(x => x.Status == ProductStatus.PendingProcessing && x.ApprovalStatus == ProductApprovalStatus.Pending).Sum(x => x.Count),
+            ReadyToOfferCount: buckets.Where(x => x.Status == ProductStatus.PendingProcessing && x.ApprovalStatus == ProductApprovalStatus.Approved).Sum(x => x.Count),
+            UnassignedLocationCount: buckets.Where(x => !x.HasLocation && (x.Status == ProductStatus.PendingProcessing || x.Status == ProductStatus.OnSale)).Sum(x => x.Count),
+            OnSaleCount: buckets.Where(x => x.Status == ProductStatus.OnSale).Sum(x => x.Count),
+            ExpiredCount: buckets.Where(x => x.Status == ProductStatus.Expired).Sum(x => x.Count));
     }
 
     public async Task<Result<InventoryDetailDto>> DetailAsync(Guid id, CancellationToken ct)
@@ -56,14 +92,30 @@ public sealed class InventoryService(AppDbContext db)
             .Select(x => new { x.PreviousStatus, x.NewStatus, x.Reason, x.ChangedByAccountId, x.OccurredAt }).ToListAsync(ct);
         events.AddRange(statusEvents.Select(x => new InventoryEventDto("Status", x.PreviousStatus?.ToString(),
             x.NewStatus.ToString(), x.Reason, x.ChangedByAccountId, x.OccurredAt)));
+        var actorIds = events.Where(x => x.ActorAccountId.HasValue).Select(x => x.ActorAccountId!.Value).Distinct().ToArray();
+        var actorNames = actorIds.Length == 0
+            ? new Dictionary<Guid, string>()
+            : await db.Accounts.AsNoTracking().Where(x => actorIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id, x => x.FullName, ct);
+        var resolvedEvents = events.OrderByDescending(x => x.OccurredAt)
+            .Select(x => x with { ActorName = x.ActorAccountId.HasValue ? actorNames.GetValueOrDefault(x.ActorAccountId.Value) : null })
+            .ToArray();
         var images = product.Images.Where(x => x.ImageType is ProductImageType.Cover or ProductImageType.Detail)
             .OrderBy(x => x.SortOrder).Select(x => new InventoryImageDto(x.Id, x.Url, x.ImageType.ToString(), x.SortOrder)).ToArray();
         return Result.Success(new InventoryDetailDto(Map(product), product.AgreementEvidence, product.AgreedListedPrice, images,
-            events.OrderByDescending(x => x.OccurredAt).ToArray(), product.PurchasePrice));
+            resolvedEvents, product.PurchasePrice));
     }
 
-    public Task<List<InventoryLocationDto>> LocationsAsync(CancellationToken ct) => db.StorageLocations.AsNoTracking()
-        .Where(x => x.IsActive).OrderBy(x => x.Code).Select(x => new InventoryLocationDto(x.Id, x.Code, x.Name)).ToListAsync(ct);
+    public async Task<List<InventoryLocationDto>> LocationsAsync(CancellationToken ct)
+    {
+        var locations = await db.StorageLocations.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Code).ToListAsync(ct);
+        var counts = await db.Products.AsNoTracking()
+            .Where(x => x.StorageLocationId != null && (x.Status == ProductStatus.PendingProcessing || x.Status == ProductStatus.OnSale))
+            .GroupBy(x => x.StorageLocationId!.Value)
+            .Select(g => new { LocationId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.LocationId, x => x.Count, ct);
+        return locations.Select(x => new InventoryLocationDto(x.Id, x.Code, x.Name, counts.GetValueOrDefault(x.Id, 0))).ToList();
+    }
 
     public async Task<Result<InventoryLocationDto>> CreateLocationAsync(CreateInventoryLocationRequest request, CancellationToken ct)
     {
@@ -152,6 +204,129 @@ public sealed class InventoryService(AppDbContext db)
         product.StorageLocation = location;
         product.StorageLocationId = location.Id;
         return await SaveAsync(product, actor, "Location", previous, location.Code, null, ct);
+    }
+
+    public async Task<Result<BulkInventoryResultDto>> BulkChangeLocationAsync(Guid actor, BulkInventoryLocationRequest request, CancellationToken ct)
+    {
+        if (request.Items is null || request.Items.Count is 0 or > 100)
+            return Result.Failure<BulkInventoryResultDto>(ApplicationError.Validation("INVENTORY.BULK_EMPTY", "Chọn từ 1 đến 100 sản phẩm để thao tác."));
+        var location = await db.StorageLocations.SingleOrDefaultAsync(x => x.Id == request.LocationId && x.IsActive, ct);
+        if (location is null)
+            return Result.Failure<BulkInventoryResultDto>(ApplicationError.Conflict("INVENTORY.INVALID", "Vị trí không tồn tại hoặc đã ngừng hoạt động."));
+
+        var ids = request.Items.Select(x => x.Id).Distinct().ToArray();
+        var products = (await Products().Where(x => ids.Contains(x.Id)).ToListAsync(ct)).ToDictionary(x => x.Id);
+        var failures = new List<BulkInventoryFailureDto>();
+        var succeeded = 0;
+
+        foreach (var item in request.Items)
+        {
+            if (!products.TryGetValue(item.Id, out var product))
+            {
+                failures.Add(new(item.Id, "Không tìm thấy sản phẩm."));
+                continue;
+            }
+            if (item.ExpectedVersion == Guid.Empty || product.InventoryVersion != item.ExpectedVersion)
+            {
+                failures.Add(new(item.Id, $"{product.Name}: dữ liệu vừa thay đổi."));
+                continue;
+            }
+            if (product.Status is not (ProductStatus.PendingProcessing or ProductStatus.OnSale))
+            {
+                failures.Add(new(item.Id, $"{product.Name}: không thể đổi vị trí sản phẩm đã kết thúc."));
+                continue;
+            }
+            if (product.StorageLocationId == location.Id)
+            {
+                succeeded++;
+                continue;
+            }
+            var previous = product.StorageLocation?.Code;
+            product.StorageLocation = location;
+            product.StorageLocationId = location.Id;
+            product.InventoryVersion = Guid.NewGuid();
+            db.InventoryEvents.Add(new InventoryEvent
+            {
+                ProductId = product.Id,
+                ActorAccountId = actor,
+                Action = "Location",
+                PreviousValue = previous,
+                NewValue = location.Code
+            });
+            succeeded++;
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            try { await db.SaveChangesAsync(ct); }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Failure<BulkInventoryResultDto>(ApplicationError.Conflict("INVENTORY.CONFLICT", "Một số sản phẩm vừa thay đổi. Vui lòng tải lại."));
+            }
+        }
+        return Result.Success(new BulkInventoryResultDto(succeeded, failures));
+    }
+
+    public async Task<Result<BulkInventoryResultDto>> BulkOfferAsync(Guid actor, BulkInventoryOfferRequest request, CancellationToken ct)
+    {
+        if (request.Items is null || request.Items.Count is 0 or > 100)
+            return Result.Failure<BulkInventoryResultDto>(ApplicationError.Validation("INVENTORY.BULK_EMPTY", "Chọn từ 1 đến 100 sản phẩm để thao tác."));
+
+        var ids = request.Items.Select(x => x.Id).Distinct().ToArray();
+        var products = (await Products().Where(x => ids.Contains(x.Id)).ToListAsync(ct)).ToDictionary(x => x.Id);
+        var failures = new List<BulkInventoryFailureDto>();
+        var succeeded = 0;
+
+        foreach (var item in request.Items)
+        {
+            if (!products.TryGetValue(item.Id, out var product))
+            {
+                failures.Add(new(item.Id, "Không tìm thấy sản phẩm."));
+                continue;
+            }
+            if (item.ExpectedVersion == Guid.Empty || product.InventoryVersion != item.ExpectedVersion)
+            {
+                failures.Add(new(item.Id, $"{product.Name}: dữ liệu vừa thay đổi."));
+                continue;
+            }
+            if (product.Status != ProductStatus.PendingProcessing || product.ApprovalStatus != ProductApprovalStatus.Approved ||
+                (product.ConsignmentContract is { } contract && contract.EndsAt <= DateTimeOffset.UtcNow) ||
+                !ValidSource(product) || product.StorageLocation is not { IsActive: true } ||
+                (product.SourceType == ProductSourceType.Consignment &&
+                 (product.AgreedListedPrice != product.ListedPrice || string.IsNullOrWhiteSpace(product.AgreementEvidence))))
+            {
+                failures.Add(new(item.Id, $"{product.Name}: chưa đủ điều kiện mở bán (cần duyệt & có vị trí kho)."));
+                continue;
+            }
+            product.OfferForSale();
+            product.InventoryVersion = Guid.NewGuid();
+            db.ProductStatusHistories.Add(new ProductStatusHistory
+            {
+                ProductId = product.Id,
+                PreviousStatus = ProductStatus.PendingProcessing,
+                NewStatus = ProductStatus.OnSale,
+                ChangedByAccountId = actor
+            });
+            db.InventoryEvents.Add(new InventoryEvent
+            {
+                ProductId = product.Id,
+                ActorAccountId = actor,
+                Action = "Status",
+                PreviousValue = "PendingProcessing",
+                NewValue = "OnSale"
+            });
+            succeeded++;
+        }
+
+        if (db.ChangeTracker.HasChanges())
+        {
+            try { await db.SaveChangesAsync(ct); }
+            catch (DbUpdateConcurrencyException)
+            {
+                return Result.Failure<BulkInventoryResultDto>(ApplicationError.Conflict("INVENTORY.CONFLICT", "Một số sản phẩm vừa thay đổi. Vui lòng tải lại."));
+            }
+        }
+        return Result.Success(new BulkInventoryResultDto(succeeded, failures));
     }
 
     public async Task<Result<InventoryProductDto>> ChangePriceAsync(Guid id, Guid actor, InventoryPriceRequest request, CancellationToken ct)

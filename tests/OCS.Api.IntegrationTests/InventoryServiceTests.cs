@@ -15,11 +15,14 @@ public sealed class InventoryServiceTests
 {
     [Theory]
     [InlineData(nameof(InventoryController.List), PermissionCatalog.ProductsRead)]
+    [InlineData(nameof(InventoryController.Summary), PermissionCatalog.ProductsRead)]
     [InlineData(nameof(InventoryController.Detail), PermissionCatalog.ProductsRead)]
     [InlineData(nameof(InventoryController.Review), PermissionCatalog.ProductsApprove)]
     [InlineData(nameof(InventoryController.Resubmit), PermissionCatalog.ProductsCreate)]
     [InlineData(nameof(InventoryController.Offer), PermissionCatalog.ProductsOffer)]
+    [InlineData(nameof(InventoryController.BulkOffer), PermissionCatalog.ProductsOffer)]
     [InlineData(nameof(InventoryController.ChangeLocation), PermissionCatalog.ProductsLocation)]
+    [InlineData(nameof(InventoryController.BulkChangeLocation), PermissionCatalog.ProductsLocation)]
     [InlineData(nameof(InventoryController.CreateLocation), PermissionCatalog.ProductsLocationsManage)]
     [InlineData(nameof(InventoryController.ChangePrice), PermissionCatalog.ProductsPrice)]
     [InlineData(nameof(InventoryController.ChangeDetails), PermissionCatalog.ProductsCreate)]
@@ -250,5 +253,55 @@ public sealed class InventoryServiceTests
         secondProduct.InventoryVersion = Guid.NewGuid();
         await first.SaveChangesAsync();
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+    }
+
+    [Fact]
+    public async Task SummaryFiltersAndBulkOperationsWorkWithPermissionsAndConcurrency()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options);
+        var brand = new Brand { Name = "LinenBrand", DefaultCommissionRate = 20 };
+        var category = new Category { Name = "Áo" };
+        var contract = new ConsignmentContract { SignedAt = DateTimeOffset.UtcNow.AddDays(-1), EndsAt = DateTimeOffset.UtcNow.AddDays(30), Status = ConsignmentContractStatus.Active };
+        var buyout = new Buyout { Status = BuyoutStatus.Approved, ApprovedByEmployeeId = Guid.NewGuid() };
+        var shelf = new StorageLocation { Code = "K-01", Name = "Kệ 01" };
+
+        var p1 = new Product { Name = "Áo sơ mi", Barcode = "OCS-001", Size = "M", ConditionPercentage = 95, BrandId = brand.Id, CategoryId = category.Id };
+        p1.AssignConsignmentTerms(contract.Id, 200000, brand);
+        var p2 = new Product { Name = "Chân váy", Barcode = "OCS-002", Size = "S", ConditionPercentage = 80, BrandId = brand.Id, CategoryId = category.Id, ApprovalStatus = ProductApprovalStatus.Approved };
+        p2.AssignBuyoutTerms(buyout.Id, 150000, 80000);
+        db.AddRange(brand, category, contract, buyout, shelf, p1, p2);
+        await db.SaveChangesAsync();
+        db.ChangeTracker.Clear();
+
+        var service = new InventoryService(db);
+        var summary = await service.SummaryAsync(default);
+        Assert.Equal(2, summary.TotalCount);
+        Assert.Equal(1, summary.PendingApprovalCount);
+        Assert.Equal(1, summary.ReadyToOfferCount);
+        Assert.Equal(2, summary.UnassignedLocationCount);
+
+        var unassigned = await service.ListAsync(new InventoryQuery(UnassignedLocation: true, SourceType: "Buyout"), default);
+        Assert.True(unassigned.IsSuccess);
+        Assert.Single(unassigned.Data!.Items);
+        Assert.Equal(p2.Id, unassigned.Data.Items[0].Id);
+
+        var actor = Guid.NewGuid();
+        var bulkLoc = await service.BulkChangeLocationAsync(actor, new([new(p1.Id, p1.InventoryVersion), new(p2.Id, p2.InventoryVersion)], shelf.Id), default);
+        Assert.True(bulkLoc.IsSuccess);
+        Assert.Equal(2, bulkLoc.Data!.SucceededCount);
+        Assert.Empty(bulkLoc.Data.Failures);
+
+        var locations = await service.LocationsAsync(default);
+        Assert.Equal(2, locations.Single(x => x.Id == shelf.Id).ProductCount);
+
+        var refreshed = await service.ListAsync(new InventoryQuery(Sort: "price_asc"), default);
+        var items = refreshed.Data!.Items;
+        Assert.Equal(p2.Id, items[0].Id);
+
+        var bulkOffer = await service.BulkOfferAsync(actor, new([new(items[0].Id, items[0].Version), new(items[1].Id, items[1].Version)]), default);
+        Assert.True(bulkOffer.IsSuccess);
+        Assert.Equal(1, bulkOffer.Data!.SucceededCount);
+        Assert.Single(bulkOffer.Data.Failures);
     }
 }
