@@ -254,7 +254,7 @@ public sealed class NotificationService(
             {
                 "Appointment" => isStaffTargeted ? "/shop/consignment" : "/appointments",
                 "Consignment" => isStaffTargeted ? "/shop/consignment" : "/my-consignments",
-                "Buyout" => isStaffTargeted ? "/shop/buyout" : "/my-consignments",
+                "Buyout" => isStaffTargeted ? "/shop/buyouts" : "/my-consignments",
                 "Payment" => isStaffTargeted ? "/shop/settlement" : "/my-consignments",
                 "Promotion" => "/catalog",
                 _ => null
