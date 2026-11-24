@@ -87,8 +87,12 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
         var withdrawals = await db.EarlyWithdrawalItems.AsNoTracking()
             .Where(i => i.Product.ConsignmentContractId != null && contractIds.Contains(i.Product.ConsignmentContractId.Value) &&
                 i.EarlyWithdrawal.CustomerId == i.Product.ConsignmentContract!.CustomerId)
-            .Select(i => new { i.ProductId, Info = new ConsignmentWithdrawalInfo(i.EarlyWithdrawalId,
-                i.EarlyWithdrawal.Status, i.EarlyWithdrawal.PaymentStatus.ToString(), i.EarlyWithdrawal.DecisionNote, i.EarlyWithdrawal.RequestedAt) })
+            .Select(i => new
+            {
+                i.ProductId,
+                Info = new ConsignmentWithdrawalInfo(i.EarlyWithdrawalId,
+                i.EarlyWithdrawal.Status, i.EarlyWithdrawal.PaymentStatus.ToString(), i.EarlyWithdrawal.DecisionNote, i.EarlyWithdrawal.RequestedAt)
+            })
             .ToListAsync(cancellationToken);
         var withdrawalByProduct = withdrawals.GroupBy(i => i.ProductId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(i => i.Info.Status is "Pending" or "Approved")

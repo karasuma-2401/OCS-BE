@@ -46,13 +46,24 @@ public sealed partial class VietQrPaymentService
             var data = qr.Data!;
             active = new FinancialTransaction
             {
-                Id = transactionId, EarlyWithdrawalId = row.Id, CustomerId = row.CustomerId,
-                Type = FinancialTransactionType.Income, PaymentMethod = PaymentMethod.VietQr,
-                Amount = row.TotalPenaltyAmount, Status = FinancialTransactionStatus.Pending,
-                PaymentReference = data.PaymentReference, QrCodeUrl = data.QrCodeUrl, QrPayload = data.QrPayload,
-                ProviderName = data.ProviderName, BankCode = data.BankCode, BankAccountNumber = data.BankAccountNumber,
-                BankAccountHolderName = data.BankAccountHolderName, ExpiresAt = expiry,
-                CreatedAt = now, OccurredAt = now, PerformedByEmployeeId = actorAccountId
+                Id = transactionId,
+                EarlyWithdrawalId = row.Id,
+                CustomerId = row.CustomerId,
+                Type = FinancialTransactionType.Income,
+                PaymentMethod = PaymentMethod.VietQr,
+                Amount = row.TotalPenaltyAmount,
+                Status = FinancialTransactionStatus.Pending,
+                PaymentReference = data.PaymentReference,
+                QrCodeUrl = data.QrCodeUrl,
+                QrPayload = data.QrPayload,
+                ProviderName = data.ProviderName,
+                BankCode = data.BankCode,
+                BankAccountNumber = data.BankAccountNumber,
+                BankAccountHolderName = data.BankAccountHolderName,
+                ExpiresAt = expiry,
+                CreatedAt = now,
+                OccurredAt = now,
+                PerformedByEmployeeId = actorAccountId
             };
             db.FinancialTransactions.Add(active);
         }

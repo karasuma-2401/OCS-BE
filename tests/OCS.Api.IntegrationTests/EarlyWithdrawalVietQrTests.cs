@@ -14,8 +14,14 @@ public sealed partial class EarlyWithdrawalTests
 {
     private static VietQrPaymentService Qr(AppDbContext db)
     {
-        var options = Options.Create(new VietQrOptions { BankCode = "MB", AccountNumber = "0900000001",
-            AccountHolderName = "OCS TEST", ReferencePrefix = "OCS", ExpiryMinutes = 10 });
+        var options = Options.Create(new VietQrOptions
+        {
+            BankCode = "MB",
+            AccountNumber = "0900000001",
+            AccountHolderName = "OCS TEST",
+            ReferencePrefix = "OCS",
+            ExpiryMinutes = 10
+        });
         return new(db, new VietQrQuickLinkAdapter(options), options, TimeProvider.System, new QrEnvironment());
     }
     private sealed class QrEnvironment : IHostEnvironment

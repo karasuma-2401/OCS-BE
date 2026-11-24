@@ -117,8 +117,14 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
         foreach (var p in products)
         {
             var rate = p.AgreedCommissionRate!.Value;
-            row.Items.Add(new EarlyWithdrawalItem { ProductId = p.Id, Product = p, ListedPrice = p.ListedPrice,
-                PenaltyRate = rate, PenaltyAmount = p.CalculateEarlyWithdrawalFee() });
+            row.Items.Add(new EarlyWithdrawalItem
+            {
+                ProductId = p.Id,
+                Product = p,
+                ListedPrice = p.ListedPrice,
+                PenaltyRate = rate,
+                PenaltyAmount = p.CalculateEarlyWithdrawalFee()
+            });
             // Serialize competing requests and sales through the existing inventory concurrency token.
             p.InventoryVersion = Guid.NewGuid();
         }
@@ -189,10 +195,18 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
                 if (payment is null || payment.Amount != row.TotalPenaltyAmount ||
                     payment.PaymentMethod is not ("Cash" or "BankTransfer") || payment.Reference?.Length > 64 ||
                     payment.PaymentMethod == "BankTransfer" && string.IsNullOrWhiteSpace(payment.Reference)) return Invalid();
-                db.FinancialTransactions.Add(new FinancialTransaction { CustomerId = row.CustomerId, EarlyWithdrawalId = row.Id,
-                    Type = FinancialTransactionType.Income, Amount = row.TotalPenaltyAmount,
-                    PaymentMethod = Enum.Parse<PaymentMethod>(payment.PaymentMethod), PaymentReference = payment.Reference?.Trim(),
-                    Status = FinancialTransactionStatus.Success, OccurredAt = now, PerformedByEmployeeId = actor });
+                db.FinancialTransactions.Add(new FinancialTransaction
+                {
+                    CustomerId = row.CustomerId,
+                    EarlyWithdrawalId = row.Id,
+                    Type = FinancialTransactionType.Income,
+                    Amount = row.TotalPenaltyAmount,
+                    PaymentMethod = Enum.Parse<PaymentMethod>(payment.PaymentMethod),
+                    PaymentReference = payment.Reference?.Trim(),
+                    Status = FinancialTransactionStatus.Success,
+                    OccurredAt = now,
+                    PerformedByEmployeeId = actor
+                });
                 row.PaymentStatus = InvoicePaymentStatus.Paid;
                 row.PaidAt = now;
                 row.PaidByEmployeeId = actor;
@@ -211,8 +225,15 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
                     item.Product.Status = ProductStatus.EarlyWithdrawn;
                     item.Product.IsReservedForWithdrawal = false;
                     item.Product.StorageLocationId = null;
-                    db.ProductStatusHistories.Add(new ProductStatusHistory { ProductId = item.ProductId, PreviousStatus = ProductStatus.OnSale,
-                        NewStatus = ProductStatus.EarlyWithdrawn, ChangedByAccountId = actor, OccurredAt = now, Reason = $"Rút sớm {row.Id}: {row.HandoverEvidence}" });
+                    db.ProductStatusHistories.Add(new ProductStatusHistory
+                    {
+                        ProductId = item.ProductId,
+                        PreviousStatus = ProductStatus.OnSale,
+                        NewStatus = ProductStatus.EarlyWithdrawn,
+                        ChangedByAccountId = actor,
+                        OccurredAt = now,
+                        Reason = $"Rút sớm {row.Id}: {row.HandoverEvidence}"
+                    });
                 }
                 break;
             default: return Invalid();

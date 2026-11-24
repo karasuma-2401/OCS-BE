@@ -29,8 +29,12 @@ public sealed class EarlyWithdrawalHttpTests
         var databaseName = Guid.NewGuid().ToString();
         var settings = new Dictionary<string, string?>
         {
-            ["ConnectionStrings:DefaultConnection"] = "", ["Redis:ConnectionString"] = "", ["R2:ServiceUrl"] = "",
-            ["Jwt:Issuer"] = "test", ["Jwt:Audience"] = "test", ["Jwt:Key"] = "test-only-key-with-at-least-32-bytes"
+            ["ConnectionStrings:DefaultConnection"] = "",
+            ["Redis:ConnectionString"] = "",
+            ["R2:ServiceUrl"] = "",
+            ["Jwt:Issuer"] = "test",
+            ["Jwt:Audience"] = "test",
+            ["Jwt:Key"] = "test-only-key-with-at-least-32-bytes"
         };
         await using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
@@ -52,11 +56,23 @@ public sealed class EarlyWithdrawalHttpTests
                 });
             });
         });
-        var customer = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, EmailVerifiedAt = DateTimeOffset.UtcNow,
-            Email = "withdraw-owner@example.com", FullName = "Khách rút hàng" };
+        var customer = new Account
+        {
+            AccountType = AccountType.Customer,
+            Status = AccountStatus.Active,
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
+            Email = "withdraw-owner@example.com",
+            FullName = "Khách rút hàng"
+        };
         customer.CustomerProfile = new CustomerProfile { Id = customer.Id };
-        var employee = new Account { AccountType = AccountType.Internal, Status = AccountStatus.Active, EmailVerifiedAt = DateTimeOffset.UtcNow,
-            Email = "withdraw-staff@example.com", FullName = "Nhân viên" };
+        var employee = new Account
+        {
+            AccountType = AccountType.Internal,
+            Status = AccountStatus.Active,
+            EmailVerifiedAt = DateTimeOffset.UtcNow,
+            Email = "withdraw-staff@example.com",
+            FullName = "Nhân viên"
+        };
         employee.EmployeeProfile = new EmployeeProfile { Id = employee.Id };
         var customerSession = Guid.NewGuid(); var employeeSession = Guid.NewGuid();
         Guid[] productIds;
@@ -72,8 +88,14 @@ public sealed class EarlyWithdrawalHttpTests
                 new AuthSession { Id = employeeSession, AccountId = employee.Id, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
             var brand = new Brand { Name = "Nhãn", DefaultCommissionRate = 15 };
             var category = new Category { Name = "Áo" };
-            var contract = new ConsignmentContract { ContractNumber = "HD-HTTP-01", CustomerId = customer.Id, CreatedByEmployeeId = employee.Id,
-                SignedAt = DateTimeOffset.UtcNow.AddDays(-1), EndsAt = DateTimeOffset.UtcNow.AddMonths(2) };
+            var contract = new ConsignmentContract
+            {
+                ContractNumber = "HD-HTTP-01",
+                CustomerId = customer.Id,
+                CreatedByEmployeeId = employee.Id,
+                SignedAt = DateTimeOffset.UtcNow.AddDays(-1),
+                EndsAt = DateTimeOffset.UtcNow.AddMonths(2)
+            };
             for (var i = 0; i < 3; i++)
             {
                 var product = new Product { Name = $"Áo {i}", Barcode = $"HTTP-{i}", Brand = brand, Category = category };

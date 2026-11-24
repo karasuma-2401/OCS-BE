@@ -25,12 +25,25 @@ public sealed class EarlyWithdrawalPostgresTests
         await using (var command = new NpgsqlCommand("SET search_path TO pg_temp;\n" + schema, connection))
             await command.ExecuteNonQueryAsync();
         var customer = new Account { AccountType = AccountType.Customer, Status = AccountStatus.Active, Email = "customer@example.test", PhoneNumber = "0900000001" };
-        var staff = new Account { AccountType = AccountType.Internal, Status = AccountStatus.Active, Email = "staff@example.test", PhoneNumber = "0900000002",
-            Username = "withdrawal-test", PasswordHash = "test-only-hash" };
+        var staff = new Account
+        {
+            AccountType = AccountType.Internal,
+            Status = AccountStatus.Active,
+            Email = "staff@example.test",
+            PhoneNumber = "0900000002",
+            Username = "withdrawal-test",
+            PasswordHash = "test-only-hash"
+        };
         var brand = new Brand { Name = "Test", DefaultCommissionRate = 15 };
         var category = new Category { Name = "Test" };
-        var contract = new ConsignmentContract { ContractNumber = "PG-TEST", CustomerId = customer.Id, CreatedByEmployeeId = staff.Id,
-            SignedAt = DateTimeOffset.UtcNow.AddDays(-1), EndsAt = DateTimeOffset.UtcNow.AddMonths(1) };
+        var contract = new ConsignmentContract
+        {
+            ContractNumber = "PG-TEST",
+            CustomerId = customer.Id,
+            CreatedByEmployeeId = staff.Id,
+            SignedAt = DateTimeOffset.UtcNow.AddDays(-1),
+            EndsAt = DateTimeOffset.UtcNow.AddMonths(1)
+        };
         var product = new Product { Name = "Áo", Barcode = "PG-TEST-1", Brand = brand, Category = category };
         product.AssignConsignmentTerms(contract.Id, 20000, brand); product.OfferForSale();
         db.AddRange(new CustomerProfile { Id = customer.Id, Account = customer }, new EmployeeProfile { Id = staff.Id, Account = staff }, contract, product);

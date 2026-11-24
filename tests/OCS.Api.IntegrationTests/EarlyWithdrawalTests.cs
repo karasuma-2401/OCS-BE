@@ -138,8 +138,14 @@ public sealed partial class EarlyWithdrawalTests
         var employee = new Account { AccountType = AccountType.Internal, Status = AccountStatus.Active };
         var brand = new Brand { Name = "Brand", DefaultCommissionRate = 20 };
         var category = new Category { Name = "Category" };
-        var contract = new ConsignmentContract { CustomerId = customer.Id, CreatedByEmployeeId = employee.Id,
-            SignedAt = now.AddDays(-1), EndsAt = now.AddDays(30), EarlyWithdrawalFeeRate = 77 };
+        var contract = new ConsignmentContract
+        {
+            CustomerId = customer.Id,
+            CreatedByEmployeeId = employee.Id,
+            SignedAt = now.AddDays(-1),
+            EndsAt = now.AddDays(30),
+            EarlyWithdrawalFeeRate = 77
+        };
         var product = new Product { Name = "Áo", BrandId = brand.Id, CategoryId = category.Id, StorageLocationId = Guid.NewGuid() };
         product.AssignConsignmentTerms(contract.Id, 123456.75m, brand, fee ?? 10);
         product.OfferForSale();
@@ -255,8 +261,14 @@ public sealed partial class EarlyWithdrawalTests
         var invoice = new SaleInvoice { SoldByEmployeeId = employee, TotalAmount = product.ListedPrice };
         invoice.Lines.Add(new SaleInvoiceLine { ProductId = product.Id, SalePrice = product.ListedPrice });
         db.Add(invoice);
-        var payment = new FinancialTransaction { SaleInvoiceId = invoice.Id, Status = FinancialTransactionStatus.Pending,
-            Amount = product.ListedPrice, ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), PerformedByEmployeeId = employee };
+        var payment = new FinancialTransaction
+        {
+            SaleInvoiceId = invoice.Id,
+            Status = FinancialTransactionStatus.Pending,
+            Amount = product.ListedPrice,
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1),
+            PerformedByEmployeeId = employee
+        };
         db.Add(payment);
         await db.SaveChangesAsync();
         Assert.False((await service.ApproveAsync(row.Id, employee, default)).IsSuccess);
