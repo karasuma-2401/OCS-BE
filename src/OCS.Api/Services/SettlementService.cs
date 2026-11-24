@@ -409,9 +409,14 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
         payout.UpdatedAt = clock.GetUtcNow();
         db.AuditLogs.Add(new AuditLog
         {
-            ActorAccountId = actor, ActorType = AuditActorType.User, Action = "UpdatePayment",
-            EntityType = nameof(Payout), EntityId = payout.Id.ToString(), Reason = request.Reason.Trim(),
-            Source = "SettlementService", OccurredAt = payout.UpdatedAt.Value
+            ActorAccountId = actor,
+            ActorType = AuditActorType.User,
+            Action = "UpdatePayment",
+            EntityType = nameof(Payout),
+            EntityId = payout.Id.ToString(),
+            Reason = request.Reason.Trim(),
+            Source = "SettlementService",
+            OccurredAt = payout.UpdatedAt.Value
         });
         return await SavePayoutAsync(payout, ct);
     }
@@ -435,8 +440,13 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
         }
         else if (request.ServiceFee > 0 && feeLine is null)
         {
-            payout.Details.Add(new PayoutDetail { PayoutId = payout.Id, Type = PayoutLineType.ServiceFee,
-                Description = request.Description!.Trim(), Amount = -request.ServiceFee });
+            payout.Details.Add(new PayoutDetail
+            {
+                PayoutId = payout.Id,
+                Type = PayoutLineType.ServiceFee,
+                Description = request.Description!.Trim(),
+                Amount = -request.ServiceFee
+            });
         }
         else if (feeLine is not null)
         {
@@ -447,9 +457,14 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
         payout.UpdatedAt = clock.GetUtcNow();
         db.AuditLogs.Add(new AuditLog
         {
-            ActorAccountId = actor, ActorType = AuditActorType.User, Action = "UpdateServiceFee",
-            EntityType = nameof(Payout), EntityId = payout.Id.ToString(), Reason = request.Reason.Trim(),
-            Source = "SettlementService", OccurredAt = payout.UpdatedAt.Value
+            ActorAccountId = actor,
+            ActorType = AuditActorType.User,
+            Action = "UpdateServiceFee",
+            EntityType = nameof(Payout),
+            EntityId = payout.Id.ToString(),
+            Reason = request.Reason.Trim(),
+            Source = "SettlementService",
+            OccurredAt = payout.UpdatedAt.Value
         });
         return await SavePayoutAsync(payout, ct);
     }

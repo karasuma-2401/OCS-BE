@@ -26,10 +26,13 @@ public sealed class SettlementWorkflowTests
         var category = new Category { Name = "Category" };
         var contract = new ConsignmentContract
         {
-            ContractNumber = "KG-SETTLEMENT", SignedAt = now.AddDays(-30),
+            ContractNumber = "KG-SETTLEMENT",
+            SignedAt = now.AddDays(-30),
             EndsAt = activeContract ? now.AddDays(30) : now.AddDays(-1),
-            BankCodeSnapshot = "VCB", BankAccountNumberSnapshot = "123456789",
-            BankAccountHolderSnapshot = "NGUYEN VAN A", Status = ConsignmentContractStatus.Active
+            BankCodeSnapshot = "VCB",
+            BankAccountNumberSnapshot = "123456789",
+            BankAccountHolderSnapshot = "NGUYEN VAN A",
+            Status = ConsignmentContractStatus.Active
         };
         var product = new Product { Name = "Coat", Barcode = "BC-SETTLEMENT", Size = "M", BrandId = brand.Id, CategoryId = category.Id };
         product.AssignConsignmentTerms(contract.Id, 1000000m, brand);
@@ -37,7 +40,8 @@ public sealed class SettlementWorkflowTests
         product.MarkSold();
         var invoice = new SaleInvoice
         {
-            InvoiceNumber = "INV-SETTLEMENT", PaymentStatus = InvoicePaymentStatus.Paid,
+            InvoiceNumber = "INV-SETTLEMENT",
+            PaymentStatus = InvoicePaymentStatus.Paid,
             TotalAmount = 1000000m,
             Lines = [new SaleInvoiceLine { ProductId = product.Id, SalePrice = 1000000m }]
         };
@@ -118,8 +122,10 @@ public sealed class SettlementWorkflowTests
         {
             db.FinancialTransactions.Add(new FinancialTransaction
             {
-                SaleInvoiceId = invoice.Id, Type = FinancialTransactionType.Income,
-                Status = FinancialTransactionStatus.Pending, Amount = 1000000m,
+                SaleInvoiceId = invoice.Id,
+                Type = FinancialTransactionType.Income,
+                Status = FinancialTransactionStatus.Pending,
+                Amount = 1000000m,
                 PerformedByEmployeeId = Guid.NewGuid()
             });
             await db.SaveChangesAsync();
@@ -154,8 +160,12 @@ public sealed class SettlementWorkflowTests
             var category = new Category { Name = "Category" };
             var contract = new ConsignmentContract
             {
-                ContractNumber = "KG-INC-AUTO", SignedAt = now.AddDays(-5), EndsAt = now.AddDays(55),
-                BankCodeSnapshot = "VCB", BankAccountNumberSnapshot = "123456", BankAccountHolderSnapshot = "NGUYEN VAN A",
+                ContractNumber = "KG-INC-AUTO",
+                SignedAt = now.AddDays(-5),
+                EndsAt = now.AddDays(55),
+                BankCodeSnapshot = "VCB",
+                BankAccountNumberSnapshot = "123456",
+                BankAccountHolderSnapshot = "NGUYEN VAN A",
                 Status = ConsignmentContractStatus.Active
             };
             var first = new Product { Name = "Blazer", Barcode = "BC-INC-1", Size = "M", BrandId = brand.Id, CategoryId = category.Id };
