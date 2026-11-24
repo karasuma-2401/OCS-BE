@@ -99,9 +99,13 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
         var now = clock.GetUtcNow();
         var report = new IncidentReport
         {
-            ProductId = product.Id, CreatedByEmployeeId = actor, Type = request.Type,
-            Description = request.Description.Trim(), EvidenceUrls = JsonSerializer.Serialize(evidence, JsonOptions),
-            Status = IncidentStatus.Pending, CreatedAt = now
+            ProductId = product.Id,
+            CreatedByEmployeeId = actor,
+            Type = request.Type,
+            Description = request.Description.Trim(),
+            EvidenceUrls = JsonSerializer.Serialize(evidence, JsonOptions),
+            Status = IncidentStatus.Pending,
+            CreatedAt = now
         };
         product.Status = ProductStatus.IncidentPending;
         product.InventoryVersion = Guid.NewGuid();
@@ -109,8 +113,12 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
         db.IncidentReports.Add(report);
         db.ProductStatusHistories.Add(new ProductStatusHistory
         {
-            ProductId = product.Id, PreviousStatus = ProductStatus.OnSale, NewStatus = ProductStatus.IncidentPending,
-            ChangedByAccountId = actor, OccurredAt = now, Reason = "Tạm giữ sản phẩm trong khi thẩm định biên bản sự cố"
+            ProductId = product.Id,
+            PreviousStatus = ProductStatus.OnSale,
+            NewStatus = ProductStatus.IncidentPending,
+            ChangedByAccountId = actor,
+            OccurredAt = now,
+            Reason = "Tạm giữ sản phẩm trong khi thẩm định biên bản sự cố"
         });
         await db.SaveChangesAsync(ct);
         if (tx is not null) await tx.CommitAsync(ct);
@@ -167,8 +175,11 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
         report.Product.UpdatedAt = now;
         db.ProductStatusHistories.Add(new ProductStatusHistory
         {
-            ProductId = report.ProductId, PreviousStatus = ProductStatus.IncidentPending,
-            NewStatus = ProductStatus.Compensated, ChangedByAccountId = actor, OccurredAt = now,
+            ProductId = report.ProductId,
+            PreviousStatus = ProductStatus.IncidentPending,
+            NewStatus = ProductStatus.Compensated,
+            ChangedByAccountId = actor,
+            OccurredAt = now,
             Reason = $"Đã duyệt bồi thường {request.CompensationAmount:N2}"
         });
 
