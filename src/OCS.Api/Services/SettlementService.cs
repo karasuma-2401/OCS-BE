@@ -542,22 +542,132 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
         return payout is null ? Missing<PayoutDto>() : Result.Success(Map(payout));
     }
 
-    public async Task<Result<PayoutDto>> ConfirmReceivedAsync(Guid id, Guid customerId, CancellationToken ct)
+    public Task<Result<PayoutDto>> ConfirmReceivedAsync(Guid id, Guid customerId, CancellationToken ct) =>
+        ConfirmReceivedAsync(id, customerId, null, ct);
+
+    public async Task<Result<PayoutDto>> ConfirmReceivedAsync(Guid id, Guid customerId, CustomerPayoutConfirmation? request, CancellationToken ct)
     {
-        var payout = await Payouts().SingleOrDefaultAsync(x => x.Id == id && x.ConsignmentContract.CustomerId == customerId, ct);
-        if (payout is null || payout.Status is not PayoutStatus.Transferred and not PayoutStatus.Completed)
-            return Missing<PayoutDto>();
+        var payout = await Payouts().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (payout is null) return Missing<PayoutDto>();
+        if (payout.ConsignmentContract.CustomerId != customerId)
+            return Result.Failure<PayoutDto>(ApplicationError.Forbidden("SETTLEMENT.FORBIDDEN", "Bạn không có quyền thao tác trên lệnh chi này."));
+        if (payout.Status is not PayoutStatus.Transferred and not PayoutStatus.Completed)
+            return Conflict<PayoutDto>("Chỉ có thể xác nhận lệnh chi đã chuyển khoản.");
         if (payout.Status == PayoutStatus.Completed) return Result.Success(Map(payout));
-        Complete(payout, clock.GetUtcNow(), customerConfirmed: true);
+
+        var now = clock.GetUtcNow();
+        Complete(payout, now, customerConfirmed: true);
+        if (payout.DisputeStatus == PayoutDisputeStatus.Open)
+        {
+            payout.DisputeStatus = PayoutDisputeStatus.Resolved;
+            payout.DisputeResolvedAt = now;
+            payout.DisputeResolutionNote = string.IsNullOrWhiteSpace(request?.ConfirmationNote)
+                ? "Khách hàng đã xác nhận nhận tiền thành công sau khiếu nại."
+                : request.ConfirmationNote.Trim();
+        }
+
+        db.AuditLogs.Add(new AuditLog
+        {
+            ActorAccountId = customerId,
+            ActorType = AuditActorType.User,
+            Action = "ConfirmReceived",
+            EntityType = nameof(Payout),
+            EntityId = payout.Id.ToString(),
+            Reason = request?.ConfirmationNote?.Trim() ?? "Khách hàng xác nhận đã nhận tiền.",
+            Source = "SettlementService",
+            OccurredAt = now
+        });
+
         await CompleteLinkedIncidentsAndContractsAsync([payout], ct);
         await db.SaveChangesAsync(ct);
         return Result.Success(Map(payout));
     }
 
+    public async Task<Result<PayoutDto>> SubmitDisputeAsync(Guid id, Guid customerId, SubmitPayoutDisputeRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 1000)
+            return Invalid<PayoutDto>("SETTLEMENT.DISPUTE", "Cần nhập nội dung khiếu nại (tối đa 1000 ký tự).");
+
+        var payout = await Payouts().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (payout is null) return Missing<PayoutDto>();
+        if (payout.ConsignmentContract.CustomerId != customerId)
+            return Result.Failure<PayoutDto>(ApplicationError.Forbidden("SETTLEMENT.FORBIDDEN", "Bạn không có quyền khiếu nại lệnh chi của người khác."));
+
+        if (payout.Status == PayoutStatus.Completed)
+            return Conflict<PayoutDto>("Lệnh chi đã hoàn tất quyết toán, không thể khiếu nại.");
+        if (payout.Status != PayoutStatus.Transferred)
+            return Conflict<PayoutDto>("Chỉ có thể khiếu nại lệnh chi đã chuyển khoản và đang chờ xác nhận.");
+        if (payout.DisputeStatus == PayoutDisputeStatus.Open)
+            return Conflict<PayoutDto>("Lệnh chi đang có khiếu nại chờ xử lý.");
+
+        var now = clock.GetUtcNow();
+        payout.DisputedAt = now;
+        payout.DisputeReason = request.Reason.Trim();
+        payout.DisputeStatus = PayoutDisputeStatus.Open;
+        payout.DisputeResolvedAt = null;
+        payout.DisputeResolvedByEmployeeId = null;
+        payout.DisputeResolutionNote = null;
+        payout.UpdatedAt = now;
+
+        db.AuditLogs.Add(new AuditLog
+        {
+            ActorAccountId = customerId,
+            ActorType = AuditActorType.User,
+            Action = "SubmitDispute",
+            EntityType = nameof(Payout),
+            EntityId = payout.Id.ToString(),
+            Reason = payout.DisputeReason,
+            Source = "SettlementService",
+            OccurredAt = now
+        });
+
+        return await SavePayoutAsync(payout, ct);
+    }
+
+    public async Task<Result<PayoutDto>> ResolveDisputeAsync(Guid id, Guid actor, ResolvePayoutDisputeRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Resolution) ||
+            (!request.Resolution.Equals("Resolved", StringComparison.OrdinalIgnoreCase) &&
+             !request.Resolution.Equals("Rejected", StringComparison.OrdinalIgnoreCase)))
+            return Invalid<PayoutDto>("SETTLEMENT.DISPUTE_RESOLUTION", "Kết quả xử lý phải là 'Resolved' hoặc 'Rejected'.");
+
+        if (request.Note?.Length > 1000)
+            return Invalid<PayoutDto>("SETTLEMENT.DISPUTE_RESOLUTION", "Ghi chú xử lý không được vượt quá 1000 ký tự.");
+
+        var payout = await Payouts().SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (payout is null) return Missing<PayoutDto>();
+        if (payout.DisputeStatus != PayoutDisputeStatus.Open)
+            return Conflict<PayoutDto>("Lệnh chi không có khiếu nại đang mở cần xử lý.");
+
+        var now = clock.GetUtcNow();
+        var isResolved = request.Resolution.Equals("Resolved", StringComparison.OrdinalIgnoreCase);
+        payout.DisputeStatus = isResolved ? PayoutDisputeStatus.Resolved : PayoutDisputeStatus.Rejected;
+        payout.DisputeResolvedAt = now;
+        payout.DisputeResolvedByEmployeeId = actor;
+        payout.DisputeResolutionNote = request.Note?.Trim() ?? (isResolved ? "Đã giải quyết khiếu nại." : "Từ chối khiếu nại.");
+        payout.UpdatedAt = now;
+
+        db.AuditLogs.Add(new AuditLog
+        {
+            ActorAccountId = actor,
+            ActorType = AuditActorType.User,
+            Action = isResolved ? "ResolveDispute" : "RejectDispute",
+            EntityType = nameof(Payout),
+            EntityId = payout.Id.ToString(),
+            Reason = payout.DisputeResolutionNote,
+            Source = "SettlementService",
+            OccurredAt = now
+        });
+
+        return await SavePayoutAsync(payout, ct);
+    }
+
     public async Task<int> CompleteExpiredAsync(CancellationToken ct)
     {
         var deadline = clock.GetUtcNow() - CustomerConfirmationWindow;
-        var payouts = await Payouts().Where(x => x.Status == PayoutStatus.Transferred && x.TransferredAt <= deadline).ToListAsync(ct);
+        var payouts = await Payouts().Where(x => x.Status == PayoutStatus.Transferred &&
+            (x.DisputeStatus == null || x.DisputeStatus != PayoutDisputeStatus.Open) &&
+            x.TransferredAt <= deadline).ToListAsync(ct);
         if (payouts.Count == 0) return 0;
         var now = clock.GetUtcNow();
         foreach (var payout in payouts) Complete(payout, now, customerConfirmed: false);
@@ -571,7 +681,8 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
         .Include(x => x.Details)
         .Include(x => x.CreatedByEmployee).ThenInclude(x => x!.Account)
         .Include(x => x.ApprovedByEmployee).ThenInclude(x => x!.Account)
-        .Include(x => x.RejectedByEmployee).ThenInclude(x => x!.Account);
+        .Include(x => x.RejectedByEmployee).ThenInclude(x => x!.Account)
+        .Include(x => x.DisputeResolvedByEmployee).ThenInclude(x => x!.Account);
 
     private async Task<Result<ProtectedPayoutProof>> ReadProofAsync(Guid id, Guid? customerId, CancellationToken ct)
     {
@@ -786,7 +897,10 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
                 x.Amount, x.ProductId, x.IncidentReportId)).ToArray(), payout.CreatedByEmployeeId,
             payout.ApprovedByEmployeeId, payout.RejectedByEmployeeId, payout.RejectedAt, payout.RejectionReason,
             payout.CreatedByEmployee?.Account.FullName, payout.ApprovedByEmployee?.Account.FullName,
-            payout.RejectedByEmployee?.Account.FullName);
+            payout.RejectedByEmployee?.Account.FullName,
+            payout.DisputedAt, payout.DisputeReason, payout.DisputeStatus?.ToString(),
+            payout.DisputeResolvedAt, payout.DisputeResolutionNote,
+            payout.DisputeResolvedByEmployeeId, payout.DisputeResolvedByEmployee?.Account.FullName);
     }
 
     private async Task<Result<PayoutDto>> SavePayoutAsync(Payout payout, CancellationToken ct)

@@ -17,7 +17,7 @@ public sealed class SettlementWorkflowTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    private static (AppDbContext Db, SettlementService Service, ConsignmentContract Contract, SaleInvoice Invoice) Setup(bool activeContract = false)
+    private static (AppDbContext Db, SettlementService Service, ConsignmentContract Contract, SaleInvoice Invoice) Setup(bool activeContract = false, Guid? customerId = null)
     {
         var now = DateTimeOffset.UtcNow;
         var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
@@ -26,6 +26,7 @@ public sealed class SettlementWorkflowTests
         var category = new Category { Name = "Category" };
         var contract = new ConsignmentContract
         {
+            CustomerId = customerId ?? Guid.NewGuid(),
             ContractNumber = "KG-SETTLEMENT", SignedAt = now.AddDays(-30),
             EndsAt = activeContract ? now.AddDays(30) : now.AddDays(-1),
             BankCodeSnapshot = "VCB", BankAccountNumberSnapshot = "123456789",
@@ -228,6 +229,227 @@ public sealed class SettlementWorkflowTests
             var detail1 = (await incidentService.DetailAsync(report1.Id, default)).Data!;
             Assert.Equal("Compensated", detail1.Status);
             Assert.Equal("Approved", detail1.PayoutStatus);
+        }
+    }
+
+    [Fact]
+    public async Task CustomerCanConfirmPaymentReceiptAndCompletePayout()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var customerId = Guid.NewGuid();
+        var (db, _, contract, _) = Setup(customerId: customerId);
+        await using (db)
+        {
+            var payout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-CONFIRM-01",
+                TotalAmount = 800000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = now.AddHours(-1)
+            };
+            db.Payouts.Add(payout);
+            await db.SaveChangesAsync();
+
+            var clock = new FixedClock(now);
+            var store = new PrivateProductImageStore(new ServiceCollection().BuildServiceProvider(), Options.Create(new R2Options()));
+            var service = new SettlementService(db, clock, store);
+
+            // Other customer cannot confirm
+            var forbidden = await service.ConfirmReceivedAsync(payout.Id, Guid.NewGuid(), default);
+            Assert.False(forbidden.IsSuccess);
+            Assert.Equal("SETTLEMENT.FORBIDDEN", forbidden.Error!.Code);
+
+            // Owning customer confirms receipt
+            var confirmed = await service.ConfirmReceivedAsync(payout.Id, customerId, new CustomerPayoutConfirmation("Đã nhận đủ tiền"), default);
+            Assert.True(confirmed.IsSuccess);
+            Assert.Equal("Completed", confirmed.Data!.Status);
+            Assert.Equal(now, confirmed.Data.CustomerConfirmedAt);
+            Assert.Equal(now, confirmed.Data.CompletedAt);
+
+            // Idempotent on completed payout
+            var repeated = await service.ConfirmReceivedAsync(payout.Id, customerId, default);
+            Assert.True(repeated.IsSuccess);
+            Assert.Equal("Completed", repeated.Data!.Status);
+
+            // Audit log exists
+            var logs = await db.AuditLogs.Where(x => x.EntityId == payout.Id.ToString() && x.Action == "ConfirmReceived").ToListAsync();
+            Assert.NotEmpty(logs);
+            Assert.Equal(customerId, logs[0].ActorAccountId);
+        }
+    }
+
+    [Fact]
+    public async Task CustomerCanSubmitDisputeAndSystemValidatesOwnershipAndStatus()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var customerId = Guid.NewGuid();
+        var (db, _, contract, _) = Setup(customerId: customerId);
+        await using (db)
+        {
+            var pendingPayout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-DISPUTE-PENDING",
+                TotalAmount = 500000m,
+                Status = PayoutStatus.Pending
+            };
+            var transferredPayout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-DISPUTE-TRANSFERRED",
+                TotalAmount = 800000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = now.AddHours(-2)
+            };
+            var completedPayout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-DISPUTE-COMPLETED",
+                TotalAmount = 700000m,
+                Status = PayoutStatus.Completed,
+                CompletedAt = now.AddHours(-10)
+            };
+            db.Payouts.AddRange(pendingPayout, transferredPayout, completedPayout);
+            await db.SaveChangesAsync();
+
+            var clock = new FixedClock(now);
+            var store = new PrivateProductImageStore(new ServiceCollection().BuildServiceProvider(), Options.Create(new R2Options()));
+            var service = new SettlementService(db, clock, store);
+
+            // Empty reason fails validation
+            var invalidReason = await service.SubmitDisputeAsync(transferredPayout.Id, customerId, new SubmitPayoutDisputeRequest("   "), default);
+            Assert.False(invalidReason.IsSuccess);
+            Assert.Equal("SETTLEMENT.DISPUTE", invalidReason.Error!.Code);
+
+            // Ownership check: other customer cannot dispute
+            var wrongCustomer = await service.SubmitDisputeAsync(transferredPayout.Id, Guid.NewGuid(), new SubmitPayoutDisputeRequest("Chưa nhận được tiền"), default);
+            Assert.False(wrongCustomer.IsSuccess);
+            Assert.Equal("SETTLEMENT.FORBIDDEN", wrongCustomer.Error!.Code);
+
+            // Cannot dispute pending payout
+            var disputePending = await service.SubmitDisputeAsync(pendingPayout.Id, customerId, new SubmitPayoutDisputeRequest("Tiền chưa về"), default);
+            Assert.False(disputePending.IsSuccess);
+            Assert.Contains("đã chuyển khoản", disputePending.Error!.Message);
+
+            // Cannot dispute completed payout
+            var disputeCompleted = await service.SubmitDisputeAsync(completedPayout.Id, customerId, new SubmitPayoutDisputeRequest("Tiền sai lệch"), default);
+            Assert.False(disputeCompleted.IsSuccess);
+            Assert.Contains("đã hoàn tất", disputeCompleted.Error!.Message);
+
+            // Valid dispute on transferred payout
+            var validDispute = await service.SubmitDisputeAsync(transferredPayout.Id, customerId, new SubmitPayoutDisputeRequest("Tài khoản chưa nhận được tiền"), default);
+            Assert.True(validDispute.IsSuccess);
+            Assert.Equal("Open", validDispute.Data!.DisputeStatus);
+            Assert.Equal("Tài khoản chưa nhận được tiền", validDispute.Data.DisputeReason);
+            Assert.Equal(now, validDispute.Data.DisputedAt);
+
+            // Duplicate dispute while open is blocked
+            var duplicate = await service.SubmitDisputeAsync(transferredPayout.Id, customerId, new SubmitPayoutDisputeRequest("Gửi lại khiếu nại"), default);
+            Assert.False(duplicate.IsSuccess);
+            Assert.Contains("chờ xử lý", duplicate.Error!.Message);
+        }
+    }
+
+    [Fact]
+    public async Task OpenDisputeBlocksAutomaticSettlementUntilResolvedOrConfirmed()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var customerId = Guid.NewGuid();
+        var (db, _, contract, _) = Setup(customerId: customerId);
+        await using (db)
+        {
+            // Payout with expired confirmation window (>48h) and open dispute
+            var disputedPayout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-AUTO-DISPUTED",
+                TotalAmount = 1000000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = now.AddHours(-50),
+                DisputedAt = now.AddHours(-40),
+                DisputeReason = "Chưa nhận được tiền chuyển khoản",
+                DisputeStatus = PayoutDisputeStatus.Open
+            };
+            // Normal payout with expired confirmation window (>48h) without dispute
+            var normalPayout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-AUTO-NORMAL",
+                TotalAmount = 500000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = now.AddHours(-50)
+            };
+            db.Payouts.AddRange(disputedPayout, normalPayout);
+            await db.SaveChangesAsync();
+
+            var clock = new FixedClock(now);
+            var store = new PrivateProductImageStore(new ServiceCollection().BuildServiceProvider(), Options.Create(new R2Options()));
+            var service = new SettlementService(db, clock, store);
+
+            // Run auto completion: normal completes, disputed remains Transferred
+            var completedCount = await service.CompleteExpiredAsync(default);
+            Assert.Equal(1, completedCount);
+
+            var reloadedNormal = await db.Payouts.AsNoTracking().SingleAsync(x => x.Id == normalPayout.Id);
+            Assert.Equal(PayoutStatus.Completed, reloadedNormal.Status);
+
+            var reloadedDisputed = await db.Payouts.AsNoTracking().SingleAsync(x => x.Id == disputedPayout.Id);
+            Assert.Equal(PayoutStatus.Transferred, reloadedDisputed.Status);
+            Assert.Equal(PayoutDisputeStatus.Open, reloadedDisputed.DisputeStatus);
+
+            // Manager resolves dispute
+            var managerActor = Guid.NewGuid();
+            var resolved = await service.ResolveDisputeAsync(disputedPayout.Id, managerActor,
+                new ResolvePayoutDisputeRequest("Resolved", "Đã tra soát ngân hàng, lệnh chuyển thành công"), default);
+            Assert.True(resolved.IsSuccess);
+            Assert.Equal("Resolved", resolved.Data!.DisputeStatus);
+            Assert.Equal(managerActor, resolved.Data.DisputeResolvedByEmployeeId);
+            Assert.NotNull(resolved.Data.DisputeResolvedAt);
+
+            // Now that dispute is Resolved (not Open), auto completion completes it
+            var completedCountAfterResolution = await service.CompleteExpiredAsync(default);
+            Assert.Equal(1, completedCountAfterResolution);
+
+            var reloadedAfterResolution = await db.Payouts.AsNoTracking().SingleAsync(x => x.Id == disputedPayout.Id);
+            Assert.Equal(PayoutStatus.Completed, reloadedAfterResolution.Status);
+        }
+    }
+
+    [Fact]
+    public async Task CustomerConfirmingReceiptResolvesOpenDisputeAutomatically()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var customerId = Guid.NewGuid();
+        var (db, _, contract, _) = Setup(customerId: customerId);
+        await using (db)
+        {
+            var disputedPayout = new Payout
+            {
+                ConsignmentContractId = contract.Id,
+                PayoutNumber = "PC-RESOLVE-CONFIRM",
+                TotalAmount = 1200000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = now.AddHours(-10),
+                DisputedAt = now.AddHours(-5),
+                DisputeReason = "Chưa thấy ting ting",
+                DisputeStatus = PayoutDisputeStatus.Open
+            };
+            db.Payouts.Add(disputedPayout);
+            await db.SaveChangesAsync();
+
+            var clock = new FixedClock(now);
+            var store = new PrivateProductImageStore(new ServiceCollection().BuildServiceProvider(), Options.Create(new R2Options()));
+            var service = new SettlementService(db, clock, store);
+
+            // Customer confirms received payment
+            var confirmed = await service.ConfirmReceivedAsync(disputedPayout.Id, customerId, new CustomerPayoutConfirmation("Tiền đã vào tài khoản rồi"), default);
+            Assert.True(confirmed.IsSuccess);
+            Assert.Equal("Completed", confirmed.Data!.Status);
+            Assert.Equal("Resolved", confirmed.Data.DisputeStatus);
+            Assert.Equal(now, confirmed.Data.CustomerConfirmedAt);
+            Assert.Equal(now, confirmed.Data.CompletedAt);
+            Assert.Equal("Tiền đã vào tài khoản rồi", confirmed.Data.DisputeResolutionNote);
         }
     }
 }

@@ -29,6 +29,13 @@ public sealed class Payout : BaseEntity
 
     public DateTimeOffset? CompletedAt { get; set; }
 
+    public DateTimeOffset? DisputedAt { get; set; }
+    public string? DisputeReason { get; set; }
+    public PayoutDisputeStatus? DisputeStatus { get; set; }
+    public DateTimeOffset? DisputeResolvedAt { get; set; }
+    public Guid? DisputeResolvedByEmployeeId { get; set; }
+    public string? DisputeResolutionNote { get; set; }
+
     public string? ProofUrl { get; set; }
 
     public string? BankTransactionReference { get; set; }
@@ -41,6 +48,7 @@ public sealed class Payout : BaseEntity
 
     public EmployeeProfile? ApprovedByEmployee { get; set; }
     public EmployeeProfile? RejectedByEmployee { get; set; }
+    public EmployeeProfile? DisputeResolvedByEmployee { get; set; }
 
     public ICollection<PayoutDetail> Details { get; set; } = new List<PayoutDetail>();
 }

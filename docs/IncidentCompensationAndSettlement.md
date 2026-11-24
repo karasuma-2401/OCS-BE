@@ -19,7 +19,7 @@ Incident states: `Pending`, `NeedsRecheck`, `Approved`, `Compensated`.
 - Each sold product appears as separate `SaleProceeds` and negative `Commission` lines. Compensation is a separate positive line. The manager enters a nonnegative service fee and description; a positive fee is stored as a negative `ServiceFee` line. Net payout must be positive.
 - Creation is blocked while an incident is pending/recheck, a sold invoice remains unpaid, a related payment transaction is pending, or a previous payout is awaiting review, transfer, or completion.
 - A pending payout may have its service fee or recipient bank details corrected with a reason. These changes are audited. Approval records the manager and timestamp and locks the statement and recipient details. Rejection records the manager, timestamp, and reason; the rejected statement remains in history while its source lines can be used in a replacement payout.
-- Payout state moves `Pending` → `Approved` → `Transferred` → `Completed`, or `Pending` → `Rejected`. Transfer requires a bank reference and an existing private R2 proof image, and creates a successful expense transaction with a recipient bank snapshot. The customer can confirm receipt; Hangfire completes an unconfirmed transfer after 48 hours.
+- Payout state moves `Pending` → `Approved` → `Transferred` → `Completed`, or `Pending` → `Rejected`. Transfer requires a bank reference and an existing private R2 proof image, and creates a successful expense transaction with a recipient bank snapshot. The customer can confirm receipt or submit a dispute (`Open`); Hangfire completes an unconfirmed transfer after 48 hours only if there is no open dispute. An open dispute blocks auto-settlement until resolved/rejected by management or until the customer confirms receipt.
 - Approval of the payout locks the statement and recipient details, transitions linked incident reports from `Approved` to `Compensated`, and moves the payout to `Approved`. Completion closes eligible consignment contracts once all products are processed.
 
 ## Permissions
@@ -51,8 +51,10 @@ Incident states: `Pending`, `NeedsRecheck`, `Approved`, `Compensated`.
 | POST | `/api/settlements/payouts/{id}/approve` | `settlements.manage` | Approve a payout batch |
 | POST | `/api/settlements/payouts/{id}/reject` | `settlements.manage` | Reject a pending payout with a reason |
 | POST | `/api/settlements/payouts/{id}/transfer` | `settlements.manage` | Record bank transfer and proof |
+| POST | `/api/settlements/payouts/{id}/resolve-dispute` | `settlements.manage` | Resolve or reject customer dispute |
 | GET | `/api/customer/payouts` | Customer | List payouts belonging to the current customer |
 | GET | `/api/customer/payouts/{id}/proof` | Owning Customer | Read the private transfer proof |
 | POST | `/api/customer/payouts/{id}/confirm-received` | Owning Customer | Confirm receipt and complete the payout |
+| POST | `/api/customer/payouts/{id}/dispute` | Owning Customer | Submit a dispute for a transferred payout |
 
-Apply `IncidentCompensationWorkflow` and `SettlementReviewAndServiceFee` migrations before deployment. Existing accounts need a refreshed login session after the permission migration so their newly seeded role permissions appear in authorization claims.
+Apply `IncidentCompensationWorkflow`, `SettlementReviewAndServiceFee`, and `AddPayoutDisputeWorkflow` migrations before deployment. Existing accounts need a refreshed login session after the permission migration so their newly seeded role permissions appear in authorization claims.

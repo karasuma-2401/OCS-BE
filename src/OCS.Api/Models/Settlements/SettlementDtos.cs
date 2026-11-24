@@ -57,7 +57,14 @@ public sealed record PayoutDto(
     IReadOnlyList<SettlementLineDto> Lines,
     Guid? CreatedByEmployeeId, Guid? ApprovedByEmployeeId, Guid? RejectedByEmployeeId,
     DateTimeOffset? RejectedAt, string? RejectionReason,
-    string? CreatedByName, string? ApprovedByName, string? RejectedByName);
+    string? CreatedByName, string? ApprovedByName, string? RejectedByName,
+    DateTimeOffset? DisputedAt = null,
+    string? DisputeReason = null,
+    string? DisputeStatus = null,
+    DateTimeOffset? DisputeResolvedAt = null,
+    string? DisputeResolutionNote = null,
+    Guid? DisputeResolvedByEmployeeId = null,
+    string? DisputeResolvedByName = null);
 
 public sealed record CreatePayoutRequest(decimal ServiceFee, string? ServiceFeeDescription);
 public sealed record UpdatePayoutServiceFeeRequest(decimal ServiceFee, string? Description, string Reason);
@@ -67,4 +74,6 @@ public sealed record PayoutHistoryDto(string Action, string Changes, string? Rea
 
 public sealed record RecordPayoutTransferRequest(string ProofUrl, string BankTransactionReference);
 
-public sealed record CustomerPayoutConfirmation(string ConfirmationNote);
+public sealed record CustomerPayoutConfirmation(string? ConfirmationNote);
+public sealed record SubmitPayoutDisputeRequest(string Reason);
+public sealed record ResolvePayoutDisputeRequest(string Resolution, string? Note);

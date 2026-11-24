@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Extensions;
+using OCS.Api.Models.Settlements;
 using OCS.Api.Services;
 
 namespace OCS.Api.Controllers;
@@ -29,8 +30,13 @@ public sealed class CustomerPayoutsController(SettlementService settlements) : C
     }
 
     [HttpPost("{id:guid}/confirm-received")]
-    public async Task<IActionResult> ConfirmReceived(Guid id, CancellationToken ct) =>
-        Actor() is Guid customerId ? (await settlements.ConfirmReceivedAsync(id, customerId, ct)).ToActionResult(this) : Unauthorized();
+    public async Task<IActionResult> ConfirmReceived(Guid id, [FromBody] CustomerPayoutConfirmation? request, CancellationToken ct) =>
+        Actor() is Guid customerId ? (await settlements.ConfirmReceivedAsync(id, customerId, request, ct)).ToActionResult(this) : Unauthorized();
+
+    [HttpPost("{id:guid}/dispute")]
+    [HttpPost("{id:guid}/complaint")]
+    public async Task<IActionResult> Dispute(Guid id, [FromBody] SubmitPayoutDisputeRequest request, CancellationToken ct) =>
+        Actor() is Guid customerId ? (await settlements.SubmitDisputeAsync(id, customerId, request, ct)).ToActionResult(this) : Unauthorized();
 
     private Guid? Actor() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id != Guid.Empty ? id : null;
 }

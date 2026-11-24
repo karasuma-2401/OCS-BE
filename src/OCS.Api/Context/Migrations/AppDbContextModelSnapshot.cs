@@ -1676,6 +1676,27 @@ namespace OCS.Api.Context.Migrations
                     b.Property<DateTimeOffset?>("CustomerConfirmedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DisputeReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("DisputeResolutionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset?>("DisputeResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DisputeResolvedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DisputeStatus")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTimeOffset?>("DisputedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PayoutNumber")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1719,6 +1740,8 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("CreatedByEmployeeId");
 
+                    b.HasIndex("DisputeResolvedByEmployeeId");
+
                     b.HasIndex("PayoutNumber")
                         .IsUnique();
 
@@ -1726,6 +1749,8 @@ namespace OCS.Api.Context.Migrations
 
                     b.ToTable("Payouts", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Payouts_DisputeStatus", "\"DisputeStatus\" IS NULL OR \"DisputeStatus\" IN ('Open', 'Resolved', 'Rejected')");
+
                             t.HasCheckConstraint("CK_Payouts_Status", "\"Status\" IN ('Pending', 'Approved', 'Transferred', 'Completed', 'Rejected')");
 
                             t.HasCheckConstraint("CK_Payouts_Total", "\"TotalAmount\" >= 0");
@@ -3323,6 +3348,11 @@ namespace OCS.Api.Context.Migrations
                         .HasForeignKey("CreatedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", "DisputeResolvedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("DisputeResolvedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("OCS.Api.Entities.EmployeeProfile", "RejectedByEmployee")
                         .WithMany()
                         .HasForeignKey("RejectedByEmployeeId")
@@ -3333,6 +3363,8 @@ namespace OCS.Api.Context.Migrations
                     b.Navigation("ConsignmentContract");
 
                     b.Navigation("CreatedByEmployee");
+
+                    b.Navigation("DisputeResolvedByEmployee");
 
                     b.Navigation("RejectedByEmployee");
                 });

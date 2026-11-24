@@ -73,5 +73,10 @@ public sealed class SettlementsController(SettlementService settlements) : Contr
     public async Task<IActionResult> Transfer(Guid id, RecordPayoutTransferRequest request, CancellationToken ct) =>
         Actor() is Guid actor ? (await settlements.RecordTransferAsync(id, actor, request, ct)).ToActionResult(this) : Unauthorized();
 
+    [HttpPost("payouts/{id:guid}/resolve-dispute")]
+    [Authorize(Policy = PermissionCatalog.SettlementsManage)]
+    public async Task<IActionResult> ResolveDispute(Guid id, [FromBody] ResolvePayoutDisputeRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await settlements.ResolveDisputeAsync(id, actor, request, ct)).ToActionResult(this) : Unauthorized();
+
     private Guid? Actor() => Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id != Guid.Empty ? id : null;
 }

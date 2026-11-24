@@ -16,6 +16,13 @@ public enum PayoutStatus
     Rejected = 4
 }
 
+public enum PayoutDisputeStatus
+{
+    Open = 0,
+    Resolved = 1,
+    Rejected = 2
+}
+
 public enum PayoutLineType
 {
     Commission = 0,
