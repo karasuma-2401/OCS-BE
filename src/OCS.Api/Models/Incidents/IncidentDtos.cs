@@ -31,4 +31,5 @@ public sealed record IncidentResponse(
     string Description, IReadOnlyList<string> EvidenceUrls, decimal AgreedPrice,
     decimal CompensationAmount, Guid CreatedByEmployeeId, Guid? ApprovedByEmployeeId, string? ApprovedByName,
     DateTimeOffset CreatedAt, DateTimeOffset? ApprovedAt, string? ReviewNote,
-    IReadOnlyList<IncidentAuditEvent>? History = null);
+    IReadOnlyList<IncidentAuditEvent>? History = null,
+    Guid? ContractId = null, Guid? PayoutId = null, string? PayoutNumber = null, string? PayoutStatus = null);

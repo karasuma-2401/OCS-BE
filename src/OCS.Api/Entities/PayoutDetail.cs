@@ -16,6 +16,7 @@ public sealed class PayoutDetail : BaseEntity
     public string Description { get; set; } = string.Empty;
 
     public decimal Amount { get; set; }
+    public bool IsReleased { get; set; }
 
     public Payout Payout { get; set; } = null!;
 

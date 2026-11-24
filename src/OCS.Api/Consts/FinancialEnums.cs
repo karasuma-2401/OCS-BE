@@ -12,7 +12,8 @@ public enum PayoutStatus
     Pending = 0,
     Approved = 1,
     Transferred = 2,
-    Completed = 3
+    Completed = 3,
+    Rejected = 4
 }
 
 public enum PayoutLineType

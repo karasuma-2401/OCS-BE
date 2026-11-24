@@ -1413,6 +1413,7 @@ namespace OCS.Api.Context.Migrations
 
                     b.Property<string>("EvidenceUrls")
                         .IsRequired()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("jsonb")
                         .HasDefaultValueSql("'[]'::jsonb");
 
@@ -1644,6 +1645,18 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid?>("ApprovedByEmployeeId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("BankAccountHolder")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("BankAccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("BankCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("BankTransactionReference")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
@@ -1672,7 +1685,18 @@ namespace OCS.Api.Context.Migrations
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)");
 
+                    b.Property<DateTimeOffset?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("RejectedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<string>("Status")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
@@ -1698,9 +1722,11 @@ namespace OCS.Api.Context.Migrations
                     b.HasIndex("PayoutNumber")
                         .IsUnique();
 
+                    b.HasIndex("RejectedByEmployeeId");
+
                     b.ToTable("Payouts", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Payouts_Status", "\"Status\" IN ('Pending', 'Approved', 'Transferred', 'Completed')");
+                            t.HasCheckConstraint("CK_Payouts_Status", "\"Status\" IN ('Pending', 'Approved', 'Transferred', 'Completed', 'Rejected')");
 
                             t.HasCheckConstraint("CK_Payouts_Total", "\"TotalAmount\" >= 0");
                         });
@@ -1726,6 +1752,11 @@ namespace OCS.Api.Context.Migrations
                     b.Property<Guid?>("IncidentReportId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("IsReleased")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("PayoutId")
                         .HasColumnType("uuid");
 
@@ -1744,13 +1775,13 @@ namespace OCS.Api.Context.Migrations
 
                     b.HasIndex("IncidentReportId")
                         .IsUnique()
-                        .HasFilter("\"IncidentReportId\" IS NOT NULL");
+                        .HasFilter("\"IncidentReportId\" IS NOT NULL AND NOT \"IsReleased\"");
 
                     b.HasIndex("PayoutId");
 
                     b.HasIndex("ProductId", "Type")
                         .IsUnique()
-                        .HasFilter("\"ProductId\" IS NOT NULL");
+                        .HasFilter("\"ProductId\" IS NOT NULL AND NOT \"IsReleased\"");
 
                     b.ToTable("PayoutDetails", null, t =>
                         {
@@ -3292,11 +3323,18 @@ namespace OCS.Api.Context.Migrations
                         .HasForeignKey("CreatedByEmployeeId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("OCS.Api.Entities.EmployeeProfile", "RejectedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("RejectedByEmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("ApprovedByEmployee");
 
                     b.Navigation("ConsignmentContract");
 
                     b.Navigation("CreatedByEmployee");
+
+                    b.Navigation("RejectedByEmployee");
                 });
 
             modelBuilder.Entity("OCS.Api.Entities.PayoutDetail", b =>

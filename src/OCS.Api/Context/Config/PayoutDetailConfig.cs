@@ -23,6 +23,7 @@ public sealed class PayoutDetailConfig : IEntityTypeConfiguration<PayoutDetail>
         builder.Property(x => x.Type).HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.Description).HasMaxLength(1000).IsRequired();
         builder.Property(x => x.Amount).HasPrecision(18, 2);
+        builder.Property(x => x.IsReleased).HasDefaultValue(false);
 
         builder.HasOne(x => x.Payout)
             .WithMany(x => x.Details)
@@ -41,9 +42,9 @@ public sealed class PayoutDetailConfig : IEntityTypeConfiguration<PayoutDetail>
 
         builder.HasIndex(x => new { x.ProductId, x.Type })
             .IsUnique()
-            .HasFilter("\"ProductId\" IS NOT NULL");
+            .HasFilter("\"ProductId\" IS NOT NULL AND NOT \"IsReleased\"");
         builder.HasIndex(x => x.IncidentReportId)
             .IsUnique()
-            .HasFilter("\"IncidentReportId\" IS NOT NULL");
+            .HasFilter("\"IncidentReportId\" IS NOT NULL AND NOT \"IsReleased\"");
     }
 }

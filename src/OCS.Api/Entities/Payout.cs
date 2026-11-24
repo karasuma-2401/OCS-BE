@@ -12,10 +12,16 @@ public sealed class Payout : BaseEntity
     public Guid? CreatedByEmployeeId { get; set; }
 
     public Guid? ApprovedByEmployeeId { get; set; }
+    public Guid? RejectedByEmployeeId { get; set; }
 
     public decimal TotalAmount { get; set; }
 
     public DateTimeOffset? ApprovedAt { get; set; }
+    public DateTimeOffset? RejectedAt { get; set; }
+    public string? RejectionReason { get; set; }
+    public string? BankCode { get; set; }
+    public string? BankAccountNumber { get; set; }
+    public string? BankAccountHolder { get; set; }
 
     public DateTimeOffset? TransferredAt { get; set; }
 
@@ -34,6 +40,7 @@ public sealed class Payout : BaseEntity
     public EmployeeProfile? CreatedByEmployee { get; set; }
 
     public EmployeeProfile? ApprovedByEmployee { get; set; }
+    public EmployeeProfile? RejectedByEmployee { get; set; }
 
     public ICollection<PayoutDetail> Details { get; set; } = new List<PayoutDetail>();
 }

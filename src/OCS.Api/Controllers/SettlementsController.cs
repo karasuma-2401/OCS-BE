@@ -25,8 +25,8 @@ public sealed class SettlementsController(SettlementService settlements) : Contr
 
     [HttpPost("contracts/{contractId:guid}/payouts")]
     [Authorize(Policy = PermissionCatalog.SettlementsManage)]
-    public async Task<IActionResult> CreatePayout(Guid contractId, CancellationToken ct) =>
-        Actor() is Guid actor ? (await settlements.CreatePayoutAsync(contractId, actor, ct)).ToActionResult(this) : Unauthorized();
+    public async Task<IActionResult> CreatePayout(Guid contractId, CreatePayoutRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await settlements.CreatePayoutAsync(contractId, actor, request, ct)).ToActionResult(this) : Unauthorized();
 
     [HttpGet("payouts")]
     [Authorize(Policy = PermissionCatalog.SettlementsRead)]
@@ -35,6 +35,10 @@ public sealed class SettlementsController(SettlementService settlements) : Contr
     [HttpGet("payouts/{id:guid}")]
     [Authorize(Policy = PermissionCatalog.SettlementsRead)]
     public async Task<IActionResult> Payout(Guid id, CancellationToken ct) => (await settlements.PayoutDetailAsync(id, ct)).ToActionResult(this);
+
+    [HttpGet("payouts/{id:guid}/history")]
+    [Authorize(Policy = PermissionCatalog.SettlementsRead)]
+    public async Task<IActionResult> History(Guid id, CancellationToken ct) => (await settlements.HistoryAsync(id, ct)).ToActionResult(this);
 
     [HttpGet("payouts/{id:guid}/proof")]
     [Authorize(Policy = PermissionCatalog.SettlementsRead)]
@@ -48,6 +52,21 @@ public sealed class SettlementsController(SettlementService settlements) : Contr
     [Authorize(Policy = PermissionCatalog.SettlementsManage)]
     public async Task<IActionResult> Approve(Guid id, CancellationToken ct) =>
         Actor() is Guid actor ? (await settlements.ApproveAsync(id, actor, ct)).ToActionResult(this) : Unauthorized();
+
+    [HttpPost("payouts/{id:guid}/reject")]
+    [Authorize(Policy = PermissionCatalog.SettlementsManage)]
+    public async Task<IActionResult> Reject(Guid id, RejectPayoutRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await settlements.RejectAsync(id, actor, request, ct)).ToActionResult(this) : Unauthorized();
+
+    [HttpPut("payouts/{id:guid}/payment")]
+    [Authorize(Policy = PermissionCatalog.SettlementsManage)]
+    public async Task<IActionResult> UpdatePayment(Guid id, UpdatePayoutPaymentRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await settlements.UpdatePaymentAsync(id, actor, request, ct)).ToActionResult(this) : Unauthorized();
+
+    [HttpPut("payouts/{id:guid}/service-fee")]
+    [Authorize(Policy = PermissionCatalog.SettlementsManage)]
+    public async Task<IActionResult> UpdateServiceFee(Guid id, UpdatePayoutServiceFeeRequest request, CancellationToken ct) =>
+        Actor() is Guid actor ? (await settlements.UpdateServiceFeeAsync(id, actor, request, ct)).ToActionResult(this) : Unauthorized();
 
     [HttpPost("payouts/{id:guid}/transfer")]
     [Authorize(Policy = PermissionCatalog.SettlementsManage)]

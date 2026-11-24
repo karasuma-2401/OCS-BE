@@ -14,7 +14,7 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private IQueryable<IncidentReport> Details() => db.IncidentReports
-        .Include(x => x.Product).ThenInclude(x => x.ConsignmentContract)
+        .Include(x => x.Product).ThenInclude(x => x.ConsignmentContract).ThenInclude(c => c!.Customer)
         .Include(x => x.Product).ThenInclude(x => x.Images)
         .Include(x => x.ApprovedByEmployee).ThenInclude(x => x!.Account);
 
@@ -58,7 +58,10 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
         var count = await rows.CountAsync(ct);
         var items = await rows.OrderBy(x => x.Status).ThenByDescending(x => x.CreatedAt)
             .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).AsSplitQuery().ToListAsync(ct);
-        return Result.Success(new PagedResponse<IncidentResponse>(items.Select(item => Map(item)).ToArray(), query.Page, query.PageSize, count));
+        var payoutMap = await LoadPayoutMapAsync(items.Select(x => x.Id).ToArray(), ct);
+        return Result.Success(new PagedResponse<IncidentResponse>(
+            items.Select(item => Map(item, payoutInfo: payoutMap.GetValueOrDefault(item.Id))).ToArray(),
+            query.Page, query.PageSize, count));
     }
 
     public async Task<Result<IncidentResponse>> DetailAsync(Guid id, CancellationToken ct)
@@ -70,7 +73,8 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
             .OrderBy(x => x.OccurredAt).Select(x => new IncidentAuditEvent(x.Id, x.Action,
                 x.ActorAccountId == null ? null : x.ActorAccountId.ToString(), x.ActorType.ToString(), x.Reason, x.Changes, x.OccurredAt))
             .ToArrayAsync(ct);
-        return Result.Success(Map(report, history: history));
+        var payoutMap = await LoadPayoutMapAsync([report.Id], ct);
+        return Result.Success(Map(report, history: history, payoutInfo: payoutMap.GetValueOrDefault(report.Id)));
     }
 
     public async Task<Result<IncidentResponse>> CreateAsync(Guid actor, CreateIncidentRequest request, CancellationToken ct)
@@ -167,9 +171,64 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
             NewStatus = ProductStatus.Compensated, ChangedByAccountId = actor, OccurredAt = now,
             Reason = $"Đã duyệt bồi thường {request.CompensationAmount:N2}"
         });
+
+        Payout? linkedPayout = null;
+        if (report.Product.ConsignmentContract is { Status: not ConsignmentContractStatus.Cancelled } contract &&
+            !await db.PayoutDetails.AnyAsync(x => x.IncidentReportId == report.Id && !x.IsReleased, ct))
+        {
+            var compensationAmount = decimal.Round(request.CompensationAmount, 2, MidpointRounding.AwayFromZero);
+            var bankCode = FirstNonEmpty(contract.BankCodeSnapshot, contract.Customer?.BankCode);
+            var bankAccountNumber = FirstNonEmpty(contract.BankAccountNumberSnapshot, contract.Customer?.BankAccountNumber);
+            var bankAccountHolder = FirstNonEmpty(contract.BankAccountHolderSnapshot, contract.Customer?.BankAccountHolderName);
+            var line = new PayoutDetail
+            {
+                Type = PayoutLineType.Compensation,
+                Description = $"Bồi thường sự cố: {report.Product.Name} ({report.Product.Barcode})",
+                Amount = compensationAmount,
+                IncidentReportId = report.Id,
+                CreatedAt = now
+            };
+
+            var openPending = await db.Payouts
+                .Include(x => x.Details)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync(x => x.ConsignmentContractId == contract.Id && x.Status == PayoutStatus.Pending, ct);
+
+            if (openPending is not null)
+            {
+                line.PayoutId = openPending.Id;
+                openPending.Details.Add(line);
+                openPending.TotalAmount = decimal.Round(openPending.TotalAmount + compensationAmount, 2, MidpointRounding.AwayFromZero);
+                openPending.BankCode = FirstNonEmpty(openPending.BankCode, bankCode);
+                openPending.BankAccountNumber = FirstNonEmpty(openPending.BankAccountNumber, bankAccountNumber);
+                openPending.BankAccountHolder = FirstNonEmpty(openPending.BankAccountHolder, bankAccountHolder);
+                openPending.UpdatedAt = now;
+                linkedPayout = openPending;
+            }
+            else
+            {
+                linkedPayout = new Payout
+                {
+                    PayoutNumber = $"PO-{now:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..28],
+                    ConsignmentContractId = contract.Id,
+                    CreatedByEmployeeId = actor,
+                    BankCode = bankCode,
+                    BankAccountNumber = bankAccountNumber,
+                    BankAccountHolder = bankAccountHolder,
+                    TotalAmount = compensationAmount,
+                    Status = PayoutStatus.Pending,
+                    CreatedAt = now,
+                    Details = [line]
+                };
+                db.Payouts.Add(linkedPayout);
+            }
+        }
+
         await db.SaveChangesAsync(ct);
         if (tx is not null) await tx.CommitAsync(ct);
-        return Result.Success(Map(report));
+        return Result.Success(Map(report, payoutInfo: linkedPayout is null
+            ? null
+            : (linkedPayout.Id, linkedPayout.PayoutNumber, linkedPayout.Status.ToString())));
     }
 
     public async Task<Result<IncidentResponse>> RequestRecheckAsync(Guid id, Guid actor, RequestIncidentRecheckRequest request, CancellationToken ct)
@@ -214,7 +273,30 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
         catch (JsonException) { return []; }
     }
 
-    private static IncidentResponse Map(IncidentReport report, Product? product = null, IReadOnlyList<IncidentAuditEvent>? history = null)
+    private async Task<Dictionary<Guid, (Guid Id, string Number, string Status)>> LoadPayoutMapAsync(
+        Guid[] incidentIds, CancellationToken ct)
+    {
+        if (incidentIds.Length == 0) return [];
+        var rows = await db.PayoutDetails.AsNoTracking()
+            .Where(x => !x.IsReleased && x.IncidentReportId != null && incidentIds.Contains(x.IncidentReportId.Value))
+            .Select(x => new { IncidentId = x.IncidentReportId!.Value, x.PayoutId, x.Payout.PayoutNumber, x.Payout.Status })
+            .ToArrayAsync(ct);
+        return rows.GroupBy(x => x.IncidentId)
+            .ToDictionary(g => g.Key, g =>
+            {
+                var row = g.First();
+                return (row.PayoutId, row.PayoutNumber, row.Status.ToString());
+            });
+    }
+
+    private static string? FirstNonEmpty(string? primary, string? fallback) =>
+        !string.IsNullOrWhiteSpace(primary) ? primary.Trim() : string.IsNullOrWhiteSpace(fallback) ? null : fallback.Trim();
+
+    private static IncidentResponse Map(
+        IncidentReport report,
+        Product? product = null,
+        IReadOnlyList<IncidentAuditEvent>? history = null,
+        (Guid Id, string Number, string Status)? payoutInfo = null)
     {
         product ??= report.Product;
         return new IncidentResponse(report.Id, report.ProductId, product.Barcode, product.Name,
@@ -222,7 +304,8 @@ public sealed class IncidentService(AppDbContext db, TimeProvider clock)
             report.Type.ToString(), report.Status.ToString(), report.Description, ReadEvidence(report.EvidenceUrls),
             product.AgreedListedPrice ?? product.ListedPrice, report.CompensationAmount,
             report.CreatedByEmployeeId, report.ApprovedByEmployeeId, report.ApprovedByEmployee?.Account.FullName, report.CreatedAt,
-            report.ApprovedAt, report.ReviewNote, history);
+            report.ApprovedAt, report.ReviewNote, history,
+            product.ConsignmentContractId, payoutInfo?.Id, payoutInfo?.Number, payoutInfo?.Status);
     }
 
     private static Result<T> Invalid<T>(string code, string message) => Result.Failure<T>(ApplicationError.Validation(code, message));
