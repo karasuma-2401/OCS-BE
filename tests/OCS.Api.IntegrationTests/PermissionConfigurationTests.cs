@@ -19,7 +19,7 @@ public sealed class PermissionConfigurationTests
     [Fact]
     public void AdminRightsAreReservedAndStaffCannotGainAccountManagement()
     {
-        Assert.Equal(5, PermissionCatalog.RequiredAdminCodes.Count);
+        Assert.Equal(10, PermissionCatalog.RequiredAdminCodes.Count);
         Assert.Contains(PermissionCatalog.ScreenPos, PermissionCatalog.DefaultsFor("Manager"));
         Assert.Contains(PermissionCatalog.ScreenAccounts, PermissionCatalog.DefaultsFor("Manager"));
         Assert.Contains(PermissionCatalog.AccountsRead, PermissionCatalog.DefaultsFor("Manager"));

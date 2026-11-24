@@ -40,7 +40,6 @@ public sealed class PrivateProductImageStore(IServiceProvider services, IOptions
     }
 
     private static bool IsSafeKey(string key) => !string.IsNullOrEmpty(key) &&
-        (key.StartsWith("inspections/", StringComparison.OrdinalIgnoreCase) || key.StartsWith("products/", StringComparison.OrdinalIgnoreCase)) &&
         !key.Contains('\\') &&
         key.Split('/').All(part => part is not ("" or "." or ".."));
 
