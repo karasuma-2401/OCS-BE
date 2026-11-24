@@ -247,8 +247,9 @@ public sealed class ContractService(AppDbContext db) : IContractService
         contract.BankAccountHolderSnapshot = guest.BankAccountHolderName?.Trim();
 
         contract.EarlyWithdrawalFeeRate = request.EarlyWithdrawalFeeRate;
-        if (request.EarlyWithdrawalFeeRate is decimal rate)
-            terms += FormattableString.Invariant($"\nPhí rút hàng sớm: {rate:0.##}% giá niêm yết từng sản phẩm; làm tròn đến 2 chữ số thập phân.");
+        if (approvedTemplate is null)
+            terms = (string.IsNullOrWhiteSpace(terms) ? "" : terms + "\n") +
+                "Phí rút hàng sớm của mỗi sản phẩm bằng giá niêm yết nhân với tỷ lệ hoa hồng đã thỏa thuận của sản phẩm trên hợp đồng; làm tròn đến 2 chữ số thập phân.";
         contract.TermsSnapshot = terms;
         contract.TemplateTitleSnapshot = template.Title;
         contract.OrganizationNameSnapshot = template.OrganizationName;

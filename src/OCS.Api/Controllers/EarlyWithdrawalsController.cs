@@ -12,6 +12,10 @@ namespace OCS.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class EarlyWithdrawalsController(EarlyWithdrawalService service) : ControllerBase
 {
+    [HttpGet("summary"), Authorize(Policy = PermissionCatalog.WithdrawalRead)]
+    public async Task<IActionResult> Summary(CancellationToken ct) => (await service.SummaryAsync(null, ct)).ToActionResult(this);
+    [HttpGet("search"), Authorize(Policy = PermissionCatalog.WithdrawalRead)]
+    public async Task<IActionResult> Search([FromQuery] WithdrawalQuery query, CancellationToken ct) => (await service.SearchAsync(null, query, ct)).ToActionResult(this);
     [HttpGet, Authorize(Policy = PermissionCatalog.WithdrawalRead)]
     public async Task<IActionResult> List(CancellationToken ct, [FromQuery] int page = 1, [FromQuery] int pageSize = 20) =>
         (await service.ListAsync(null, page, pageSize, ct)).ToActionResult(this);
@@ -36,6 +40,12 @@ public sealed class EarlyWithdrawalsController(EarlyWithdrawalService service) :
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class CustomerEarlyWithdrawalsController(EarlyWithdrawalService service) : ControllerBase
 {
+    [HttpGet("summary")]
+    public async Task<IActionResult> Summary(CancellationToken ct) => Actor() is Guid actor
+        ? (await service.SummaryAsync(actor, ct)).ToActionResult(this) : Unauthorized();
+    [HttpGet("search")]
+    public async Task<IActionResult> Search([FromQuery] WithdrawalQuery query, CancellationToken ct) => Actor() is Guid actor
+        ? (await service.SearchAsync(actor, query, ct)).ToActionResult(this) : Unauthorized();
     [HttpGet("eligible-products")]
     public async Task<IActionResult> Eligible(CancellationToken ct) => Actor() is Guid actor
         ? (await service.EligibleAsync(actor, ct)).ToActionResult(this) : Unauthorized();

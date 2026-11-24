@@ -186,4 +186,17 @@ public sealed class Product : BaseEntity
             0,
             MidpointRounding.AwayFromZero);
     }
+
+    public bool CanRequestEarlyWithdrawal(DateTimeOffset now) =>
+        SourceType == ProductSourceType.Consignment && Status == ProductStatus.OnSale &&
+        !IsReservedForWithdrawal && AgreedCommissionRate is >= 0 and <= 100 &&
+        ConsignmentContract is { Status: ConsignmentContractStatus.Active } contract &&
+        contract.SignedAt <= now && contract.EndsAt > now;
+
+    public decimal CalculateEarlyWithdrawalFee()
+    {
+        if (SourceType != ProductSourceType.Consignment || AgreedCommissionRate is not (>= 0 and <= 100))
+            throw new InvalidOperationException("The product must have an agreed consignment commission rate.");
+        return decimal.Round(ListedPrice * AgreedCommissionRate.Value / 100m, 2, MidpointRounding.AwayFromZero);
+    }
 }

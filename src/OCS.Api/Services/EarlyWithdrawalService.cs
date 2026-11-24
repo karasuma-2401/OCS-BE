@@ -29,14 +29,13 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
             .Where(x => x.SourceType == ProductSourceType.Consignment && x.Status == ProductStatus.OnSale && !x.IsReservedForWithdrawal &&
                 x.ConsignmentContract != null && x.ConsignmentContract.CustomerId == customer &&
                 x.ConsignmentContract.Status == ConsignmentContractStatus.Active && x.ConsignmentContract.SignedAt <= now && x.ConsignmentContract.EndsAt > now &&
-                x.ConsignmentContract.EarlyWithdrawalFeeRate >= 0 && x.ConsignmentContract.EarlyWithdrawalFeeRate <= 100 &&
+                x.AgreedCommissionRate >= 0 && x.AgreedCommissionRate <= 100 &&
                 !db.EarlyWithdrawalItems.Any(i => i.ProductId == x.Id && (i.EarlyWithdrawal.Status == "Pending" || i.EarlyWithdrawal.Status == "Approved")))
             .OrderBy(x => x.ConsignmentContract!.ContractNumber).ThenBy(x => x.Name).ThenBy(x => x.Id).ToListAsync(ct);
         return Result.Success<IReadOnlyList<WithdrawalEligibleProductDto>>(products.Select(x =>
             new WithdrawalEligibleProductDto(x.Id, x.Name, x.Barcode, x.ConsignmentContractId!.Value,
                 x.ConsignmentContract!.ContractNumber, x.ConsignmentContract.EndsAt, x.ListedPrice,
-                x.ConsignmentContract.EarlyWithdrawalFeeRate!.Value,
-                decimal.Round(x.ListedPrice * x.ConsignmentContract.EarlyWithdrawalFeeRate.Value / 100, 2, MidpointRounding.AwayFromZero))).ToArray());
+                x.AgreedCommissionRate!.Value, x.CalculateEarlyWithdrawalFee())).ToArray());
     }
 
     public async Task<Result<IReadOnlyList<EarlyWithdrawalDto>>> ListAsync(Guid? customer, int page, int pageSize, CancellationToken ct)
@@ -57,6 +56,48 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
         return row is null ? Missing() : Result.Success(Map(row));
     }
 
+    public async Task<Result<WithdrawalSummaryDto>> SummaryAsync(Guid? customer, CancellationToken ct)
+    {
+        if (customer.HasValue && !await CustomerActive(customer.Value, ct))
+            return Result.Failure<WithdrawalSummaryDto>(ApplicationError.Forbidden("WITHDRAWAL.CUSTOMER", "Hồ sơ khách hàng không hoạt động."));
+        var counts = await db.EarlyWithdrawals.AsNoTracking().Where(x => !customer.HasValue || x.CustomerId == customer)
+            .GroupBy(x => x.Status).Select(g => new { Status = g.Key, Count = g.Count() }).ToDictionaryAsync(x => x.Status, x => x.Count, ct);
+        return Result.Success(new WithdrawalSummaryDto(counts.Values.Sum(), counts.GetValueOrDefault("Pending"),
+            counts.GetValueOrDefault("Approved"), counts.GetValueOrDefault("Completed"), counts.GetValueOrDefault("Rejected")));
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1304", Justification = "EF Core translates ToLower to database LOWER.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Globalization", "CA1311", Justification = "EF Core translates ToLower to database LOWER.")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1862", Justification = "StringComparison cannot be translated by EF Core PostgreSQL.")]
+    public async Task<Result<PagedResponse<EarlyWithdrawalDto>>> SearchAsync(Guid? customer, WithdrawalQuery filter, CancellationToken ct)
+    {
+        if (customer.HasValue && !await CustomerActive(customer.Value, ct))
+            return Result.Failure<PagedResponse<EarlyWithdrawalDto>>(ApplicationError.Forbidden("WITHDRAWAL.CUSTOMER", "Hồ sơ khách hàng không hoạt động."));
+        if (filter.Page is < 1 or > 100000 || filter.PageSize is < 1 or > 100 || filter.Q?.Length > 200 ||
+            filter.Status is not (null or "" or "Pending" or "Approved" or "Completed" or "Rejected" or "Cancelled" or "Legacy") ||
+            filter.PaymentStatus is not (null or "" or "Unpaid" or "Partial" or "Paid") || filter.Sort is not (null or "" or "newest" or "oldest"))
+            return Result.Failure<PagedResponse<EarlyWithdrawalDto>>(ApplicationError.Validation("WITHDRAWAL.FILTER", "Bộ lọc hoặc phân trang không hợp lệ."));
+        var query = Details().AsNoTracking().Where(x => !customer.HasValue || x.CustomerId == customer);
+        if (!string.IsNullOrEmpty(filter.Status)) query = query.Where(x => x.Status == filter.Status);
+        if (!string.IsNullOrEmpty(filter.PaymentStatus))
+        {
+            var payment = Enum.Parse<InvoicePaymentStatus>(filter.PaymentStatus);
+            query = query.Where(x => x.PaymentStatus == payment);
+        }
+        if (!string.IsNullOrWhiteSpace(filter.Q))
+        {
+            var term = filter.Q.Trim().ToLowerInvariant();
+            query = query.Where(x => x.Id.ToString().StartsWith(term) || x.Customer.Account.FullName.ToLower().Contains(term) ||
+                x.Customer.Account.PhoneNumber.Contains(term) || x.Items.Any(i => i.Product.Name.ToLower().Contains(term) ||
+                    i.Product.Barcode.ToLower().Contains(term) || i.Product.ConsignmentContract != null && i.Product.ConsignmentContract.ContractNumber.ToLower().Contains(term)));
+        }
+        var total = await query.CountAsync(ct);
+        var ordered = filter.Sort == "oldest" ? query.OrderBy(x => x.RequestedAt).ThenBy(x => x.Id)
+            : query.OrderByDescending(x => x.RequestedAt).ThenBy(x => x.Id);
+        var rows = await ordered.Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).AsSplitQuery().ToListAsync(ct);
+        return Result.Success(new PagedResponse<EarlyWithdrawalDto>(rows.Select(Map).ToArray(), filter.Page, filter.PageSize, total));
+    }
+
     public async Task<Result<EarlyWithdrawalDto>> CreateAsync(Guid customer, CreateEarlyWithdrawalRequest request, CancellationToken ct)
     {
         if (!await CustomerActive(customer, ct)) return Forbidden();
@@ -68,17 +109,15 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
         if (products.Count != request.ProductIds.Length) return Missing();
         var now = clock.GetUtcNow();
         if (products.Any(x => !Available(x, now))) return Conflict("Chỉ được rút hàng ký gửi còn bán trong thời hạn hợp đồng.");
-        if (products.Any(x => x.ConsignmentContract!.EarlyWithdrawalFeeRate is null or < 0 or > 100))
-            return Conflict("Hợp đồng chưa có tỷ lệ phí rút sớm hợp lệ. Cần đối chiếu điều khoản đã ký.");
         if (await db.EarlyWithdrawalItems.AnyAsync(x => request.ProductIds.Contains(x.ProductId) &&
             (x.EarlyWithdrawal.Status == "Pending" || x.EarlyWithdrawal.Status == "Approved"), ct))
             return Conflict("Sản phẩm đã có yêu cầu rút sớm đang xử lý.");
         var row = new EarlyWithdrawal { CustomerId = customer, Reason = request.Reason.Trim(), RequestedAt = now };
         foreach (var p in products)
         {
-            var rate = p.ConsignmentContract!.EarlyWithdrawalFeeRate!.Value;
+            var rate = p.AgreedCommissionRate!.Value;
             row.Items.Add(new EarlyWithdrawalItem { ProductId = p.Id, Product = p, ListedPrice = p.ListedPrice,
-                PenaltyRate = rate, PenaltyAmount = decimal.Round(p.ListedPrice * rate / 100, 2, MidpointRounding.AwayFromZero) });
+                PenaltyRate = rate, PenaltyAmount = p.CalculateEarlyWithdrawalFee() });
             // Serialize competing requests and sales through the existing inventory concurrency token.
             p.InventoryVersion = Guid.NewGuid();
         }
@@ -204,9 +243,7 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
         }
     }
 
-    private static bool Available(Product p, DateTimeOffset now) => p.SourceType == ProductSourceType.Consignment &&
-        p.Status == ProductStatus.OnSale && !p.IsReservedForWithdrawal && p.ConsignmentContract is { Status: ConsignmentContractStatus.Active } c &&
-        c.SignedAt <= now && c.EndsAt > now;
+    private static bool Available(Product p, DateTimeOffset now) => p.CanRequestEarlyWithdrawal(now);
     private static bool Text(string? text) => !string.IsNullOrWhiteSpace(text) && text.Length <= 1000;
     private static Result<EarlyWithdrawalDto> Missing() => Result.Failure<EarlyWithdrawalDto>(ApplicationError.NotFound("WITHDRAWAL.NOT_FOUND", "Không tìm thấy yêu cầu hoặc sản phẩm."));
     private static Result<EarlyWithdrawalDto> Invalid() => Result.Failure<EarlyWithdrawalDto>(ApplicationError.Validation("WITHDRAWAL.INVALID", "Thông tin yêu cầu không hợp lệ."));

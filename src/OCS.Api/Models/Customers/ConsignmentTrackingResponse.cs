@@ -12,7 +12,13 @@ public sealed record ConsignmentProductResponse(
     decimal? AgreedCommissionRate,
     decimal? EstimatedPayout,
     bool DetailAvailable = true,
-    DateTimeOffset? HandledAt = null);
+    DateTimeOffset? HandledAt = null,
+    bool CanWithdrawEarly = false,
+    decimal? EarlyWithdrawalFee = null,
+    ConsignmentWithdrawalInfo? Withdrawal = null);
+
+public sealed record ConsignmentWithdrawalInfo(Guid Id, string Status, string PaymentStatus,
+    string? DecisionNote, DateTimeOffset RequestedAt);
 
 /// <summary>Thong tin theo doi mot hop dong ky gui cua khach hang.</summary>
 /// <param name="EstimatedPayout">Tong du kien cho tat ca san pham; null neu co san pham thieu uoc tinh.</param>
@@ -41,4 +47,5 @@ public sealed record ConsignmentProductDetailResponse(
     string? BrandName, string? CategoryName, string? Size, string? Condition,
     IReadOnlyList<string> ImageUrls, DateTimeOffset? HandledAt = null,
     string? ExpiryProcessingType = null, string? ExpiryProcessingStatus = null,
-    DateTimeOffset? CollectionDeadline = null);
+    DateTimeOffset? CollectionDeadline = null,
+    bool CanWithdrawEarly = false, decimal? EarlyWithdrawalFee = null, ConsignmentWithdrawalInfo? Withdrawal = null);

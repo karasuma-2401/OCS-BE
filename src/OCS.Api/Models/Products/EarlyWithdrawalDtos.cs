@@ -2,6 +2,10 @@ using System.ComponentModel.DataAnnotations;
 
 namespace OCS.Api.Models.Products;
 
+public sealed record WithdrawalQuery(int Page = 1, int PageSize = 20, string? Q = null,
+    string? Status = null, string? PaymentStatus = null, string? Sort = null);
+public sealed record WithdrawalSummaryDto(int TotalCount, int PendingCount, int ApprovedCount, int CompletedCount, int RejectedCount);
+
 public sealed record CreateEarlyWithdrawalRequest(
     [property: Required, MinLength(1), MaxLength(100)] Guid[] ProductIds,
     [property: Required, MaxLength(1000)] string Reason);
