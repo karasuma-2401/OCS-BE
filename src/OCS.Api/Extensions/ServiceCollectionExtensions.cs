@@ -152,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ExpiryProcessingService>();
         services.AddScoped<ExpiryProcessingJob>();
         services.AddScoped<BuyoutService>();
+        services.AddScoped<EarlyWithdrawalService>();
         services.AddScoped<IFcmService, FcmNotificationService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IAppointmentService, AppointmentService>();

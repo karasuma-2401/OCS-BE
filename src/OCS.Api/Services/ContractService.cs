@@ -43,6 +43,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
 
     private async Task<Result<PreparedContract>> PrepareAsync(CreateContractRequest request, Guid employeeId, bool preview, bool renderLegacy, CancellationToken cancellationToken)
     {
+        if (request.EarlyWithdrawalFeeRate is decimal fee && (fee < 0 || fee > 100 || decimal.Round(fee, 2) != fee))
+            return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.FEE_RATE", "Tỷ lệ phí rút sớm phải từ 0 đến 100, tối đa 2 chữ số thập phân."));
         if (request.SignedAt is not DateTimeOffset signedAt || request.EndsAt is not DateTimeOffset endsAt ||
             endsAt <= signedAt || (request.ExpiryHandling != "Return" && request.ExpiryHandling != "Donate"))
             return Result.Failure<PreparedContract>(ApplicationError.Validation("CONTRACT.INVALID_DATA", "Vui lòng kiểm tra ngày ký, ngày kết thúc và cách xử lý khi hết hạn."));
@@ -244,6 +246,9 @@ public sealed class ContractService(AppDbContext db) : IContractService
         contract.BankAccountNumberSnapshot = guest.BankAccountNumber?.Trim();
         contract.BankAccountHolderSnapshot = guest.BankAccountHolderName?.Trim();
 
+        contract.EarlyWithdrawalFeeRate = request.EarlyWithdrawalFeeRate;
+        if (request.EarlyWithdrawalFeeRate is decimal rate)
+            terms += FormattableString.Invariant($"\nPhí rút hàng sớm: {rate:0.##}% giá niêm yết từng sản phẩm; làm tròn đến 2 chữ số thập phân.");
         contract.TermsSnapshot = terms;
         contract.TemplateTitleSnapshot = template.Title;
         contract.OrganizationNameSnapshot = template.OrganizationName;
@@ -329,7 +334,7 @@ public sealed class ContractService(AppDbContext db) : IContractService
                 item.Product.StorageLocationId is Guid locationId && locations.TryGetValue(locationId, out var location) ? location.Name : null, index + 1)).ToArray();
             var storeAddress = await db.SystemParameters.AsNoTracking().Where(x => x.Key == "store.address").Select(x => x.Value).SingleOrDefaultAsync(cancellationToken);
             var values = WordTemplateData.Contract(contract, template, employeeAccount?.FullName ?? "", employee.JobTitle,
-                employeeAccount?.PhoneNumber ?? "", null, pdfProducts.Select(item => item.Product).ToArray(), preview, storeAddress);
+                employeeAccount?.PhoneNumber ?? "", terms, pdfProducts.Select(item => item.Product).ToArray(), preview, storeAddress);
             var images = signatureBytes is null ? null : new Dictionary<string, byte[]> { ["customer.signature"] = signatureBytes };
             var effectiveTemplate = approvedTemplate is not null && approvedTemplate.AsSpan().StartsWith("PK"u8) ? approvedTemplate : templateBytes;
             word = WordTemplateFiller.Fill(effectiveTemplate, WordTemplateSamples.Contract, values, productRows, images);
@@ -767,7 +772,8 @@ public sealed class ContractService(AppDbContext db) : IContractService
             title,
             organizationName,
             headerText,
-            footerText
+            footerText,
+            contract.EarlyWithdrawalFeeRate
         );
 
         return Result.Success(detail);
@@ -912,5 +918,5 @@ public sealed class ContractService(AppDbContext db) : IContractService
     private static ContractResponse Map(ConsignmentContract contract) => new(
         contract.Id, contract.ContractNumber, contract.CustomerId, contract.AppointmentId,
         contract.CreatedByEmployeeId, contract.SignedAt, contract.EndsAt,
-        contract.ExpiryHandling.ToString(), contract.Status.ToString());
+        contract.ExpiryHandling.ToString(), contract.Status.ToString(), contract.EarlyWithdrawalFeeRate);
 }

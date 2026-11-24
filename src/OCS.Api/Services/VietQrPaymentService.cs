@@ -509,7 +509,7 @@ public sealed class VietQrPaymentService(
     {
         var productIds = invoice.Lines.Select(line => line.ProductId).ToArray();
         return db.Products.AnyAsync(x => productIds.Contains(x.Id) &&
-            (x.Status != ProductStatus.OnSale ||
+            (x.Status != ProductStatus.OnSale || x.IsReservedForWithdrawal ||
              x.ConsignmentContract != null && x.ConsignmentContract.EndsAt <= now), ct);
     }
 

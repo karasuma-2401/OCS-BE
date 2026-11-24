@@ -49,6 +49,7 @@ public sealed class Product : BaseEntity
     public ProductApprovalStatus ApprovalStatus { get; set; } = ProductApprovalStatus.Pending;
 
     public Guid InventoryVersion { get; set; } = Guid.NewGuid();
+    public bool IsReservedForWithdrawal { get; set; }
 
     public decimal? PurchasePrice { get; private set; }
 

@@ -10,6 +10,7 @@ public sealed class EarlyWithdrawalItemConfig : IEntityTypeConfiguration<EarlyWi
     {
         builder.ToTable("EarlyWithdrawalItems", table =>
         {
+            table.HasCheckConstraint("CK_EarlyWithdrawalItems_Rate", "\"PenaltyRate\" BETWEEN 0 AND 100");
             table.HasCheckConstraint("CK_EarlyWithdrawalItems_ListedPrice", "\"ListedPrice\" >= 0");
             table.HasCheckConstraint("CK_EarlyWithdrawalItems_Penalty", "\"PenaltyAmount\" >= 0");
         });
@@ -17,6 +18,7 @@ public sealed class EarlyWithdrawalItemConfig : IEntityTypeConfiguration<EarlyWi
         builder.HasKey(x => new { x.EarlyWithdrawalId, x.ProductId });
         builder.Property(x => x.ListedPrice).HasPrecision(18, 2);
         builder.Property(x => x.PenaltyAmount).HasPrecision(18, 2);
+        builder.Property(x => x.PenaltyRate).HasPrecision(5, 2);
         builder.HasOne(x => x.EarlyWithdrawal).WithMany(x => x.Items).HasForeignKey(x => x.EarlyWithdrawalId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(x => x.Product).WithMany().HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => x.ProductId).IsUnique();

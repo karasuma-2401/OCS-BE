@@ -11,6 +11,7 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
     {
         builder.ToTable("ConsignmentContracts", table =>
         {
+            table.HasCheckConstraint("CK_ConsignmentContracts_WithdrawalFeeRate", "\"EarlyWithdrawalFeeRate\" IS NULL OR \"EarlyWithdrawalFeeRate\" BETWEEN 0 AND 100");
             table.HasCheckConstraint(
                 "CK_ConsignmentContracts_Dates",
                 """
@@ -26,6 +27,7 @@ public sealed class ConsignmentContractConfig : IEntityTypeConfiguration<Consign
         });
 
         builder.HasKey(x => x.Id);
+        builder.Property(x => x.EarlyWithdrawalFeeRate).HasPrecision(5, 2);
 
         builder.Property(x => x.Id)
             .ValueGeneratedNever();

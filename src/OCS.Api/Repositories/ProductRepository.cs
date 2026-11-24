@@ -43,7 +43,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
 
         var query = dbContext.Products
             .AsNoTracking()
-            .Where(p => p.Status == ProductStatus.OnSale && p.Category.IsActive && p.Brand.IsActive);
+            .Where(p => p.Status == ProductStatus.OnSale && !p.IsReservedForWithdrawal && p.Category.IsActive && p.Brand.IsActive);
 
         if (!string.IsNullOrWhiteSpace(request.Q))
         {
@@ -152,7 +152,7 @@ public sealed class ProductRepository(AppDbContext dbContext) : IProductReposito
     {
         var product = await dbContext.Products
             .AsNoTracking()
-            .Where(p => p.Id == id && p.Status == ProductStatus.OnSale && p.Category.IsActive && p.Brand.IsActive)
+            .Where(p => p.Id == id && p.Status == ProductStatus.OnSale && !p.IsReservedForWithdrawal && p.Category.IsActive && p.Brand.IsActive)
             .Select(p => new
             {
                 p.Id,
