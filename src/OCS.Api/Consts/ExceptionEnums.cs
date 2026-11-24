@@ -24,7 +24,8 @@ public enum IncidentStatus
 {
     Pending = 0,
     Approved = 1,
-    Compensated = 2
+    Compensated = 2,
+    NeedsRecheck = 3
 }
 
 public enum NotificationType

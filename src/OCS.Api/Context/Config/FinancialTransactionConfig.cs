@@ -47,5 +47,8 @@ public sealed class FinancialTransactionConfig : IEntityTypeConfiguration<Financ
         builder.HasIndex(x => x.PaymentReference)
             .IsUnique()
             .HasFilter("\"PaymentReference\" IS NOT NULL");
+        builder.HasIndex(x => x.PayoutId)
+            .IsUnique()
+            .HasFilter("\"PayoutId\" IS NOT NULL");
     }
 }

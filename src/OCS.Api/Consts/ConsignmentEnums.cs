@@ -51,7 +51,8 @@ public enum ProductStatus
     Returned = 5,
     EarlyWithdrawn = 6,
     Compensated = 7,
-    Cancelled = 8
+    Cancelled = 8,
+    IncidentPending = 9
 }
 
 public enum ProductApprovalStatus

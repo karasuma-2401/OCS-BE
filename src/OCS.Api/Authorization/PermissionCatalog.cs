@@ -37,6 +37,11 @@ public static class PermissionCatalog
     public const string ScreenReports = "screens.reports";
     public const string ScreenSettings = "screens.settings";
     public const string ScreenAccounts = "screens.accounts";
+    public const string IncidentsRead = "incidents.read";
+    public const string IncidentsCreate = "incidents.create";
+    public const string IncidentsReview = "incidents.review";
+    public const string SettlementsRead = "settlements.read";
+    public const string SettlementsManage = "settlements.manage";
 
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
@@ -74,7 +79,12 @@ public static class PermissionCatalog
         new(ExpiryRead, "Xem hàng hết hạn", "Xem phiếu xử lý hàng ký gửi hết hạn.", 32),
         new(ExpiryReturn, "Giao trả hàng hết hạn", "Xác nhận bàn giao hàng cho người ký gửi.", 33),
         new(ExpiryDonate, "Bàn giao hàng quyên góp", "Xác nhận bàn giao cho tổ chức nhận.", 34),
-        new(ExpiryMarkUnclaimed, "Duyệt hàng không nhận", "Duyệt chuyển hàng không nhận sang quyên góp.", 35)
+        new(ExpiryMarkUnclaimed, "Duyệt hàng không nhận", "Duyệt chuyển hàng không nhận sang quyên góp.", 35),
+        new(IncidentsRead, "Xem biên bản sự cố", "Tra cứu biên bản sự cố sản phẩm.", 36),
+        new(IncidentsCreate, "Lập biên bản sự cố", "Ghi nhận sản phẩm hư hỏng hoặc thất lạc.", 37),
+        new(IncidentsReview, "Duyệt biên bản sự cố", "Phê duyệt bồi thường hoặc yêu cầu kiểm tra lại.", 38),
+        new(SettlementsRead, "Xem quyết toán", "Xem bảng kê và trạng thái giải ngân.", 39),
+        new(SettlementsManage, "Quản lý quyết toán", "Tạo và gửi lệnh chi trả cho người ký gửi.", 40)
     ];
 
     public static readonly IReadOnlySet<string> AdminOnly = new HashSet<string>(StringComparer.Ordinal)
@@ -84,7 +94,8 @@ public static class PermissionCatalog
 
     public static readonly IReadOnlySet<string> RequiredAdminCodes = new HashSet<string>(StringComparer.Ordinal)
     {
-        ManagePermissions, ScreenSettings, AccountsRead, AccountsRoles, ScreenAccounts
+        ManagePermissions, ScreenSettings, AccountsRead, AccountsRoles, ScreenAccounts,
+        IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage
     };
 
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> DefaultRolePermissions =
@@ -96,13 +107,15 @@ public static class PermissionCatalog
                 CustomersRead, CustomersUpdate, AccountsCreate, AccountsRead, AccountsUpdate, AccountsStatus,
                 AppointmentsStaffRead, AppointmentsStaffUpdate, AppointmentsStaffReception,
                 ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ExpiryRead, ExpiryReturn, ExpiryDonate, ExpiryMarkUnclaimed, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
-                ScreenSettlement, ScreenReports, ScreenAccounts
+                ScreenSettlement, ScreenReports, ScreenAccounts,
+                IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage
             ],
             ["Staff"] =
             [
                 CustomersRead, CustomersUpdate, AppointmentsStaffRead, AppointmentsStaffUpdate,
                 AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ExpiryRead, ExpiryReturn, ExpiryDonate, ScreenPos, ScreenInventory,
-                ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports
+                ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports,
+                IncidentsRead, IncidentsCreate
             ],
             ["Customer"] = [AppointmentsCreate, AppointmentsOwnRead, AppointmentsOwnCancel]
         };
@@ -123,6 +136,7 @@ public static class PermissionCatalog
         "Staff" => !permissionCode.StartsWith("appointments.own.", StringComparison.Ordinal)
             && permissionCode != AppointmentsCreate && !AdminOnly.Contains(permissionCode)
             && !permissionCode.StartsWith("accounts.", StringComparison.Ordinal)
+            && permissionCode != IncidentsReview && permissionCode != SettlementsManage
             && permissionCode != ScreenAccounts && permissionCode != ExpiryMarkUnclaimed,
         _ => false
     });

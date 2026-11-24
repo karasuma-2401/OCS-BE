@@ -9,9 +9,19 @@ public sealed class Payout : BaseEntity
 
     public Guid ConsignmentContractId { get; set; }
 
-    public Guid ApprovedByEmployeeId { get; set; }
+    public Guid? CreatedByEmployeeId { get; set; }
+
+    public Guid? ApprovedByEmployeeId { get; set; }
 
     public decimal TotalAmount { get; set; }
+
+    public DateTimeOffset? ApprovedAt { get; set; }
+
+    public DateTimeOffset? TransferredAt { get; set; }
+
+    public DateTimeOffset? CustomerConfirmedAt { get; set; }
+
+    public DateTimeOffset? CompletedAt { get; set; }
 
     public string? ProofUrl { get; set; }
 
@@ -21,7 +31,9 @@ public sealed class Payout : BaseEntity
 
     public ConsignmentContract ConsignmentContract { get; set; } = null!;
 
-    public EmployeeProfile ApprovedByEmployee { get; set; } = null!;
+    public EmployeeProfile? CreatedByEmployee { get; set; }
+
+    public EmployeeProfile? ApprovedByEmployee { get; set; }
 
     public ICollection<PayoutDetail> Details { get; set; } = new List<PayoutDetail>();
 }

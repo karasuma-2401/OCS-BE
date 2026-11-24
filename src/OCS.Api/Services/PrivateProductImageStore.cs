@@ -12,8 +12,13 @@ public sealed class PrivateProductImageStore(IServiceProvider services, IOptions
     // Chi doc object trong bucket R2 da cau hinh; khong fetch URL tuy y.
     public string? GetKey(string url)
     {
-        if (services.GetService<IAmazonS3>() is null || string.IsNullOrWhiteSpace(options.Value.BucketName) ||
-            !Uri.TryCreate(url, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Query) ||
+        if (services.GetService<IAmazonS3>() is null || string.IsNullOrWhiteSpace(options.Value.BucketName) || string.IsNullOrWhiteSpace(url)) return null;
+        if (url.StartsWith("/api/storage/inspections/", StringComparison.OrdinalIgnoreCase))
+        {
+            var relativeKey = Uri.UnescapeDataString(url["/api/storage/".Length..]);
+            return IsSafeKey(relativeKey) ? relativeKey : null;
+        }
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !string.IsNullOrEmpty(uri.Query) ||
             !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo)) return null;
         var pathStart = url.IndexOf('/', url.IndexOf("://", StringComparison.Ordinal) + 3);
         if (pathStart < 0 || Uri.UnescapeDataString(url[pathStart..].Split('?', '#')[0]).Split('/').Any(part => part is "." or "..")) return null;
@@ -30,9 +35,14 @@ public sealed class PrivateProductImageStore(IServiceProvider services, IOptions
                 !uri.AbsolutePath.StartsWith(root.AbsolutePath, StringComparison.Ordinal)) return null;
             key = Uri.UnescapeDataString(uri.AbsolutePath[root.AbsolutePath.Length..]);
         }
-        if (string.IsNullOrEmpty(key) || key.Contains('\\') || key.Split('/').Any(part => part is "" or "." or "..")) return null;
+        if (!IsSafeKey(key)) return null;
         return key;
     }
+
+    private static bool IsSafeKey(string key) => !string.IsNullOrEmpty(key) &&
+        (key.StartsWith("inspections/", StringComparison.OrdinalIgnoreCase) || key.StartsWith("products/", StringComparison.OrdinalIgnoreCase)) &&
+        !key.Contains('\\') &&
+        key.Split('/').All(part => part is not ("" or "." or ".."));
 
     public async Task<(byte[] Content, string ContentType)?> ReadAsync(string key, CancellationToken ct)
     {
