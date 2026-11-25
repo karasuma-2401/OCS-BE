@@ -150,6 +150,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<InventoryService>();
         services.AddScoped<ExpiryProcessingService>();
+        services.AddScoped<IncidentService>();
+        services.AddScoped<SettlementService>();
+        services.AddScoped<PayoutAutoCompletionJob>();
         services.AddScoped<ExpiryProcessingJob>();
         services.AddScoped<BuyoutService>();
         services.AddScoped<EarlyWithdrawalService>();
@@ -474,6 +477,10 @@ public static class ServiceCollectionExtensions
                     "consignment-expiry-job",
                     job => job.ExecuteAsync(CancellationToken.None),
                     "* * * * *");
+                RecurringJob.AddOrUpdate<PayoutAutoCompletionJob>(
+                    "consignment-payout-auto-complete",
+                    job => job.ExecuteAsync(CancellationToken.None),
+                    "*/15 * * * *");
             }
             catch
             {

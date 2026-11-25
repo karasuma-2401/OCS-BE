@@ -61,7 +61,7 @@ public sealed class ProductConfig : IEntityTypeConfiguration<Product>
                 "Status" IN (
                     'PendingProcessing', 'OnSale', 'Sold',
                     'Expired', 'Donated', 'Returned',
-                    'EarlyWithdrawn', 'Compensated', 'Cancelled'
+                    'EarlyWithdrawn', 'Compensated', 'Cancelled', 'IncidentPending'
                 )
                 AND (
                     "AgreedBrandTier" IS NULL
