@@ -1,3 +1,6 @@
+using System.Reflection;
+using Amazon.S3;
+using Amazon.S3.Model;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -238,6 +241,253 @@ public sealed class SettlementWorkflowTests
             var detail1 = (await incidentService.DetailAsync(report1.Id, default)).Data!;
             Assert.Equal("Compensated", detail1.Status);
             Assert.Equal("Approved", detail1.PayoutStatus);
+        }
+    }
+
+    private sealed class MutableClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    [Fact]
+    public async Task AutoConfirmUsesConfiguredHoursWithoutRetroactiveChangeAndRespectsOpenIncidents()
+    {
+        var start = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+        var clock = new MutableClock(start);
+        var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        await using (db)
+        {
+            var brand = new Brand { Name = "Brand", DefaultCommissionRate = 20m };
+            var category = new Category { Name = "Category" };
+            var contract = new ConsignmentContract
+            {
+                ContractNumber = "KG-AUTO-1",
+                SignedAt = start.AddDays(-30),
+                EndsAt = start.AddDays(-1),
+                BankCodeSnapshot = "VCB",
+                BankAccountNumberSnapshot = "123456789",
+                BankAccountHolderSnapshot = "NGUYEN VAN A",
+                Status = ConsignmentContractStatus.Active
+            };
+            var product = new Product { Name = "Bag", Barcode = "BC-AUTO-1", Size = "M", BrandId = brand.Id, CategoryId = category.Id };
+            product.AssignConsignmentTerms(contract.Id, 1000000m, brand);
+            product.OfferForSale();
+            product.MarkSold();
+
+            db.AddRange(brand, category, contract, product, new SystemParameter
+            {
+                Key = SystemParameterKeys.PayoutAutoConfirmHours,
+                Value = "24",
+                Description = "Auto confirm window in hours"
+            });
+
+            var payout = new Payout
+            {
+                PayoutNumber = "PAY-AUTO-1",
+                ConsignmentContractId = contract.Id,
+                TotalAmount = 800000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = start,
+                AutoConfirmAt = start.AddHours(24)
+            };
+            var openIncident = new IncidentReport
+            {
+                ProductId = product.Id,
+                CreatedByEmployeeId = Guid.NewGuid(),
+                Type = IncidentType.Damaged,
+                Description = "Khách khiếu nại trầy xước",
+                Status = IncidentStatus.Pending
+            };
+            db.AddRange(payout, openIncident);
+            await db.SaveChangesAsync();
+
+            var store = new PrivateProductImageStore(new ServiceCollection().BuildServiceProvider(), Options.Create(new R2Options()));
+            var service = new SettlementService(db, clock, store);
+            var job = new PayoutAutoCompletionJob(service, new SystemAuditContext());
+
+            // 1. Chưa đến hạn (23h < 24h)
+            clock.Now = start.AddHours(23);
+            Assert.Equal(0, await job.ExecuteAsync());
+            Assert.Equal(PayoutStatus.Transferred, (await db.Payouts.FindAsync(payout.Id))!.Status);
+
+            // 2. Đổi cấu hình lên 72h sau khi đã chuyển tiền -> không hồi tố payout cũ (vẫn giữ AutoConfirmAt = +24h)
+            var param = await db.SystemParameters.SingleAsync(x => x.Key == SystemParameterKeys.PayoutAutoConfirmHours);
+            param.Value = "72";
+            await db.SaveChangesAsync();
+
+            // 3. Quá hạn (25h >= 24h) nhưng còn khiếu nại mở -> vẫn giữ Transferred
+            clock.Now = start.AddHours(25);
+            Assert.Equal(0, await job.ExecuteAsync());
+            Assert.Equal(PayoutStatus.Transferred, (await db.Payouts.FindAsync(payout.Id))!.Status);
+
+            // 4. Khiếu nại đã được xử lý/bồi thường (Compensated) -> job tự động hoàn tất payout và hợp đồng
+            openIncident.Status = IncidentStatus.Compensated;
+            await db.SaveChangesAsync();
+
+            Assert.Equal(1, await job.ExecuteAsync());
+            var completedPayout = await db.Payouts.FindAsync(payout.Id);
+            Assert.Equal(PayoutStatus.Completed, completedPayout!.Status);
+            Assert.Null(completedPayout.CustomerConfirmedAt);
+            Assert.Equal(clock.Now, completedPayout.CompletedAt);
+            Assert.Equal(ConsignmentContractStatus.Completed, (await db.ConsignmentContracts.FindAsync(contract.Id))!.Status);
+
+            // 5. Job chạy lặp lại -> idempotent, trả về 0
+            Assert.Equal(0, await job.ExecuteAsync());
+        }
+    }
+
+    [Fact]
+    public async Task AutoConfirmDoesNotCompleteContractWithActiveProductsAndPreservesCustomerConfirmation()
+    {
+        var start = new DateTimeOffset(2026, 11, 20, 8, 0, 0, TimeSpan.Zero);
+        var clock = new MutableClock(start);
+        var auditContext = new SystemAuditContext();
+        var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .AddInterceptors(new OCS.Api.Context.Interceptors.AuditSaveChangesInterceptor(auditContext))
+            .Options);
+        await using (db)
+        {
+            auditContext.Initialize("Seed");
+            var brand = new Brand { Name = "Brand", DefaultCommissionRate = 20m };
+            var category = new Category { Name = "Category" };
+            var customerId = Guid.NewGuid();
+            var contract = new ConsignmentContract
+            {
+                ContractNumber = "KG-AUTO-2",
+                CustomerId = customerId,
+                SignedAt = start.AddDays(-5),
+                EndsAt = start.AddDays(25),
+                Status = ConsignmentContractStatus.Active
+            };
+            var activeProduct = new Product { Name = "Still On Sale", Barcode = "BC-AUTO-2", Size = "L", BrandId = brand.Id, CategoryId = category.Id };
+            activeProduct.AssignConsignmentTerms(contract.Id, 500000m, brand);
+            activeProduct.OfferForSale();
+
+            var expiredPayout = new Payout
+            {
+                PayoutNumber = "PAY-AUTO-2",
+                ConsignmentContractId = contract.Id,
+                TotalAmount = 300000m,
+                Status = PayoutStatus.Transferred,
+                TransferredAt = start.AddHours(-50),
+                AutoConfirmAt = start.AddHours(-2)
+            };
+            var customerConfirmedPayout = new Payout
+            {
+                PayoutNumber = "PAY-AUTO-3",
+                ConsignmentContractId = contract.Id,
+                TotalAmount = 200000m,
+                Status = PayoutStatus.Completed,
+                TransferredAt = start.AddHours(-60),
+                AutoConfirmAt = start.AddHours(-12),
+                CustomerConfirmedAt = start.AddHours(-20),
+                CompletedAt = start.AddHours(-20)
+            };
+            db.AddRange(brand, category, contract, activeProduct, expiredPayout, customerConfirmedPayout);
+            await db.SaveChangesAsync();
+
+            var store = new PrivateProductImageStore(new ServiceCollection().BuildServiceProvider(), Options.Create(new R2Options()));
+            var service = new SettlementService(db, clock, store);
+            var job = new PayoutAutoCompletionJob(service, auditContext);
+
+            Assert.Equal(1, await job.ExecuteAsync());
+
+            // Hợp đồng còn sản phẩm OnSale -> vẫn Active
+            Assert.Equal(ConsignmentContractStatus.Active, (await db.ConsignmentContracts.FindAsync(contract.Id))!.Status);
+            // Payout khách đã xác nhận trước -> giữ nguyên CustomerConfirmedAt
+            var confirmed = await db.Payouts.FindAsync(customerConfirmedPayout.Id);
+            Assert.Equal(start.AddHours(-20), confirmed!.CustomerConfirmedAt);
+            // Audit interceptor ghi nhận ActorType = System và Source = PayoutAutoCompletionJob
+            var systemAudit = await db.AuditLogs.AsNoTracking()
+                .Where(x => x.EntityType == nameof(Payout) && x.EntityId == expiredPayout.Id.ToString() && x.Source == nameof(PayoutAutoCompletionJob))
+                .SingleOrDefaultAsync();
+            Assert.NotNull(systemAudit);
+            Assert.Equal(AuditActorType.System, systemAudit.ActorType);
+        }
+    }
+
+    public class FakeS3Proxy : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == nameof(IAmazonS3.GetObjectAsync))
+            {
+                var response = new GetObjectResponse
+                {
+                    ResponseStream = new MemoryStream([0xff, 0xd8, 0xff, 0xe0]),
+                    ContentLength = 4
+                };
+                response.Headers.ContentType = "image/jpeg";
+                return Task.FromResult(response);
+            }
+
+            throw new NotImplementedException(targetMethod?.Name);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, 48)]
+    [InlineData("24", 24)]
+    [InlineData("invalid", 48)]
+    [InlineData("0", 48)]
+    [InlineData("-10", 48)]
+    [InlineData("999999", 48)]
+    public async Task RecordTransferSetsAutoConfirmAtFromSystemParameterAndFallsBackWhenInvalidOrOutOfRange(
+        string? configuredValue,
+        int expectedHours)
+    {
+        var now = new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
+        var clock = new FixedClock(now);
+        var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        await using (db)
+        {
+            var contract = new ConsignmentContract
+            {
+                ContractNumber = $"KG-TR-{expectedHours}",
+                SignedAt = now.AddDays(-10),
+                EndsAt = now.AddDays(-1),
+                Status = ConsignmentContractStatus.Active
+            };
+            var payout = new Payout
+            {
+                PayoutNumber = $"PAY-TR-{expectedHours}",
+                ConsignmentContractId = contract.Id,
+                TotalAmount = 500000m,
+                Status = PayoutStatus.Approved,
+                BankCode = "VCB",
+                BankAccountNumber = "123456789",
+                BankAccountHolder = "NGUYEN VAN A"
+            };
+            db.AddRange(contract, payout);
+            if (configuredValue is not null)
+            {
+                db.SystemParameters.Add(new SystemParameter
+                {
+                    Key = SystemParameterKeys.PayoutAutoConfirmHours,
+                    Value = configuredValue
+                });
+            }
+            await db.SaveChangesAsync();
+
+            var s3 = DispatchProxy.Create<IAmazonS3, FakeS3Proxy>();
+            var services = new ServiceCollection().AddSingleton(s3).BuildServiceProvider();
+            var store = new PrivateProductImageStore(services, Options.Create(new R2Options { BucketName = "test-bucket" }));
+            var service = new SettlementService(db, clock, store);
+
+            var result = await service.RecordTransferAsync(
+                payout.Id,
+                Guid.NewGuid(),
+                new RecordPayoutTransferRequest("/api/storage/inspections/proof.jpg", "FT-123456"),
+                default);
+
+            Assert.True(result.IsSuccess, result.Error?.Message);
+            Assert.Equal(PayoutStatus.Transferred.ToString(), result.Data!.Status);
+            Assert.Equal(now, result.Data.TransferredAt);
+            Assert.Equal(now.AddHours(expectedHours), result.Data.AutoConfirmAt);
         }
     }
 }

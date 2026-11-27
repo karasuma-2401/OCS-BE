@@ -57,7 +57,8 @@ public sealed record PayoutDto(
     IReadOnlyList<SettlementLineDto> Lines,
     Guid? CreatedByEmployeeId, Guid? ApprovedByEmployeeId, Guid? RejectedByEmployeeId,
     DateTimeOffset? RejectedAt, string? RejectionReason,
-    string? CreatedByName, string? ApprovedByName, string? RejectedByName);
+    string? CreatedByName, string? ApprovedByName, string? RejectedByName,
+    DateTimeOffset? AutoConfirmAt = null);
 
 public sealed record CreatePayoutRequest(decimal ServiceFee, string? ServiceFeeDescription);
 public sealed record UpdatePayoutServiceFeeRequest(decimal ServiceFee, string? Description, string Reason);

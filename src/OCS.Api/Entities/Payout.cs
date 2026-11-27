@@ -25,6 +25,8 @@ public sealed class Payout : BaseEntity
 
     public DateTimeOffset? TransferredAt { get; set; }
 
+    public DateTimeOffset? AutoConfirmAt { get; set; }
+
     public DateTimeOffset? CustomerConfirmedAt { get; set; }
 
     public DateTimeOffset? CompletedAt { get; set; }
