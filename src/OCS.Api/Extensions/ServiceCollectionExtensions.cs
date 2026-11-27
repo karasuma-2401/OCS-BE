@@ -152,6 +152,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ExpiryProcessingService>();
         services.AddScoped<IncidentService>();
         services.AddScoped<SettlementService>();
+        services.AddScoped<ReportService>();
         services.AddScoped<PayoutAutoCompletionJob>();
         services.AddScoped<ExpiryProcessingJob>();
         services.AddScoped<BuyoutService>();
