@@ -17,6 +17,13 @@ public sealed class PermissionConfigurationTests
     }
 
     [Fact]
+    public void StaffCanOfferProductsWithoutInventoryApprovalPermission()
+    {
+        Assert.Contains(PermissionCatalog.ProductsOffer, PermissionCatalog.DefaultsFor("Staff"));
+        Assert.DoesNotContain(PermissionCatalog.ProductsApprove, PermissionCatalog.DefaultsFor("Staff"));
+    }
+
+    [Fact]
     public void AdminRightsAreReservedAndStaffCannotGainAccountManagement()
     {
         Assert.Equal(10, PermissionCatalog.RequiredAdminCodes.Count);
