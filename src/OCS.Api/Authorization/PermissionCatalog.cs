@@ -79,7 +79,7 @@ public static class PermissionCatalog
         new(AppointmentsOwnCancel, "Hủy lịch hẹn của mình", "Khách hàng hủy lịch hẹn của chính mình.", 24),
         new(ProductsRead, "Xem kho", "Xem sản phẩm và lịch sử kho.", 25),
         new(ProductsApprove, "Duyệt sản phẩm", "Duyệt hoặc từ chối sản phẩm.", 26),
-        new(ProductsOffer, "Đưa sản phẩm lên bán", "Đưa sản phẩm đã duyệt lên bán.", 27),
+        new(ProductsOffer, "Đưa sản phẩm lên bán", "Đưa sản phẩm đủ điều kiện lên bán, không cần duyệt kho.", 27),
         new(ProductsLocation, "Chuyển vị trí sản phẩm", "Cập nhật vị trí lưu kho.", 28),
         new(ProductsLocationsManage, "Quản lý vị trí kho", "Tạo vị trí lưu kho.", 29),
         new(ProductsPrice, "Đổi giá hàng mua đứt", "Cập nhật giá hàng mua đứt.", 30),
@@ -121,7 +121,7 @@ public static class PermissionCatalog
             ["Staff"] =
             [
                 WithdrawalRead, WithdrawalApprove, WithdrawalPayment, WithdrawalHandover, CustomersRead, CustomersUpdate, AppointmentsStaffRead, AppointmentsStaffUpdate,
-                AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsLocation, ExpiryRead, ExpiryReturn, ExpiryDonate, ScreenPos, ScreenInventory,
+                AppointmentsStaffReception, ProductsCreate, ProductsRead, ProductsOffer, ProductsLocation, ExpiryRead, ExpiryReturn, ExpiryDonate, ScreenPos, ScreenInventory,
                 ScreenConsignment, ScreenCustomers, ScreenSettlement, ScreenReports,
                 IncidentsRead, IncidentsCreate
             ],

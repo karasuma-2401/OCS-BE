@@ -75,10 +75,11 @@ public sealed class InventoryService(AppDbContext db)
         return new InventorySummaryDto(
             TotalCount: buckets.Sum(x => x.Count),
             PendingApprovalCount: buckets.Where(x => x.Status == ProductStatus.PendingProcessing && x.ApprovalStatus == ProductApprovalStatus.Pending).Sum(x => x.Count),
-            ReadyToOfferCount: buckets.Where(x => x.Status == ProductStatus.PendingProcessing && x.ApprovalStatus == ProductApprovalStatus.Approved).Sum(x => x.Count),
+            ReadyToOfferCount: buckets.Where(x => x.Status == ProductStatus.PendingProcessing && x.ApprovalStatus != ProductApprovalStatus.Rejected).Sum(x => x.Count),
             UnassignedLocationCount: buckets.Where(x => !x.HasLocation && (x.Status == ProductStatus.PendingProcessing || x.Status == ProductStatus.OnSale)).Sum(x => x.Count),
             OnSaleCount: buckets.Where(x => x.Status == ProductStatus.OnSale).Sum(x => x.Count),
-            ExpiredCount: buckets.Where(x => x.Status == ProductStatus.Expired).Sum(x => x.Count));
+            ExpiredCount: buckets.Where(x => x.Status == ProductStatus.Expired).Sum(x => x.Count),
+            PendingProcessingCount: buckets.Where(x => x.Status == ProductStatus.PendingProcessing).Sum(x => x.Count));
     }
 
     public async Task<Result<InventoryDetailDto>> DetailAsync(Guid id, CancellationToken ct)
@@ -173,12 +174,8 @@ public sealed class InventoryService(AppDbContext db)
         var product = await Products().SingleOrDefaultAsync(x => x.Id == id, ct);
         if (product is null) return Missing<InventoryProductDto>();
         if (request.ExpectedVersion == Guid.Empty || product.InventoryVersion != request.ExpectedVersion) return Conflict();
-        if (product.Status != ProductStatus.PendingProcessing || product.ApprovalStatus != ProductApprovalStatus.Approved ||
-            (product.ConsignmentContract is { } contract && contract.EndsAt <= DateTimeOffset.UtcNow) ||
-            !ValidSource(product) || product.StorageLocation is not { IsActive: true } ||
-            (product.SourceType == ProductSourceType.Consignment &&
-             (product.AgreedListedPrice != product.ListedPrice || string.IsNullOrWhiteSpace(product.AgreementEvidence))))
-            return Invalid("Sản phẩm cần được duyệt, có vị trí hoạt động và nguồn hàng hợp lệ trước khi mở bán.");
+        if (!CanOffer(product))
+            return Invalid("Sản phẩm cần đang chờ xử lý, không bị từ chối tiếp nhận, có vị trí hoạt động và nguồn hàng hợp lệ trước khi mở bán.");
         product.OfferForSale();
         db.ProductStatusHistories.Add(new ProductStatusHistory
         {
@@ -289,13 +286,9 @@ public sealed class InventoryService(AppDbContext db)
                 failures.Add(new(item.Id, $"{product.Name}: dữ liệu vừa thay đổi."));
                 continue;
             }
-            if (product.Status != ProductStatus.PendingProcessing || product.ApprovalStatus != ProductApprovalStatus.Approved ||
-                (product.ConsignmentContract is { } contract && contract.EndsAt <= DateTimeOffset.UtcNow) ||
-                !ValidSource(product) || product.StorageLocation is not { IsActive: true } ||
-                (product.SourceType == ProductSourceType.Consignment &&
-                 (product.AgreedListedPrice != product.ListedPrice || string.IsNullOrWhiteSpace(product.AgreementEvidence))))
+            if (!CanOffer(product))
             {
-                failures.Add(new(item.Id, $"{product.Name}: chưa đủ điều kiện mở bán (cần duyệt & có vị trí kho)."));
+                failures.Add(new(item.Id, $"{product.Name}: chưa đủ điều kiện mở bán (cần đang chờ xử lý, không bị từ chối tiếp nhận, có vị trí hoạt động và nguồn hàng hợp lệ)."));
                 continue;
             }
             product.OfferForSale();
@@ -364,6 +357,10 @@ public sealed class InventoryService(AppDbContext db)
         return await SaveAsync(product, actor, "Details", oldValue[..Math.Min(oldValue.Length, 1000)],
             newValue[..Math.Min(newValue.Length, 1000)], null, ct);
     }
+
+    private static bool CanOffer(Product p) => p.Status == ProductStatus.PendingProcessing &&
+        p.ApprovalStatus != ProductApprovalStatus.Rejected && p.StorageLocation is { IsActive: true } &&
+        ValidSource(p) && (p.SourceType != ProductSourceType.Consignment || p.AgreedListedPrice == p.ListedPrice);
 
     private static bool ValidSource(Product p) => !string.IsNullOrWhiteSpace(p.Name) && !string.IsNullOrWhiteSpace(p.Barcode) &&
         !string.IsNullOrWhiteSpace(p.Size) && p.Brand.IsActive && p.Category.IsActive && p.ListedPrice >= 0 &&

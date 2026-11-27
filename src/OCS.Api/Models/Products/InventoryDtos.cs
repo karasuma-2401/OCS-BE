@@ -5,7 +5,7 @@ public sealed record InventoryQuery(int Page = 1, int PageSize = 20, string? Q =
     bool? UnassignedLocation = null, string? SourceType = null, string? Sort = null);
 
 public sealed record InventorySummaryDto(int TotalCount, int PendingApprovalCount, int ReadyToOfferCount,
-    int UnassignedLocationCount, int OnSaleCount, int ExpiredCount);
+    int UnassignedLocationCount, int OnSaleCount, int ExpiredCount, int PendingProcessingCount = 0);
 
 public sealed record InventoryLocationDto(Guid Id, string Code, string Name, int ProductCount = 0);
 public sealed record InventoryImageDto(Guid Id, string Url, string ImageType, int SortOrder);

@@ -2089,7 +2089,7 @@ namespace OCS.Api.Context.Migrations
                         {
                             Id = new Guid("30000000-0000-0000-0000-000000000027"),
                             Code = "products.offer",
-                            Description = "Đưa sản phẩm đã duyệt lên bán.",
+                            Description = "Đưa sản phẩm đủ điều kiện lên bán, không cần duyệt kho.",
                             Name = "Đưa sản phẩm lên bán"
                         },
                         new
@@ -2765,6 +2765,11 @@ namespace OCS.Api.Context.Migrations
                         {
                             RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
                             PermissionId = new Guid("30000000-0000-0000-0000-000000000025")
+                        },
+                        new
+                        {
+                            RoleId = new Guid("20000000-0000-0000-0000-000000000002"),
+                            PermissionId = new Guid("30000000-0000-0000-0000-000000000027")
                         },
                         new
                         {

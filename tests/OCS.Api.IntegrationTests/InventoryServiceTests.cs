@@ -50,29 +50,25 @@ public sealed class InventoryServiceTests
     }
 
     [Fact]
-    public async Task ConsignmentRequiresVerifiedAgreementAndApprovalBeforeSale()
+    public async Task ConsignmentCanBeOfferedWithoutInventoryApprovalOrManualEvidence()
     {
         var (db, product, service) = await SetupConsignment();
         await using (db)
         {
             var actor = Guid.NewGuid();
             Assert.False((await service.OfferAsync(product.Id, actor, new(Guid.Empty), default)).IsSuccess);
-            var beforeApproval = await service.OfferAsync(product.Id, actor, new(product.InventoryVersion), default);
-            Assert.False(beforeApproval.IsSuccess);
-            var missingEvidence = await service.ReviewAsync(product.Id, actor, new(product.InventoryVersion, true, null, 150000, null), default);
-            Assert.False(missingEvidence.IsSuccess);
-            var wrongPrice = await service.ReviewAsync(product.Id, actor, new(product.InventoryVersion, true, null, 149000, "Hợp đồng 01"), default);
-            Assert.False(wrongPrice.IsSuccess);
-            var approved = await service.ReviewAsync(product.Id, actor, new(product.InventoryVersion, true, null, 150000, "Hợp đồng 01"), default);
-            Assert.True(approved.IsSuccess);
-            var offered = await service.OfferAsync(product.Id, actor, new(approved.Data!.Version), default);
+            var offered = await service.OfferAsync(product.Id, actor, new(product.InventoryVersion), default);
             Assert.True(offered.IsSuccess);
             Assert.Equal("OnSale", offered.Data!.Status);
-            Assert.Equal(2, await db.InventoryEvents.CountAsync());
+            Assert.NotEqual(product.InventoryVersion, offered.Data.Version);
+            Assert.Single(await db.InventoryEvents.ToListAsync(), x => x.Action == "Status" && x.ActorAccountId == actor);
             Assert.Equal(1, await db.ProductStatusHistories.CountAsync());
             var saved = await db.Products.SingleAsync(x => x.Id == product.Id);
+            Assert.Equal(ProductApprovalStatus.Pending, saved.ApprovalStatus);
+            Assert.Null(saved.AgreementEvidence);
             Assert.Equal(150000, saved.AgreedListedPrice);
             Assert.Throws<InvalidOperationException>(() => saved.ListedPrice = 100000);
+            Assert.False((await service.OfferAsync(product.Id, actor, new(offered.Data.Version), default)).IsSuccess);
         }
     }
 
@@ -103,6 +99,82 @@ public sealed class InventoryServiceTests
             Assert.False(denied.IsSuccess);
             Assert.Equal("Áo mới", tracked.Name);
         }
+    }
+
+    [Theory]
+    [InlineData("missing-location")]
+    [InlineData("inactive-location")]
+    [InlineData("expired-contract")]
+    [InlineData("future-contract")]
+    [InlineData("inactive-contract")]
+    [InlineData("inactive-brand")]
+    [InlineData("inactive-category")]
+    [InlineData("rejected")]
+    [InlineData("sold")]
+    [InlineData("stale-version")]
+    public async Task IndividualAndBulkOffersPreserveEligibilityChecks(string scenario)
+    {
+        var (db, product, service) = await SetupConsignment();
+        await using (db)
+        {
+            var saved = await db.Products.Include(x => x.StorageLocation).Include(x => x.ConsignmentContract)
+                .Include(x => x.Brand).Include(x => x.Category).SingleAsync();
+            switch (scenario)
+            {
+                case "missing-location": saved.StorageLocationId = null; saved.StorageLocation = null; break;
+                case "inactive-location": saved.StorageLocation!.IsActive = false; break;
+                case "expired-contract": saved.ConsignmentContract!.EndsAt = DateTimeOffset.UtcNow.AddDays(-1); break;
+                case "future-contract": saved.ConsignmentContract!.SignedAt = DateTimeOffset.UtcNow.AddDays(1); break;
+                case "inactive-contract": saved.ConsignmentContract!.Status = ConsignmentContractStatus.Cancelled; break;
+                case "inactive-brand": saved.Brand.IsActive = false; break;
+                case "inactive-category": saved.Category.IsActive = false; break;
+                case "rejected": saved.ApprovalStatus = ProductApprovalStatus.Rejected; break;
+                case "sold": saved.Status = ProductStatus.Sold; break;
+                case "stale-version": saved.InventoryVersion = Guid.NewGuid(); break;
+            }
+            await db.SaveChangesAsync();
+            var actor = Guid.NewGuid();
+            Assert.False((await service.OfferAsync(product.Id, actor, new(product.InventoryVersion), default)).IsSuccess);
+            var bulk = await service.BulkOfferAsync(actor, new([new(product.Id, product.InventoryVersion)]), default);
+            Assert.True(bulk.IsSuccess);
+            Assert.Equal(0, bulk.Data!.SucceededCount);
+            Assert.Single(bulk.Data.Failures);
+            Assert.Empty(db.InventoryEvents);
+            Assert.Empty(db.ProductStatusHistories);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuyoutOfferRequiresValidPurchaseButNoInventoryApproval(bool bulk)
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
+        await using var db = new AppDbContext(options);
+        var brand = new Brand { Name = "Brand" };
+        var category = new Category { Name = "Áo" };
+        var location = new StorageLocation { Code = "B1", Name = "Kệ B" };
+        var buyout = new Buyout { Status = BuyoutStatus.Pending };
+        var product = new Product { Name = "Áo", Barcode = "BUY-01", Size = "M", BrandId = brand.Id, CategoryId = category.Id, StorageLocationId = location.Id };
+        product.AssignBuyoutTerms(buyout.Id, 200000, 100000);
+        db.AddRange(brand, category, location, buyout, product);
+        await db.SaveChangesAsync();
+        var service = new InventoryService(db);
+        var actor = Guid.NewGuid();
+        async Task<bool> Offer() => bulk
+            ? (await service.BulkOfferAsync(actor, new([new(product.Id, product.InventoryVersion)]), default)).Data!.SucceededCount == 1
+            : (await service.OfferAsync(product.Id, actor, new(product.InventoryVersion), default)).IsSuccess;
+        Assert.False(await Offer());
+        buyout.Status = BuyoutStatus.Approved;
+        await db.SaveChangesAsync();
+        Assert.False(await Offer());
+        buyout.IsAutoApproved = true;
+        await db.SaveChangesAsync();
+        Assert.True(await Offer());
+        Assert.Equal(ProductStatus.OnSale, product.Status);
+        Assert.Equal(ProductApprovalStatus.Pending, product.ApprovalStatus);
+        Assert.Single(db.InventoryEvents);
+        Assert.Single(db.ProductStatusHistories);
     }
 
     [Fact]
@@ -177,6 +249,12 @@ public sealed class InventoryServiceTests
         Assert.True((long)(await command.ExecuteScalarAsync())! >= 7);
         command.CommandText = "SELECT to_regclass('\"InventoryEvents\"') IS NOT NULL";
         Assert.True((bool)(await command.ExecuteScalarAsync())!);
+        command.CommandText = """
+            SELECT count(*) FROM "RolePermissions"
+            WHERE "RoleId" = '20000000-0000-0000-0000-000000000002'
+              AND "PermissionId" = '30000000-0000-0000-0000-000000000027'
+            """;
+        Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
     }
 
     [PostgresFact]
@@ -233,17 +311,12 @@ public sealed class InventoryServiceTests
         db.ChangeTracker.Clear();
 
         var service = new InventoryService(db);
-        var reviewed = await service.ReviewAsync(product.Id, employee.Id, new(product.InventoryVersion, true, null, null, null), default);
-        Assert.True(reviewed.IsSuccess);
-        var offered = await service.OfferAsync(product.Id, employee.Id, new(reviewed.Data!.Version), default);
+        var offered = await service.OfferAsync(product.Id, employee.Id, new(product.InventoryVersion), default);
         Assert.True(offered.IsSuccess);
         var detail = await service.DetailAsync(product.Id, default);
         Assert.Equal("OnSale", detail.Data!.Product.Status);
-        Assert.Equal(2, detail.Data.History.Count);
-        var consignmentReview = await service.ReviewAsync(consignment.Id, employee.Id,
-            new(consignment.InventoryVersion, true, null, 300000, "Hợp đồng TEST-CONTRACT-1"), default);
-        Assert.True(consignmentReview.IsSuccess);
-        Assert.True((await service.OfferAsync(consignment.Id, employee.Id, new(consignmentReview.Data!.Version), default)).IsSuccess);
+        Assert.Single(detail.Data.History);
+        Assert.True((await service.OfferAsync(consignment.Id, employee.Id, new(consignment.InventoryVersion), default)).IsSuccess);
 
         await using var first = database.Context();
         await using var second = database.Context();
@@ -278,7 +351,8 @@ public sealed class InventoryServiceTests
         var summary = await service.SummaryAsync(default);
         Assert.Equal(2, summary.TotalCount);
         Assert.Equal(1, summary.PendingApprovalCount);
-        Assert.Equal(1, summary.ReadyToOfferCount);
+        Assert.Equal(2, summary.ReadyToOfferCount);
+        Assert.Equal(2, summary.PendingProcessingCount);
         Assert.Equal(2, summary.UnassignedLocationCount);
 
         var unassigned = await service.ListAsync(new InventoryQuery(UnassignedLocation: true, SourceType: "Buyout"), default);
@@ -301,7 +375,7 @@ public sealed class InventoryServiceTests
 
         var bulkOffer = await service.BulkOfferAsync(actor, new([new(items[0].Id, items[0].Version), new(items[1].Id, items[1].Version)]), default);
         Assert.True(bulkOffer.IsSuccess);
-        Assert.Equal(1, bulkOffer.Data!.SucceededCount);
-        Assert.Single(bulkOffer.Data.Failures);
+        Assert.Equal(2, bulkOffer.Data!.SucceededCount);
+        Assert.Empty(bulkOffer.Data.Failures);
     }
 }
