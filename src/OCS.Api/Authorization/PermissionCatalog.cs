@@ -46,6 +46,7 @@ public static class PermissionCatalog
     public const string IncidentsReview = "incidents.review";
     public const string SettlementsRead = "settlements.read";
     public const string SettlementsManage = "settlements.manage";
+    public const string ReportsRead = "reports.read";
 
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
@@ -92,7 +93,8 @@ public static class PermissionCatalog
         new(IncidentsCreate, "Lập biên bản sự cố", "Ghi nhận sản phẩm hư hỏng hoặc thất lạc.", 37),
         new(IncidentsReview, "Duyệt biên bản sự cố", "Phê duyệt bồi thường hoặc yêu cầu kiểm tra lại.", 38),
         new(SettlementsRead, "Xem quyết toán", "Xem bảng kê và trạng thái giải ngân.", 39),
-        new(SettlementsManage, "Quản lý quyết toán", "Tạo và gửi lệnh chi trả cho người ký gửi.", 40)
+        new(SettlementsManage, "Quản lý quyết toán", "Tạo và gửi lệnh chi trả cho người ký gửi.", 40),
+        new(ReportsRead, "Xem báo cáo tài chính", "Xem KPI, báo cáo doanh thu POS, hoa hồng ký gửi, lợi nhuận thu mua và xuất CSV.", 41)
     ];
 
     public static readonly IReadOnlySet<string> AdminOnly = new HashSet<string>(StringComparer.Ordinal)
@@ -103,7 +105,8 @@ public static class PermissionCatalog
     public static readonly IReadOnlySet<string> RequiredAdminCodes = new HashSet<string>(StringComparer.Ordinal)
     {
         ManagePermissions, ScreenSettings, AccountsRead, AccountsRoles, ScreenAccounts,
-        IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage
+        IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage,
+        ScreenReports, ReportsRead
     };
 
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> DefaultRolePermissions =
@@ -116,7 +119,7 @@ public static class PermissionCatalog
                 AppointmentsStaffRead, AppointmentsStaffUpdate, AppointmentsStaffReception,
                 ProductsCreate, ProductsRead, ProductsApprove, ProductsOffer, ProductsLocation, ProductsLocationsManage, ProductsPrice, ExpiryRead, ExpiryReturn, ExpiryDonate, ExpiryMarkUnclaimed, ScreenPos, ScreenInventory, ScreenConsignment, ScreenCustomers,
                 ScreenSettlement, ScreenReports, ScreenAccounts,
-                IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage
+                IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage, ReportsRead
             ],
             ["Staff"] =
             [
@@ -145,6 +148,7 @@ public static class PermissionCatalog
             && permissionCode != AppointmentsCreate && !AdminOnly.Contains(permissionCode)
             && !permissionCode.StartsWith("accounts.", StringComparison.Ordinal)
             && permissionCode != IncidentsReview && permissionCode != SettlementsManage
+            && permissionCode != ReportsRead
             && permissionCode != ScreenAccounts && permissionCode != ExpiryMarkUnclaimed,
         _ => false
     });
