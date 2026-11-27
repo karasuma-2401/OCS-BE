@@ -153,6 +153,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IncidentService>();
         services.AddScoped<SettlementService>();
         services.AddScoped<ReportService>();
+        services.AddScoped<SystemConfigService>();
+        services.AddScoped<AuditLogQueryService>();
         services.AddScoped<PayoutAutoCompletionJob>();
         services.AddScoped<ExpiryProcessingJob>();
         services.AddScoped<BuyoutService>();

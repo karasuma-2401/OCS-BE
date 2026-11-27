@@ -32,7 +32,8 @@ public sealed class ContractTermsRequestsTests
         var service = new ContractService(db);
         var preview = await service.PreviewWebAsync(request, employee.Id, default);
         Assert.True(preview.IsSuccess, preview.Error?.Message);
-        Assert.Equal("Điều khoản riêng", preview.Data);
+        Assert.Contains("Điều khoản riêng", preview.Data);
+        Assert.Contains("tỷ lệ phí rút sớm 10% trên hợp đồng", preview.Data);
         Assert.Empty(db.ConsignmentContracts);
         var signature = new ContractImageRequest { ContentType = "image/png", Data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=" };
         var saved = await service.CreateAsync(request with { Signature = signature }, employee.Id, default);

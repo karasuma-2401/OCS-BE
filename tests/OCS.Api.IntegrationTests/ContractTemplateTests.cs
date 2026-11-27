@@ -97,7 +97,7 @@ public sealed class ContractTemplateTests
         Assert.True((await contracts.CreateAsync(contractRequest, employee.Id, default)).IsSuccess);
         var document = await db.ContractDocuments.SingleAsync();
         var oldSnapshot = document.Content.ToArray();
-        const string withdrawalFeeTerms = "Phí rút hàng sớm của mỗi sản phẩm bằng giá niêm yết nhân với tỷ lệ hoa hồng đã thỏa thuận của sản phẩm trên hợp đồng; làm tròn đến 2 chữ số thập phân.";
+        const string withdrawalFeeTerms = "Phí rút hàng sớm của mỗi sản phẩm bằng giá niêm yết nhân với tỷ lệ phí rút sớm 10% trên hợp đồng; làm tròn đến 2 chữ số thập phân.";
         var oldTerms = $"Điều khoản đầu\n{withdrawalFeeTerms}";
         Assert.Equal(oldTerms, document.Terms);
         Assert.Equal(oldTerms, (await db.ConsignmentContracts.SingleAsync()).TermsSnapshot);

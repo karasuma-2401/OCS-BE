@@ -85,8 +85,11 @@ public sealed class CreateReceptionRequest
 
     public string ExpiryHandling { get; set; } = "Return";
 
-    [Range(1, 60, ErrorMessage = "Thời gian ký gửi phải từ 1 đến tối đa 60 ngày.")]
-    public int TermDays { get; set; } = 60;
+    [Range(0, 365, ErrorMessage = "Thời gian ký gửi phải từ 1 đến tối đa 365 ngày.")]
+    public int TermDays { get; set; }
+
+    [Range(0, 100)]
+    public decimal? EarlyWithdrawalFeeRate { get; set; }
 
     [MaxLength(1000)]
     public string? Note { get; set; }
@@ -155,7 +158,7 @@ public sealed class SaveReceptionDraftRequest
     public string? BankAccountNumber { get; set; }
     public string? BankAccountHolderName { get; set; }
     public int? ActualItemCount { get; set; }
-    public int TermDays { get; set; } = 60;
+    public int TermDays { get; set; }
     public decimal CommissionShop { get; set; } = 20;
     public string? Note { get; set; }
     public List<CreateReceptionItemDto> Items { get; set; } = new();
@@ -176,7 +179,7 @@ public sealed class ReceptionDraftResponse
     public string? BankAccountNumber { get; set; }
     public string? BankAccountHolderName { get; set; }
     public int? ActualItemCount { get; set; }
-    public int TermDays { get; set; } = 60;
+    public int TermDays { get; set; }
     public decimal CommissionShop { get; set; } = 20;
     public string? Note { get; set; }
     public List<CreateReceptionItemDto> Items { get; set; } = new();

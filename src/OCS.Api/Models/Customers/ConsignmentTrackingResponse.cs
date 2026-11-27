@@ -38,7 +38,8 @@ public sealed record ConsignmentTrackingResponse(
     ConsignmentDocumentMetadata? ContractDocument = null,
     string? ExpiryProcessingType = null,
     string? ExpiryProcessingStatus = null,
-    DateTimeOffset? CollectionDeadline = null);
+    DateTimeOffset? CollectionDeadline = null,
+    decimal? EarlyWithdrawalFeeRate = null);
 
 public sealed record ConsignmentDocumentMetadata(string FileName, string ContentType, DateTimeOffset? UploadedAt);
 
@@ -50,4 +51,5 @@ public sealed record ConsignmentProductDetailResponse(
     string? ExpiryProcessingType = null, string? ExpiryProcessingStatus = null,
     DateTimeOffset? CollectionDeadline = null,
     bool CanWithdrawEarly = false, decimal? EarlyWithdrawalFee = null, ConsignmentWithdrawalInfo? Withdrawal = null,
-    string? EarlyWithdrawalBlockReason = null);
+    string? EarlyWithdrawalBlockReason = null,
+    decimal? EarlyWithdrawalFeeRate = null);

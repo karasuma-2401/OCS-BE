@@ -144,7 +144,7 @@ public sealed partial class EarlyWithdrawalTests
             CreatedByEmployeeId = employee.Id,
             SignedAt = now.AddDays(-1),
             EndsAt = now.AddDays(30),
-            EarlyWithdrawalFeeRate = 77
+            EarlyWithdrawalFeeRate = null
         };
         var product = new Product { Name = "Áo", BrandId = brand.Id, CategoryId = category.Id, StorageLocationId = Guid.NewGuid() };
         product.AssignConsignmentTerms(contract.Id, 123456.75m, brand, fee ?? 10);

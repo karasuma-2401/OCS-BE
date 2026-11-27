@@ -47,6 +47,9 @@ public static class PermissionCatalog
     public const string SettlementsRead = "settlements.read";
     public const string SettlementsManage = "settlements.manage";
     public const string ReportsRead = "reports.read";
+    public const string SettingsRead = "settings.read";
+    public const string SettingsUpdate = "settings.update";
+    public const string AuditLogsRead = "audit_logs.read";
 
     public static readonly IReadOnlyList<PermissionDefinition> All =
     [
@@ -94,19 +97,23 @@ public static class PermissionCatalog
         new(IncidentsReview, "Duyệt biên bản sự cố", "Phê duyệt bồi thường hoặc yêu cầu kiểm tra lại.", 38),
         new(SettlementsRead, "Xem quyết toán", "Xem bảng kê và trạng thái giải ngân.", 39),
         new(SettlementsManage, "Quản lý quyết toán", "Tạo và gửi lệnh chi trả cho người ký gửi.", 40),
-        new(ReportsRead, "Xem báo cáo tài chính", "Xem KPI, báo cáo doanh thu POS, hoa hồng ký gửi, lợi nhuận thu mua và xuất CSV.", 41)
+        new(ReportsRead, "Xem báo cáo tài chính", "Xem KPI, báo cáo doanh thu POS, hoa hồng ký gửi, lợi nhuận thu mua và xuất CSV.", 41),
+        new(SettingsRead, "Xem cấu hình hệ thống", "Xem các tham số vận hành của cửa hàng.", 42),
+        new(SettingsUpdate, "Sửa cấu hình hệ thống", "Cập nhật thời hạn ký gửi, hoa hồng theo hạng, phí rút sớm và thời gian Auto-confirm.", 43),
+        new(AuditLogsRead, "Xem nhật ký quản trị", "Tra cứu lịch sử thay đổi quan trọng trong hệ thống.", 44)
     ];
 
     public static readonly IReadOnlySet<string> AdminOnly = new HashSet<string>(StringComparer.Ordinal)
     {
-        ManagePermissions, AccountsRoles, AccountsHistory, AccountsResetPassword, ScreenSettings
+        ManagePermissions, AccountsRoles, AccountsHistory, AccountsResetPassword, ScreenSettings,
+        SettingsRead, SettingsUpdate, AuditLogsRead
     };
 
     public static readonly IReadOnlySet<string> RequiredAdminCodes = new HashSet<string>(StringComparer.Ordinal)
     {
         ManagePermissions, ScreenSettings, AccountsRead, AccountsRoles, ScreenAccounts,
         IncidentsRead, IncidentsCreate, IncidentsReview, SettlementsRead, SettlementsManage,
-        ScreenReports, ReportsRead
+        ScreenReports, ReportsRead, SettingsRead, SettingsUpdate, AuditLogsRead
     };
 
     public static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> DefaultRolePermissions =

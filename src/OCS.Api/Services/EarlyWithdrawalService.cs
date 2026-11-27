@@ -33,9 +33,12 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
                 !db.EarlyWithdrawalItems.Any(i => i.ProductId == x.Id && (i.EarlyWithdrawal.Status == "Pending" || i.EarlyWithdrawal.Status == "Approved")))
             .OrderBy(x => x.ConsignmentContract!.ContractNumber).ThenBy(x => x.Name).ThenBy(x => x.Id).ToListAsync(ct);
         return Result.Success<IReadOnlyList<WithdrawalEligibleProductDto>>(products.Select(x =>
-            new WithdrawalEligibleProductDto(x.Id, x.Name, x.Barcode, x.ConsignmentContractId!.Value,
+        {
+            var rate = x.ConsignmentContract?.EarlyWithdrawalFeeRate ?? x.AgreedCommissionRate!.Value;
+            return new WithdrawalEligibleProductDto(x.Id, x.Name, x.Barcode, x.ConsignmentContractId!.Value,
                 x.ConsignmentContract!.ContractNumber, x.ConsignmentContract.EndsAt, x.ListedPrice,
-                x.AgreedCommissionRate!.Value, x.CalculateEarlyWithdrawalFee())).ToArray());
+                rate, x.CalculateEarlyWithdrawalFee(rate));
+        }).ToArray());
     }
 
     public async Task<Result<IReadOnlyList<EarlyWithdrawalDto>>> ListAsync(Guid? customer, int page, int pageSize, CancellationToken ct)
@@ -116,14 +119,14 @@ public sealed class EarlyWithdrawalService(AppDbContext db, TimeProvider clock)
         var row = new EarlyWithdrawal { CustomerId = customer, Reason = request.Reason.Trim(), RequestedAt = now };
         foreach (var p in products)
         {
-            var rate = p.AgreedCommissionRate!.Value;
+            var rate = p.ConsignmentContract?.EarlyWithdrawalFeeRate ?? p.AgreedCommissionRate!.Value;
             row.Items.Add(new EarlyWithdrawalItem
             {
                 ProductId = p.Id,
                 Product = p,
                 ListedPrice = p.ListedPrice,
                 PenaltyRate = rate,
-                PenaltyAmount = p.CalculateEarlyWithdrawalFee()
+                PenaltyAmount = p.CalculateEarlyWithdrawalFee(rate)
             });
             // Serialize competing requests and sales through the existing inventory concurrency token.
             p.InventoryVersion = Guid.NewGuid();

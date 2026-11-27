@@ -2,9 +2,11 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OCS.Api.Authorization;
+using OCS.Api.Common;
 using OCS.Api.Extensions;
 using OCS.Api.Interfaces.Services;
 using OCS.Api.Models.Consignments;
+using OCS.Api.Services;
 
 namespace OCS.Api.Controllers;
 
@@ -39,9 +41,17 @@ public sealed class ConsignmentsController(IConsignmentService consignmentServic
     [HttpGet("reception-template")]
     [Authorize(Roles = "Admin,Manager,Staff")]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public async Task<IActionResult> ReceptionTemplate([FromServices] IContractTemplateService templates, CancellationToken cancellationToken)
+    public async Task<IActionResult> ReceptionTemplate(
+        [FromServices] IContractTemplateService templates,
+        [FromServices] OCS.Api.Context.AppDbContext db,
+        CancellationToken cancellationToken)
     {
         var template = await templates.GetAsync(cancellationToken);
+        var sysConfig = await SystemConfigService.ReadEffectiveAsync(db, cancellationToken);
+        var effectiveTermsResult = ContractTermsFormatter.BuildEffectiveTerms(template.DefaultTerms, sysConfig.EarlyWithdrawalFeeRate, isCustomApprovedTerms: false);
+        if (!effectiveTermsResult.IsSuccess)
+            return Result.Failure<object>(effectiveTermsResult.Error!).ToActionResult(this);
+
         return Ok(new
         {
             template.Title,
@@ -49,6 +59,8 @@ public sealed class ConsignmentsController(IConsignmentService consignmentServic
             template.HeaderText,
             template.FooterText,
             template.DefaultTerms,
+            EffectiveTerms = effectiveTermsResult.Data!,
+            sysConfig.EarlyWithdrawalFeeRate,
             template.Version,
             template.DefaultTermDays,
             template.DefaultExpiryHandling
