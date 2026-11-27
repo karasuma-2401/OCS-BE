@@ -140,7 +140,9 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                     p.AgreedCommissionRate is null ? null : p.CalculateEstimatedConsignorPayout(),
                     HandledAt: expiryByProduct.GetValueOrDefault(p.Id)?.HandledAt,
                     CanWithdrawEarly: p.CanRequestEarlyWithdrawal(now) && !activeWithdrawalIds.Contains(p.Id),
-                    EarlyWithdrawalFee: p.AgreedCommissionRate is >= 0 and <= 100 ? p.CalculateEarlyWithdrawalFee() : null,
+                    EarlyWithdrawalFee: (c.EarlyWithdrawalFeeRate ?? p.AgreedCommissionRate) is >= 0 and <= 100
+                        ? p.CalculateEarlyWithdrawalFee(c.EarlyWithdrawalFeeRate)
+                        : null,
                     Withdrawal: withdrawalByProduct.GetValueOrDefault(p.Id),
                     EarlyWithdrawalBlockReason: WithdrawalBlockReason(p, withdrawalByProduct.GetValueOrDefault(p.Id), activeWithdrawalIds.Contains(p.Id), now))).ToArray();
             // Tong du kien tinh cho moi san pham, khong tru cac khoan da quyet toan.
@@ -156,7 +158,8 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
                     : generatedMetadata.GetValueOrDefault(c.Id) ?? (contractService is null ? null : new ConsignmentDocumentMetadata($"ban-xem-{c.Id}.pdf", "application/pdf", null)),
                 expiryByContract.TryGetValue(c.Id, out var expiry) ? expiry.Type.ToString() : null,
                 expiryByContract.TryGetValue(c.Id, out expiry) ? expiry.Status.ToString() : null,
-                expiryByContract.TryGetValue(c.Id, out expiry) ? expiry.CollectionDeadline : null);
+                expiryByContract.TryGetValue(c.Id, out expiry) ? expiry.CollectionDeadline : null,
+                c.EarlyWithdrawalFeeRate);
         }).ToArray();
     }
     public async Task<bool> IsActiveCustomerAsync(Guid customerId, CancellationToken cancellationToken)
@@ -230,8 +233,11 @@ public sealed class CustomerConsignmentService(AppDbContext db, ICustomerProfile
             $"{product.ConditionPercentage}%", imageUrls, expiry?.HandledAt,
             expiry?.Type.ToString(), expiry?.Status.ToString(), expiry?.CollectionDeadline,
             product.CanRequestEarlyWithdrawal((clock ?? TimeProvider.System).GetUtcNow()) && withdrawal?.Status is not ("Pending" or "Approved"),
-            product.AgreedCommissionRate is >= 0 and <= 100 ? product.CalculateEarlyWithdrawalFee() : null, withdrawal,
-            WithdrawalBlockReason(product, withdrawal, withdrawal?.Status is "Pending" or "Approved", (clock ?? TimeProvider.System).GetUtcNow()));
+            (product.ConsignmentContract?.EarlyWithdrawalFeeRate ?? product.AgreedCommissionRate) is >= 0 and <= 100
+                ? product.CalculateEarlyWithdrawalFee(product.ConsignmentContract?.EarlyWithdrawalFeeRate)
+                : null, withdrawal,
+            WithdrawalBlockReason(product, withdrawal, withdrawal?.Status is "Pending" or "Approved", (clock ?? TimeProvider.System).GetUtcNow()),
+            product.ConsignmentContract?.EarlyWithdrawalFeeRate ?? product.AgreedCommissionRate);
     }
     public async Task<(byte[] Content, string ContentType)?> GetImageAsync(Guid customerId, Guid contractId, Guid productId, Guid imageId, CancellationToken ct)
     {

@@ -59,8 +59,8 @@ public sealed class ContractTemplateService(AppDbContext db) : IContractTemplate
     {
         if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 200 || request.OrganizationName is null || request.OrganizationName.Length > 200 ||
         request.HeaderText is null || request.HeaderText.Length > 1000 || request.FooterText is null || request.FooterText.Length > 1000 ||
-        request.DefaultTerms is null || request.DefaultTerms.Length > 6000)
-            return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", "Vui lòng kiểm tra tiêu đề và độ dài nội dung mẫu.");
+        request.DefaultTerms is null || request.DefaultTerms.Length > ContractTermsFormatter.MaxTemplateDefaultTermsLength)
+            return ApplicationError.Validation("CONTRACT_TEMPLATE.INVALID", $"Vui lòng kiểm tra tiêu đề và độ dài nội dung mẫu (điều khoản mặc định tối đa {ContractTermsFormatter.MaxTemplateDefaultTermsLength} ký tự).");
         return null;
     }
 

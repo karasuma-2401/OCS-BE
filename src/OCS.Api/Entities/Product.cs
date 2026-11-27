@@ -213,10 +213,11 @@ public sealed class Product : BaseEntity
         return null;
     }
 
-    public decimal CalculateEarlyWithdrawalFee()
+    public decimal CalculateEarlyWithdrawalFee(decimal? overrideRate = null)
     {
-        if (SourceType != ProductSourceType.Consignment || AgreedCommissionRate is not (>= 0 and <= 100))
-            throw new InvalidOperationException("The product must have an agreed consignment commission rate.");
-        return decimal.Round(ListedPrice * AgreedCommissionRate.Value / 100m, 2, MidpointRounding.AwayFromZero);
+        var rate = overrideRate ?? AgreedCommissionRate;
+        if (SourceType != ProductSourceType.Consignment || rate is not (>= 0 and <= 100))
+            throw new InvalidOperationException("The product must have a valid early withdrawal fee or commission rate.");
+        return decimal.Round(ListedPrice * rate.Value / 100m, 2, MidpointRounding.AwayFromZero);
     }
 }

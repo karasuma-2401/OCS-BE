@@ -60,6 +60,9 @@ public sealed class ConsignmentService(
         if (bankParts.Any(x => !string.IsNullOrWhiteSpace(x)) && bankParts.Any(string.IsNullOrWhiteSpace))
             return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CUSTOMER.INVALID_BANK", "Vui lòng nhập đầy đủ thông tin tài khoản ngân hàng."));
         var isBuyout = string.Equals(request.IntakeType?.Trim(), "Buyout", StringComparison.OrdinalIgnoreCase);
+        if (request.EarlyWithdrawalFeeRate is decimal fee && (fee < 0 || fee > 100 || decimal.Round(fee, 2) != fee))
+            return Result.Failure<ReceptionContractResponse>(
+                ApplicationError.Validation("CONSIGNMENT.INVALID_EARLY_WITHDRAWAL_FEE_RATE", "Tỷ lệ phí rút hàng sớm phải nằm trong khoảng 0–100% và tối đa 2 chữ số thập phân."));
         if (request.ActualItemCount > 0 && request.ActualItemCount < request.Items.Count)
             return Result.Failure<ReceptionContractResponse>(ApplicationError.Validation("CONSIGNMENT.ITEM_COUNT_MISMATCH", "Số món thực tế không thể nhỏ hơn số sản phẩm đã nhập."));
 
@@ -286,7 +289,19 @@ public sealed class ConsignmentService(
             var vietnamToday = DateOnly.FromDateTime(now.UtcDateTime.AddHours(7));
             var dateStamp = vietnamToday.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
             var shortDateStamp = vietnamToday.ToString("yyMMdd", CultureInfo.InvariantCulture);
-            var termDays = Math.Clamp(request.TermDays > 0 ? request.TermDays : 60, 1, 60);
+            var systemConfig = await SystemConfigService.ReadEffectiveAsync(dbContext, cancellationToken);
+            if (!isBuyout &&
+                request.EarlyWithdrawalFeeRate.HasValue &&
+                decimal.Round(request.EarlyWithdrawalFeeRate.Value, 2, MidpointRounding.AwayFromZero) != systemConfig.EarlyWithdrawalFeeRate)
+            {
+                if (transaction is not null) await transaction.RollbackAsync(cancellationToken);
+                return Result.Failure<ReceptionContractResponse>(ApplicationError.Conflict(
+                    "CONSIGNMENT.SYSTEM_CONFIG_CHANGED",
+                    "Cấu hình tỷ lệ phí rút hàng sớm vừa thay đổi. Vui lòng xem lại hợp đồng trước khi lưu."));
+            }
+            var termDays = request.TermDays > 0
+                ? Math.Clamp(request.TermDays, SystemParameterKeys.MinConsignmentDurationDays, SystemParameterKeys.MaxConsignmentDurationDays)
+                : systemConfig.ConsignmentDurationDays;
             var endsAt = now.AddDays(termDays);
 
             Guid contractId;
@@ -320,6 +335,7 @@ public sealed class ConsignmentService(
                     SignedAt = now,
                     EndsAt = endsAt,
                     ExpiryHandling = expiryHandling,
+                    EarlyWithdrawalFeeRate = systemConfig.EarlyWithdrawalFeeRate,
                     Status = ConsignmentContractStatus.Active
                 };
                 dbContext.ConsignmentContracts.Add(contract);
@@ -392,7 +408,7 @@ public sealed class ConsignmentService(
 
                 decimal brandConfiguredRate = brand.DefaultCommissionRate > 0
                     ? brand.DefaultCommissionRate
-                    : GetDefaultTierCommissionRate(brand.Tier);
+                    : SystemConfigService.GetTierCommissionRate(systemConfig.CommissionTierRates, brand.Tier);
                 decimal effectiveRate = item.CommissionRate ?? brandConfiguredRate;
                 decimal customerPayout;
 
@@ -503,7 +519,13 @@ public sealed class ConsignmentService(
                 var staff = await dbContext.Accounts.AsNoTracking().FirstOrDefaultAsync(a => a.Id == staffId, cancellationToken);
                 var staffProf = await dbContext.EmployeeProfiles.AsNoTracking().FirstOrDefaultAsync(ep => ep.Id == staffId, cancellationToken);
 
-                contract.TermsSnapshot = template.DefaultTerms;
+                var feeRate = contract.EarlyWithdrawalFeeRate ?? systemConfig.EarlyWithdrawalFeeRate;
+                var termsResult = ContractTermsFormatter.BuildEffectiveTerms(template.DefaultTerms, feeRate, isCustomApprovedTerms: false);
+                if (!termsResult.IsSuccess)
+                    return Result.Failure<ReceptionContractResponse>(termsResult.Error!);
+                var effectiveTerms = termsResult.Data!;
+
+                contract.TermsSnapshot = effectiveTerms;
                 contract.TemplateTitleSnapshot = template.Title;
                 contract.OrganizationNameSnapshot = template.OrganizationName;
                 contract.HeaderTextSnapshot = template.HeaderText;
@@ -536,7 +558,7 @@ public sealed class ConsignmentService(
                         Images = dbContext.ProductImages.Local.Where(i => i.ProductId == item.Product.Id).OrderBy(i => i.SortOrder).Select(i => i.Url).ToArray()
                     }).ToArray()
                 }, System.Text.Json.JsonSerializerOptions.Web);
-                dbContext.ContractDocuments.Add(new ContractDocument { ContractId = contractId, Content = snapshot, SignatureContent = signatureBytes, SignatureContentType = request.Signature.ContentType, Terms = template.DefaultTerms, TemplateVersion = template.Version.ToString("N") });
+                dbContext.ContractDocuments.Add(new ContractDocument { ContractId = contractId, Content = snapshot, SignatureContent = signatureBytes, SignatureContentType = request.Signature.ContentType, Terms = effectiveTerms, TemplateVersion = template.Version.ToString("N") });
             }
             if (linkedAppointment is not null)
             {
@@ -941,13 +963,4 @@ public sealed class ConsignmentService(
 
         return true;
     }
-
-    private static decimal GetDefaultTierCommissionRate(BrandTier tier) => tier switch
-    {
-        BrandTier.Luxury => 20m,
-        BrandTier.Commercial => 15m,
-        BrandTier.LocalBrand => 12m,
-        BrandTier.NoBrand => 10m,
-        _ => 15m
-    };
 }

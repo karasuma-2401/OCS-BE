@@ -246,10 +246,20 @@ public sealed class ContractService(AppDbContext db) : IContractService
         contract.BankAccountNumberSnapshot = guest.BankAccountNumber?.Trim();
         contract.BankAccountHolderSnapshot = guest.BankAccountHolderName?.Trim();
 
-        contract.EarlyWithdrawalFeeRate = request.EarlyWithdrawalFeeRate;
-        if (approvedTemplate is null)
-            terms = (string.IsNullOrWhiteSpace(terms) ? "" : terms + "\n") +
-                "Phí rút hàng sớm của mỗi sản phẩm bằng giá niêm yết nhân với tỷ lệ hoa hồng đã thỏa thuận của sản phẩm trên hợp đồng; làm tròn đến 2 chữ số thập phân.";
+        var systemConfig = await SystemConfigService.ReadEffectiveAsync(db, cancellationToken);
+        if (request.EarlyWithdrawalFeeRate.HasValue &&
+            decimal.Round(request.EarlyWithdrawalFeeRate.Value, 2, MidpointRounding.AwayFromZero) != systemConfig.EarlyWithdrawalFeeRate)
+        {
+            return Result.Failure<PreparedContract>(ApplicationError.Conflict(
+                "CONTRACT.SYSTEM_CONFIG_CHANGED",
+                "Cấu hình tỷ lệ phí rút hàng sớm vừa thay đổi. Vui lòng xem lại hợp đồng trước khi lưu."));
+        }
+        var earlyWithdrawalFeeRate = systemConfig.EarlyWithdrawalFeeRate;
+        contract.EarlyWithdrawalFeeRate = earlyWithdrawalFeeRate;
+        var termsResult = ContractTermsFormatter.BuildEffectiveTerms(terms, earlyWithdrawalFeeRate, approvedTemplate is not null);
+        if (!termsResult.IsSuccess)
+            return Result.Failure<PreparedContract>(termsResult.Error!);
+        terms = termsResult.Data!;
         contract.TermsSnapshot = terms;
         contract.TemplateTitleSnapshot = template.Title;
         contract.OrganizationNameSnapshot = template.OrganizationName;
@@ -308,8 +318,13 @@ public sealed class ContractService(AppDbContext db) : IContractService
                 StorageLocationId = item.StorageLocationId
             };
             product.Barcode = barcodes[productIndex];
-            product.AssignConsignmentTerms(contract.Id, item.ListedPrice, brands[item.BrandId], item.AgreedCommissionRate);
-            pdfProducts.Add((product, brands[item.BrandId].Name, categories[item.CategoryId].Name));
+            var brand = brands[item.BrandId];
+            var effectiveRate = item.AgreedCommissionRate
+                ?? (brand.DefaultCommissionRate > 0
+                    ? brand.DefaultCommissionRate
+                    : SystemConfigService.GetTierCommissionRate(systemConfig.CommissionTierRates, brand.Tier));
+            product.AssignConsignmentTerms(contract.Id, item.ListedPrice, brand, effectiveRate);
+            pdfProducts.Add((product, brand.Name, categories[item.CategoryId].Name));
             for (var imageIndex = 0; imageIndex < decodedImages[productIndex].Length; imageIndex++)
             {
                 var file = decodedImages[productIndex][imageIndex];
@@ -538,10 +553,22 @@ public sealed class ContractService(AppDbContext db) : IContractService
 
     public async Task<ContractOptionsResponse> GetOptionsAsync(CancellationToken cancellationToken)
     {
-        var brands = await db.Brands.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new ContractOption(x.Id, x.Name, x.DefaultCommissionRate)).ToListAsync(cancellationToken);
+        var systemConfig = await SystemConfigService.ReadEffectiveAsync(db, cancellationToken);
+        var brands = (await db.Brands.AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Name)
+            .Select(x => new { x.Id, x.Name, x.DefaultCommissionRate, x.Tier })
+            .ToListAsync(cancellationToken))
+            .Select(x => new ContractOption(
+                x.Id,
+                x.Name,
+                x.DefaultCommissionRate > 0
+                    ? x.DefaultCommissionRate
+                    : SystemConfigService.GetTierCommissionRate(systemConfig.CommissionTierRates, x.Tier)))
+            .ToList();
         var categories = await db.Categories.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new ContractOption(x.Id, x.Name, null)).ToListAsync(cancellationToken);
         var locations = await db.StorageLocations.AsNoTracking().Where(x => x.IsActive).OrderBy(x => x.Name).Select(x => new ContractOption(x.Id, x.Name, null)).ToListAsync(cancellationToken);
-        return new ContractOptionsResponse(brands, categories, locations);
+        return new ContractOptionsResponse(brands, categories, locations, systemConfig.ConsignmentDurationDays, systemConfig.EarlyWithdrawalFeeRate);
     }
 
     public async Task<Result<ContractResponse>> GetAsync(Guid id, CancellationToken cancellationToken)

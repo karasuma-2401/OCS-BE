@@ -95,7 +95,12 @@ public sealed record ContractImageContent(byte[] Content, string ContentType, bo
 /// <summary>Danh mục dùng trong form tiếp nhận.</summary>
 public sealed record ContractOption(Guid Id, string Name, decimal? CommissionRate = null);
 /// <summary>Các danh mục đang hoạt động.</summary>
-public sealed record ContractOptionsResponse(IReadOnlyList<ContractOption> Brands, IReadOnlyList<ContractOption> Categories, IReadOnlyList<ContractOption> Locations);
+public sealed record ContractOptionsResponse(
+    IReadOnlyList<ContractOption> Brands,
+    IReadOnlyList<ContractOption> Categories,
+    IReadOnlyList<ContractOption> Locations,
+    int DefaultTermDays = 30,
+    decimal DefaultEarlyWithdrawalFeeRate = 10m);
 
 /// <summary>Thông tin cơ bản của hợp đồng đã lập.</summary>
 public sealed record ContractResponse(
