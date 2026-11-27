@@ -11,7 +11,7 @@ namespace OCS.Api.Services;
 
 public sealed class SettlementService(AppDbContext db, TimeProvider clock, PrivateProductImageStore imageStore)
 {
-    private static readonly TimeSpan CustomerConfirmationWindow = TimeSpan.FromHours(48);
+    private const int DefaultAutoConfirmHours = SystemParameterKeys.DefaultAutoConfirmHours;
 
     public async Task<Result<IReadOnlyList<SettlementContractDto>>> ContractsAsync(CancellationToken ct)
     {
@@ -513,10 +513,12 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
         if (await db.Payouts.AnyAsync(x => x.Id != id && x.ProofUrl == proof, ct))
             return Conflict<PayoutDto>("Chứng từ này đã gắn với lệnh chi khác.");
         var now = clock.GetUtcNow();
+        var autoConfirmWindow = await GetAutoConfirmWindowAsync(ct);
         payout.Status = PayoutStatus.Transferred;
         payout.ProofUrl = proof;
         payout.BankTransactionReference = request.BankTransactionReference.Trim();
         payout.TransferredAt = now;
+        payout.AutoConfirmAt = now + autoConfirmWindow;
         payout.UpdatedAt = now;
         db.FinancialTransactions.Add(new FinancialTransaction
         {
@@ -571,14 +573,52 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
 
     public async Task<int> CompleteExpiredAsync(CancellationToken ct)
     {
-        var deadline = clock.GetUtcNow() - CustomerConfirmationWindow;
-        var payouts = await Payouts().Where(x => x.Status == PayoutStatus.Transferred && x.TransferredAt <= deadline).ToListAsync(ct);
-        if (payouts.Count == 0) return 0;
         var now = clock.GetUtcNow();
+        var fallbackDeadline = now - await GetAutoConfirmWindowAsync(ct);
+
+        await using var tx = db.Database.IsRelational()
+            ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct)
+            : null;
+
+        // Contract-level check (matching GetBlockReasonAsync): any open incident on the contract pauses auto-confirm until resolved.
+        var payouts = await Payouts()
+            .Where(x => x.Status == PayoutStatus.Transferred &&
+                ((x.AutoConfirmAt != null && x.AutoConfirmAt <= now) ||
+                 (x.AutoConfirmAt == null && x.TransferredAt <= fallbackDeadline)) &&
+                !db.IncidentReports.Any(ir =>
+                    ir.Product.ConsignmentContractId == x.ConsignmentContractId &&
+                    (ir.Status == IncidentStatus.Pending || ir.Status == IncidentStatus.NeedsRecheck)))
+            .ToListAsync(ct);
+
+        if (payouts.Count == 0) return 0;
+
         foreach (var payout in payouts) Complete(payout, now, customerConfirmed: false);
         await CompleteLinkedIncidentsAndContractsAsync(payouts, ct);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return 0;
+        }
+
+        if (tx is not null) await tx.CommitAsync(ct);
         return payouts.Count;
+    }
+
+    private async Task<TimeSpan> GetAutoConfirmWindowAsync(CancellationToken ct)
+    {
+        var raw = await db.SystemParameters.AsNoTracking()
+            .Where(x => x.Key == SystemParameterKeys.PayoutAutoConfirmHours)
+            .Select(x => x.Value)
+            .SingleOrDefaultAsync(ct);
+
+        return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hours)
+               && hours is >= SystemParameterKeys.MinAutoConfirmHours and <= SystemParameterKeys.MaxAutoConfirmHours
+            ? TimeSpan.FromHours(hours)
+            : TimeSpan.FromHours(DefaultAutoConfirmHours);
     }
 
     private IQueryable<Payout> Payouts() => db.Payouts
@@ -801,7 +841,7 @@ public sealed class SettlementService(AppDbContext db, TimeProvider clock, Priva
                 x.Amount, x.ProductId, x.IncidentReportId)).ToArray(), payout.CreatedByEmployeeId,
             payout.ApprovedByEmployeeId, payout.RejectedByEmployeeId, payout.RejectedAt, payout.RejectionReason,
             payout.CreatedByEmployee?.Account.FullName, payout.ApprovedByEmployee?.Account.FullName,
-            payout.RejectedByEmployee?.Account.FullName);
+            payout.RejectedByEmployee?.Account.FullName, payout.AutoConfirmAt);
     }
 
     private async Task<Result<PayoutDto>> SavePayoutAsync(Payout payout, CancellationToken ct)

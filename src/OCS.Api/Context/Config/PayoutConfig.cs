@@ -28,6 +28,7 @@ public sealed class PayoutConfig : IEntityTypeConfiguration<Payout>
         builder.Property(x => x.BankAccountNumber).HasMaxLength(50);
         builder.Property(x => x.BankAccountHolder).HasMaxLength(200);
         builder.Property(x => x.TransferredAt).HasColumnType("timestamp with time zone");
+        builder.Property(x => x.AutoConfirmAt).HasColumnType("timestamp with time zone");
         builder.Property(x => x.CustomerConfirmedAt).HasColumnType("timestamp with time zone");
         builder.Property(x => x.CompletedAt).HasColumnType("timestamp with time zone");
         builder.Property(x => x.ProofUrl).HasMaxLength(2048);

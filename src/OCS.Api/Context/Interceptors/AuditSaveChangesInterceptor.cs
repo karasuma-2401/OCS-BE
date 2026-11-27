@@ -67,7 +67,7 @@ public sealed class AuditSaveChangesInterceptor(IAuditContext auditContext) : Sa
             nameof(Payout.ApprovedAt), nameof(Payout.RejectedByEmployeeId), nameof(Payout.RejectedAt),
             nameof(Payout.RejectionReason), nameof(Payout.BankCode), nameof(Payout.BankAccountNumber),
             nameof(Payout.BankAccountHolder), nameof(Payout.ProofUrl), nameof(Payout.BankTransactionReference),
-            nameof(Payout.Status), nameof(Payout.TransferredAt), nameof(Payout.CustomerConfirmedAt), nameof(Payout.CompletedAt)],
+            nameof(Payout.Status), nameof(Payout.TransferredAt), nameof(Payout.AutoConfirmAt), nameof(Payout.CustomerConfirmedAt), nameof(Payout.CompletedAt)],
         [typeof(PayoutDetail)] = [nameof(PayoutDetail.PayoutId), nameof(PayoutDetail.ProductId),
             nameof(PayoutDetail.IncidentReportId), nameof(PayoutDetail.Type), nameof(PayoutDetail.Description),
             nameof(PayoutDetail.Amount), nameof(PayoutDetail.IsReleased)],
