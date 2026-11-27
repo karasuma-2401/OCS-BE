@@ -272,81 +272,81 @@ public sealed class ReportService(AppDbContext db, TimeProvider clock)
         switch (normalizedType)
         {
             case "pos":
-            {
-                if (!TryParsePaymentMethod(filter.PaymentMethod, out var methodFilter))
-                    return Result.Failure<(byte[], string)>(ApplicationError.Validation("REPORTS.PAYMENT_METHOD", "Phương thức thanh toán không hợp lệ."));
-
-                var rows = await db.FinancialTransactions.AsNoTracking()
-                    .Where(x => x.Type == FinancialTransactionType.Income
-                                && x.SaleInvoiceId != null
-                                && x.Status == FinancialTransactionStatus.Success
-                                && x.SaleInvoice!.PaymentStatus == InvoicePaymentStatus.Paid
-                                && x.OccurredAt >= startUtc
-                                && x.OccurredAt < endUtc
-                                && (methodFilter == null || x.PaymentMethod == methodFilter.Value))
-                    .OrderByDescending(x => x.OccurredAt)
-                    .Select(x => new PosRevenueDetailDto(
-                        x.Id,
-                        x.SaleInvoiceId!.Value,
-                        x.SaleInvoice!.InvoiceNumber,
-                        x.OccurredAt,
-                        x.PaymentMethod.ToString(),
-                        x.Amount,
-                        x.SaleInvoice.Lines.Count,
-                        x.SaleInvoice.SoldByEmployee.Account.FullName))
-                    .ToArrayAsync(ct);
-
-                sb.AppendLine("Ma hoa don,Thoi gian (UTC+7),Phuong thuc,So tien (VND),So san pham,Thu ngan");
-                foreach (var row in rows)
                 {
-                    sb.AppendLine(string.Join(',',
-                        Csv(row.InvoiceNumber),
-                        Csv(FormatVnTime(row.OccurredAt)),
-                        Csv(row.PaymentMethod),
-                        row.Amount.ToString("0.##", CultureInfo.InvariantCulture),
-                        row.ItemCount.ToString(CultureInfo.InvariantCulture),
-                        Csv(row.CashierName ?? "")));
+                    if (!TryParsePaymentMethod(filter.PaymentMethod, out var methodFilter))
+                        return Result.Failure<(byte[], string)>(ApplicationError.Validation("REPORTS.PAYMENT_METHOD", "Phương thức thanh toán không hợp lệ."));
+
+                    var rows = await db.FinancialTransactions.AsNoTracking()
+                        .Where(x => x.Type == FinancialTransactionType.Income
+                                    && x.SaleInvoiceId != null
+                                    && x.Status == FinancialTransactionStatus.Success
+                                    && x.SaleInvoice!.PaymentStatus == InvoicePaymentStatus.Paid
+                                    && x.OccurredAt >= startUtc
+                                    && x.OccurredAt < endUtc
+                                    && (methodFilter == null || x.PaymentMethod == methodFilter.Value))
+                        .OrderByDescending(x => x.OccurredAt)
+                        .Select(x => new PosRevenueDetailDto(
+                            x.Id,
+                            x.SaleInvoiceId!.Value,
+                            x.SaleInvoice!.InvoiceNumber,
+                            x.OccurredAt,
+                            x.PaymentMethod.ToString(),
+                            x.Amount,
+                            x.SaleInvoice.Lines.Count,
+                            x.SaleInvoice.SoldByEmployee.Account.FullName))
+                        .ToArrayAsync(ct);
+
+                    sb.AppendLine("Ma hoa don,Thoi gian (UTC+7),Phuong thuc,So tien (VND),So san pham,Thu ngan");
+                    foreach (var row in rows)
+                    {
+                        sb.AppendLine(string.Join(',',
+                            Csv(row.InvoiceNumber),
+                            Csv(FormatVnTime(row.OccurredAt)),
+                            Csv(row.PaymentMethod),
+                            row.Amount.ToString("0.##", CultureInfo.InvariantCulture),
+                            row.ItemCount.ToString(CultureInfo.InvariantCulture),
+                            Csv(row.CashierName ?? "")));
+                    }
+                    return Result.Success((WithUtf8Bom(sb.ToString()), $"bao-cao-doanh-thu-pos-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"));
                 }
-                return Result.Success((WithUtf8Bom(sb.ToString()), $"bao-cao-doanh-thu-pos-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"));
-            }
             case "commission":
-            {
-                var rows = await QueryConsignmentCommissionDetails(startUtc, endUtc).ToArrayAsync(ct);
-                sb.AppendLine("Ma lenh chi,Ma hop dong,Khach hang,Hoan tat luc (UTC+7),Doanh so ban (VND),Hoa hong (VND),Phi dich vu (VND),Thuc chi khach (VND)");
-                foreach (var row in rows)
                 {
-                    sb.AppendLine(string.Join(',',
-                        Csv(row.PayoutNumber),
-                        Csv(row.ContractNumber),
-                        Csv(row.CustomerName ?? ""),
-                        Csv(FormatVnTime(row.CompletedAt)),
-                        row.SaleProceedsAmount.ToString("0.##", CultureInfo.InvariantCulture),
-                        row.CommissionAmount.ToString("0.##", CultureInfo.InvariantCulture),
-                        row.ServiceFeeAmount.ToString("0.##", CultureInfo.InvariantCulture),
-                        row.NetPayoutAmount.ToString("0.##", CultureInfo.InvariantCulture)));
+                    var rows = await QueryConsignmentCommissionDetails(startUtc, endUtc).ToArrayAsync(ct);
+                    sb.AppendLine("Ma lenh chi,Ma hop dong,Khach hang,Hoan tat luc (UTC+7),Doanh so ban (VND),Hoa hong (VND),Phi dich vu (VND),Thuc chi khach (VND)");
+                    foreach (var row in rows)
+                    {
+                        sb.AppendLine(string.Join(',',
+                            Csv(row.PayoutNumber),
+                            Csv(row.ContractNumber),
+                            Csv(row.CustomerName ?? ""),
+                            Csv(FormatVnTime(row.CompletedAt)),
+                            row.SaleProceedsAmount.ToString("0.##", CultureInfo.InvariantCulture),
+                            row.CommissionAmount.ToString("0.##", CultureInfo.InvariantCulture),
+                            row.ServiceFeeAmount.ToString("0.##", CultureInfo.InvariantCulture),
+                            row.NetPayoutAmount.ToString("0.##", CultureInfo.InvariantCulture)));
+                    }
+                    return Result.Success((WithUtf8Bom(sb.ToString()), $"bao-cao-hoa-hong-ky-gui-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"));
                 }
-                return Result.Success((WithUtf8Bom(sb.ToString()), $"bao-cao-hoa-hong-ky-gui-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"));
-            }
             default:
-            {
-                var rows = (await QuerySoldPaidBuyoutLines(startUtc, endUtc).ToArrayAsync(ct))
-                    .OrderByDescending(x => x.SoldAt)
-                    .ToArray();
-                sb.AppendLine("Barcode,San pham,Ma phieu thu mua,Ma hoa don,Ban luc (UTC+7),Gia thu mua (VND),Gia ban lai (VND),Loi nhuan (VND)");
-                foreach (var row in rows)
                 {
-                    sb.AppendLine(string.Join(',',
-                        Csv(row.Barcode),
-                        Csv(row.ProductName),
-                        Csv(row.BuyoutNumber ?? ""),
-                        Csv(row.InvoiceNumber),
-                        Csv(FormatVnTime(row.SoldAt)),
-                        row.PurchasePrice.ToString("0.##", CultureInfo.InvariantCulture),
-                        row.SalePrice.ToString("0.##", CultureInfo.InvariantCulture),
-                        row.Profit.ToString("0.##", CultureInfo.InvariantCulture)));
+                    var rows = (await QuerySoldPaidBuyoutLines(startUtc, endUtc).ToArrayAsync(ct))
+                        .OrderByDescending(x => x.SoldAt)
+                        .ToArray();
+                    sb.AppendLine("Barcode,San pham,Ma phieu thu mua,Ma hoa don,Ban luc (UTC+7),Gia thu mua (VND),Gia ban lai (VND),Loi nhuan (VND)");
+                    foreach (var row in rows)
+                    {
+                        sb.AppendLine(string.Join(',',
+                            Csv(row.Barcode),
+                            Csv(row.ProductName),
+                            Csv(row.BuyoutNumber ?? ""),
+                            Csv(row.InvoiceNumber),
+                            Csv(FormatVnTime(row.SoldAt)),
+                            row.PurchasePrice.ToString("0.##", CultureInfo.InvariantCulture),
+                            row.SalePrice.ToString("0.##", CultureInfo.InvariantCulture),
+                            row.Profit.ToString("0.##", CultureInfo.InvariantCulture)));
+                    }
+                    return Result.Success((WithUtf8Bom(sb.ToString()), $"bao-cao-mua-dut-loi-nhuan-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"));
                 }
-                return Result.Success((WithUtf8Bom(sb.ToString()), $"bao-cao-mua-dut-loi-nhuan-{from:yyyyMMdd}-{to:yyyyMMdd}.csv"));
-            }
         }
     }
 
