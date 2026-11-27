@@ -17,6 +17,7 @@ namespace OCS.Api.Context.Migrations
             migrationBuilder.InsertData(
                 table: "Permissions",
                 columns: new[] { "Id", "Code", "Description", "Name" },
+                columnTypes: new[] { "uuid", "character varying(100)", "character varying(500)", "character varying(200)" },
                 values: new object[]
                 {
                     new Guid("30000000-0000-0000-0000-000000000041"),
@@ -28,6 +29,7 @@ namespace OCS.Api.Context.Migrations
             migrationBuilder.InsertData(
                 table: "RolePermissions",
                 columns: new[] { "PermissionId", "RoleId" },
+                columnTypes: new[] { "uuid", "uuid" },
                 values: new object[,]
                 {
                     { new Guid("30000000-0000-0000-0000-000000000020"), new Guid("20000000-0000-0000-0000-000000000003") },
@@ -41,20 +43,25 @@ namespace OCS.Api.Context.Migrations
             migrationBuilder.DeleteData(
                 table: "RolePermissions",
                 keyColumns: new[] { "PermissionId", "RoleId" },
+                keyColumnTypes: new[] { "uuid", "uuid" },
                 keyValues: new object[] { new Guid("30000000-0000-0000-0000-000000000020"), new Guid("20000000-0000-0000-0000-000000000003") });
+
             migrationBuilder.DeleteData(
                 table: "RolePermissions",
                 keyColumns: new[] { "PermissionId", "RoleId" },
+                keyColumnTypes: new[] { "uuid", "uuid" },
                 keyValues: new object[] { new Guid("30000000-0000-0000-0000-000000000041"), new Guid("20000000-0000-0000-0000-000000000001") });
 
             migrationBuilder.DeleteData(
                 table: "RolePermissions",
                 keyColumns: new[] { "PermissionId", "RoleId" },
+                keyColumnTypes: new[] { "uuid", "uuid" },
                 keyValues: new object[] { new Guid("30000000-0000-0000-0000-000000000041"), new Guid("20000000-0000-0000-0000-000000000003") });
 
             migrationBuilder.DeleteData(
                 table: "Permissions",
                 keyColumn: "Id",
+                keyColumnType: "uuid",
                 keyValue: new Guid("30000000-0000-0000-0000-000000000041"));
         }
     }
